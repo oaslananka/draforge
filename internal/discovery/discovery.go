@@ -54,7 +54,7 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 			}
 
 			className := ""
-			if rc.Spec.Devices != nil && len(rc.Spec.Devices.Requests) > 0 {
+			if len(rc.Spec.Devices.Requests) > 0 {
 				if rc.Spec.Devices.Requests[0].Exactly != nil {
 					className = rc.Spec.Devices.Requests[0].Exactly.DeviceClassName
 				} else if len(rc.Spec.Devices.Requests[0].FirstAvailable) > 0 {

@@ -4,7 +4,6 @@ package redaction
 
 import (
 	"regexp"
-	"strings"
 )
 
 var (

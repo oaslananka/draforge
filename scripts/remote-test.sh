@@ -55,11 +55,21 @@ fi
 
 # 5. Stream clone logs
 echo "==> Streaming checkout logs..."
-kubectl logs -n draforge-ci "$pod_name" -c clone -f --tail=-1 || true
+for i in {1..30}; do
+    if kubectl logs -n draforge-ci "$pod_name" -c clone -f --tail=-1 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
 
 # 6. Stream test runner logs
 echo "==> Streaming test runner logs..."
-kubectl logs -n draforge-ci "$pod_name" -c test-runner -f --tail=-1 || true
+for i in {1..30}; do
+    if kubectl logs -n draforge-ci "$pod_name" -c test-runner -f --tail=-1 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
 
 # 7. Check final status of the Job
 echo "==> Checking test completion status..."

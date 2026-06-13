@@ -55,11 +55,21 @@ fi
 
 # 5. Stream clone logs
 echo "==> Streaming checkout logs..."
-kubectl logs -n draforge-ci "$pod_name" -c clone -f --tail=-1 || true
+for i in {1..30}; do
+    if kubectl logs -n draforge-ci "$pod_name" -c clone -f --tail=-1 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
 
 # 6. Stream E2E runner logs
 echo "==> Streaming E2E runner logs..."
-kubectl logs -n draforge-ci "$pod_name" -c e2e-runner -f --tail=-1 || true
+for i in {1..30}; do
+    if kubectl logs -n draforge-ci "$pod_name" -c e2e-runner -f --tail=-1 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
 
 # 7. Check final status of the Job
 echo "==> Checking E2E completion status..."

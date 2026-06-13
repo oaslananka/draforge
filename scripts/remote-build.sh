@@ -73,11 +73,21 @@ fi
 
 # 6. Stream init container clone logs if it runs
 echo "==> Streaming checkout logs..."
-kubectl logs -n draforge-ci "$pod_name" -c clone -f --tail=-1 || true
+for i in {1..30}; do
+    if kubectl logs -n draforge-ci "$pod_name" -c clone -f --tail=-1 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
 
 # 7. Stream Kaniko builder logs
 echo "==> Streaming Kaniko build logs..."
-kubectl logs -n draforge-ci "$pod_name" -c kaniko -f --tail=-1 || true
+for i in {1..30}; do
+    if kubectl logs -n draforge-ci "$pod_name" -c kaniko -f --tail=-1 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
 
 # 8. Check final status of the Job
 echo "==> Checking build completion status..."

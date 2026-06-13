@@ -45,12 +45,24 @@ builds:
       - -s -w -X main.versionVal={{.Version}} -X main.commitSHA={{.ShortCommit}}
 
 archives:
-  - id: default
+  - id: draforge
+    builds:
+      - draforge
     format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "draforge_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         format: zip
+  - id: draforge-controller
+    builds:
+      - draforge-controller
+    format: tar.gz
+    name_template: "draforge-controller_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: draforge-sim-driver
+    builds:
+      - draforge-sim-driver
+    format: tar.gz
+    name_template: "draforge-sim-driver_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: 'checksums.txt'

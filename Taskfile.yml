@@ -96,7 +96,7 @@ tasks:
   release:local:
     desc: Run GoReleaser dry-run release locally
     cmds:
-      - '{{.GORELEASER_BIN}} release --snapshot --clean --skip=docker'
+      - '{{.GORELEASER_BIN}} release --snapshot --clean --skip=docker,sbom,sign'
 
   demo:up:
     desc: Deploy the live showcase demo to DOKS

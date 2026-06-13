@@ -78,7 +78,7 @@ nodePlugin:
 
 gateway:
   enabled: true
-  className: gateway-api
+  className: cilium
   hostname: "" # Dynamically set or fallback
   ingress:
     enabled: false

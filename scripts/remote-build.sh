@@ -25,12 +25,32 @@ echo "  - Commit SHA: $COMMIT_SHA"
 echo "  - Destination Image: $REGISTRY_URL/$IMAGE_NAME:$TAG"
 echo "  - Run ID: $RUN_ID"
 
+# Load token from environment or .env file
+if [ -z "${DIGITALOCEAN_TOKEN:-}" ]; then
+    if [ -f .env ]; then
+        DIGITAL_OCEON_API_KEY=$(grep -E "^DIGITAL_OCEON_API_KEY=" .env | cut -d'=' -f2-)
+        DIGITAL_OCEON_API_KEY=$(echo "$DIGITAL_OCEON_API_KEY" | tr -d '\r' | tr -d '"' | tr -d "'")
+        export DIGITALOCEAN_TOKEN="$DIGITAL_OCEON_API_KEY"
+    fi
+fi
+
+if [ -z "${DIGITALOCEAN_TOKEN:-}" ]; then
+    echo "ERROR: DIGITALOCEAN_TOKEN not found in environment or .env" >&2
+    exit 1
+fi
+
 # 1. Create remote CI resources if they do not exist
 kubectl apply -f build/remote/namespace.yaml
 kubectl apply -f build/remote/quota.yaml
 
-# 2. Re-create the registry credentials secret in the namespace
-doctl registry kubernetes-manifest --namespace draforge-ci | kubectl apply -f -
+# 2. Re-create the registry credentials secret in the namespace with write/push permissions
+kubectl delete secret registry-draforge -n draforge-ci --ignore-not-found=true
+kubectl create secret docker-registry registry-draforge \
+    --namespace draforge-ci \
+    --docker-server=registry.digitalocean.com \
+    --docker-username="$DIGITALOCEAN_TOKEN" \
+    --docker-password="$DIGITALOCEAN_TOKEN" \
+    --docker-email="unused@unused.com"
 
 # 3. Generate the Job manifest
 MANIFEST_TEMP=$(mktemp)

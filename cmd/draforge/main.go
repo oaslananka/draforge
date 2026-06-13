@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/oaslananka/draforge/internal/cluster"
@@ -16,6 +17,7 @@ import (
 	"github.com/oaslananka/draforge/internal/graph"
 	"github.com/oaslananka/draforge/internal/server"
 	"github.com/oaslananka/draforge/internal/tui"
+	"github.com/oaslananka/draforge/pkg/model"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

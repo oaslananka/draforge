@@ -54,8 +54,12 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 			}
 
 			className := ""
-			if len(rc.Spec.Devices.Requests) > 0 {
-				className = rc.Spec.Devices.Requests[0].DeviceClassName
+			if rc.Spec.Devices != nil && len(rc.Spec.Devices.Requests) > 0 {
+				if rc.Spec.Devices.Requests[0].Exactly != nil {
+					className = rc.Spec.Devices.Requests[0].Exactly.DeviceClassName
+				} else if len(rc.Spec.Devices.Requests[0].FirstAvailable) > 0 {
+					className = rc.Spec.Devices.Requests[0].FirstAvailable[0].DeviceClassName
+				}
 			}
 
 			claims = append(claims, model.ResourceClaimInfo{
@@ -81,17 +85,20 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 
 		for _, slice := range sliceList.Items {
 			driverName := slice.Spec.Driver
-			nodeName := slice.Spec.NodeName
+			nodeNameStr := ""
+			if slice.Spec.NodeName != nil {
+				nodeNameStr = *slice.Spec.NodeName
+			}
 			poolName := slice.Spec.Pool.Name
 
-			poolKey := driverName + "/" + poolName + "/" + nodeName
+			poolKey := driverName + "/" + poolName + "/" + nodeNameStr
 			pool, exists := poolMap[poolKey]
 			if !exists {
 				isSynth := strings.Contains(poolName, "sim") || strings.Contains(driverName, "sim")
 				pool = &model.DevicePool{
 					Name:        poolName,
 					DriverName:  driverName,
-					NodeName:    nodeName,
+					NodeName:    nodeNameStr,
 					DeviceType:  "unknown",
 					Health:      "healthy",
 					IsSynthetic: isSynth,
@@ -110,26 +117,24 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 				attrs := make(map[string]string)
 				caps := make(map[string]int64)
 
-				if devSpec.Basic != nil {
-					// Extract attributes
-					for attrName, attrVal := range devSpec.Basic.Attributes {
-						attrNameStr := string(attrName)
-						if attrVal.StringValue != nil {
-							attrs[attrNameStr] = *attrVal.StringValue
-							// Infer type from model attribute if present
-							if strings.EqualFold(attrNameStr, "type") || strings.EqualFold(attrNameStr, "model") {
-								devType = strings.ToLower(*attrVal.StringValue)
-							}
-						} else if attrVal.IntValue != nil {
-							attrs[attrNameStr] = fmt.Sprintf("%d", *attrVal.IntValue)
-						} else if attrVal.BoolValue != nil {
-							attrs[attrNameStr] = fmt.Sprintf("%t", *attrVal.BoolValue)
+				// Extract attributes
+				for attrName, attrVal := range devSpec.Attributes {
+					attrNameStr := string(attrName)
+					if attrVal.StringValue != nil {
+						attrs[attrNameStr] = *attrVal.StringValue
+						// Infer type from model attribute if present
+						if strings.EqualFold(attrNameStr, "type") || strings.EqualFold(attrNameStr, "model") {
+							devType = strings.ToLower(*attrVal.StringValue)
 						}
+					} else if attrVal.IntValue != nil {
+						attrs[attrNameStr] = fmt.Sprintf("%d", *attrVal.IntValue)
+					} else if attrVal.BoolValue != nil {
+						attrs[attrNameStr] = fmt.Sprintf("%t", *attrVal.BoolValue)
 					}
-					// Extract capacities
-					for capName, capVal := range devSpec.Basic.Capacity {
-						caps[string(capName)] = capVal.Value.Value()
-					}
+				}
+				// Extract capacities
+				for capName, capVal := range devSpec.Capacity {
+					caps[string(capName)] = capVal.Value.Value()
 				}
 
 				pool.DeviceType = devType
@@ -140,7 +145,7 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 					Name:        devSpec.Name,
 					Type:        devType,
 					Status:      "healthy", // Default, driver reports health in status field if extended
-					NodeName:    nodeName,
+					NodeName:    nodeNameStr,
 					PoolName:    poolName,
 					Attributes:  attrs,
 					Capacities:  caps,

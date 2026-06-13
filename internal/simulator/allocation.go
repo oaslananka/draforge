@@ -78,8 +78,12 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 		}
 
 		if found {
+			nodeName := ""
+			if targetSlice.Spec.NodeName != nil {
+				nodeName = *targetSlice.Spec.NodeName
+			}
 			fmt.Printf("Simulating allocation for claim %s/%s -> device %s on node %s\n",
-				claim.Namespace, claim.Name, targetDeviceName, targetSlice.Spec.NodeName)
+				claim.Namespace, claim.Name, targetDeviceName, nodeName)
 
 			// Update claim status with allocation result
 			allocatedClaim := claim.DeepCopy()
@@ -100,7 +104,7 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 								{
 									Key:      "metadata.name",
 									Operator: corev1.NodeSelectorOpIn,
-									Values:   []string{targetSlice.Spec.NodeName},
+									Values:   []string{nodeName},
 								},
 							},
 						},

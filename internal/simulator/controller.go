@@ -179,11 +179,9 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 		}
 
 		devices = append(devices, resourcev1.Device{
-			Name: devName,
-			Basic: &resourcev1.BasicDevice{
-				Attributes: bAttrs,
-				Capacity:   bCaps,
-			},
+			Name:       devName,
+			Attributes: bAttrs,
+			Capacity:   bCaps,
 		})
 	}
 
@@ -199,7 +197,7 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 		},
 		Spec: resourcev1.ResourceSliceSpec{
 			Driver:   driverName,
-			NodeName: nodeName,
+			NodeName: &nodeName,
 			Pool: resourcev1.ResourcePool{
 				Name:       poolName,
 				Generation: 1,

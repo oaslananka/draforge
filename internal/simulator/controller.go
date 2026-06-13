@@ -130,7 +130,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 			sliceName = strings.ReplaceAll(sliceName, ".", "-")
 			activeSliceNames[sliceName] = true
 
-			if err := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, int(deviceCount), attrs, caps); err != nil {
+			if err := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, int(deviceCount), attrs, caps, len(targetNodes)); err != nil {
 				fmt.Printf("Failed to ensure ResourceSlice %s: %v\n", sliceName, err)
 			}
 		}
@@ -153,7 +153,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, sdpName, driverName, poolName, nodeName, health string, devCount int, attrs map[string]string, caps map[string]resource.Quantity) error {
+func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, sdpName, driverName, poolName, nodeName, health string, devCount int, attrs map[string]string, caps map[string]resource.Quantity, sliceCount int) error {
 	slicesClient := r.clientset.ResourceV1().ResourceSlices()
 
 	// Build device list
@@ -199,8 +199,9 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 			Driver:   driverName,
 			NodeName: &nodeName,
 			Pool: resourcev1.ResourcePool{
-				Name:       poolName,
-				Generation: 1,
+				Name:               poolName,
+				Generation:         1,
+				ResourceSliceCount: int64(sliceCount),
 			},
 			Devices: devices,
 		},

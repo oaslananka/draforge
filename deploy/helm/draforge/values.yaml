@@ -10,7 +10,7 @@ server:
   image:
     repository: draforge
     tag: "server-latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 8080
@@ -37,7 +37,7 @@ controller:
   image:
     repository: draforge
     tag: "controller-latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   resources:
     limits:
       cpu: 500m
@@ -60,7 +60,7 @@ nodePlugin:
   image:
     repository: draforge
     tag: "sim-driver-latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   resources:
     limits:
       cpu: 500m

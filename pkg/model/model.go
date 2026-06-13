@@ -8,16 +8,16 @@ import (
 
 // Device represents a physical or synthetic device.
 type Device struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Type         string            `json:"type"`         // gpu, camera, fpga, nic, etc.
-	Status       string            `json:"status"`       // healthy, unhealthy, allocated, pending
-	NodeName     string            `json:"nodeName"`     // Node where the device resides
-	PoolName     string            `json:"poolName"`     // Pool the device belongs to
-	Attributes   map[string]string `json:"attributes"`   // Model, vendor, driver-version, etc.
-	Capacities   map[string]int64  `json:"capacities"`   // Custom consumable capacities
-	IsSynthetic  bool              `json:"isSynthetic"`  // True if created by DRAForge simulator
-	LastUpdated  time.Time         `json:"lastUpdated"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`        // gpu, camera, fpga, nic, etc.
+	Status      string            `json:"status"`      // healthy, unhealthy, allocated, pending
+	NodeName    string            `json:"nodeName"`    // Node where the device resides
+	PoolName    string            `json:"poolName"`    // Pool the device belongs to
+	Attributes  map[string]string `json:"attributes"`  // Model, vendor, driver-version, etc.
+	Capacities  map[string]int64  `json:"capacities"`  // Custom consumable capacities
+	IsSynthetic bool              `json:"isSynthetic"` // True if created by DRAForge simulator
+	LastUpdated time.Time         `json:"lastUpdated"`
 }
 
 // DevicePool represents a pool of resource devices.
@@ -27,22 +27,22 @@ type DevicePool struct {
 	NodeName    string            `json:"nodeName"`
 	DeviceCount int               `json:"deviceCount"`
 	DeviceType  string            `json:"deviceType"`
-	Health      string            `json:"health"`       // healthy, degraded, offline
+	Health      string            `json:"health"` // healthy, degraded, offline
 	IsSynthetic bool              `json:"isSynthetic"`
 	Labels      map[string]string `json:"labels"`
 }
 
 // ResourceClaimInfo represents the state of a ResourceClaim.
 type ResourceClaimInfo struct {
-	Name            string            `json:"name"`
-	Namespace       string            `json:"namespace"`
-	DeviceClassName string            `json:"deviceClassName"`
-	Status          string            `json:"status"`       // pending, allocated, deallocating
-	OwnerPodName    string            `json:"ownerPodName"` // Pod using the claim
-	AllocatedDevice string            `json:"allocatedDevice,omitempty"`
-	AllocatedNode   string            `json:"allocatedNode,omitempty"`
-	AllocatedDriver string            `json:"allocatedDriver,omitempty"`
-	CreatedAt       time.Time         `json:"createdAt"`
+	Name            string    `json:"name"`
+	Namespace       string    `json:"namespace"`
+	DeviceClassName string    `json:"deviceClassName"`
+	Status          string    `json:"status"`       // pending, allocated, deallocating
+	OwnerPodName    string    `json:"ownerPodName"` // Pod using the claim
+	AllocatedDevice string    `json:"allocatedDevice,omitempty"`
+	AllocatedNode   string    `json:"allocatedNode,omitempty"`
+	AllocatedDriver string    `json:"allocatedDriver,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
 }
 
 // GraphNode represents a vertex in the resource graph.
@@ -68,21 +68,21 @@ type ResourceGraph struct {
 
 // ReasonNode represents a node in the explain reason tree.
 type ReasonNode struct {
-	Message    string        `json:"message"`
-	Confidence string        `json:"confidence"` // confirmed, probable, informational
-	Evidence   string        `json:"evidence"`   // Source of finding (e.g. event, condition)
-	SourceType string        `json:"sourceType"` // Pod, Claim, Node, etc.
-	FieldPath  string        `json:"fieldPath,omitempty"`
-	Children   []ReasonNode  `json:"children,omitempty"`
+	Message    string       `json:"message"`
+	Confidence string       `json:"confidence"` // confirmed, probable, informational
+	Evidence   string       `json:"evidence"`   // Source of finding (e.g. event, condition)
+	SourceType string       `json:"sourceType"` // Pod, Claim, Node, etc.
+	FieldPath  string       `json:"fieldPath,omitempty"`
+	Children   []ReasonNode `json:"children,omitempty"`
 }
 
 // ExplainResult is the final explanation tree.
 type ExplainResult struct {
-	TargetName string      `json:"targetName"`
-	TargetType string      `json:"targetType"` // claim, pod
-	Allocated  bool        `json:"allocated"`
-	ReasonTree ReasonNode  `json:"reasonTree"`
-	Remedy     []string    `json:"remedy"`
+	TargetName string     `json:"targetName"`
+	TargetType string     `json:"targetType"` // claim, pod
+	Allocated  bool       `json:"allocated"`
+	ReasonTree ReasonNode `json:"reasonTree"`
+	Remedy     []string   `json:"remedy"`
 }
 
 // DoctorCheckStatus represents diagnostic check outcomes.
@@ -98,14 +98,14 @@ const (
 
 // DoctorCheckResult represents a single diagnostic check result.
 type DoctorCheckResult struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	Category       string            `json:"category"` // cluster, driver, claim
-	Status         DoctorCheckStatus `json:"status"`
-	Severity       string            `json:"severity"` // critical, high, medium, low, info
-	Evidence       string            `json:"evidence"`
-	Remediation    string            `json:"remediation"`
-	DocReference   string            `json:"docReference"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Category     string            `json:"category"` // cluster, driver, claim
+	Status       DoctorCheckStatus `json:"status"`
+	Severity     string            `json:"severity"` // critical, high, medium, low, info
+	Evidence     string            `json:"evidence"`
+	Remediation  string            `json:"remediation"`
+	DocReference string            `json:"docReference"`
 }
 
 // DoctorReport contains all diagnostic check results.

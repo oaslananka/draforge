@@ -5,6 +5,7 @@ package simulator
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -60,6 +61,11 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 				continue
 			}
 
+			// Do not allocate from unhealthy slices (fault injection)
+			if slice.Labels["draforge.oaslananka/health"] == "unhealthy" {
+				continue
+			}
+
 			// Simple model/class matching: in simulator, if DeviceClassName matches or defaults
 			// We find the first available device in the slice
 			for _, dev := range slice.Spec.Devices {
@@ -112,9 +118,11 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 				},
 			}
 
-			_, err = claimsClient.UpdateStatus(ctx, allocatedClaim, metav1.UpdateOptions{})
+			_, err = r.clientset.ResourceV1().ResourceClaims(claim.Namespace).UpdateStatus(ctx, allocatedClaim, metav1.UpdateOptions{})
 			if err != nil {
 				fmt.Printf("Failed to update status for claim %s: %v\n", claim.Name, err)
+			} else {
+				atomic.AddInt64(&r.AllocationsSimulated, 1)
 			}
 		}
 	}

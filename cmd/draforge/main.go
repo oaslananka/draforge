@@ -20,6 +20,9 @@ import (
 	"github.com/oaslananka/draforge/pkg/model"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 var (
@@ -232,6 +235,165 @@ func main() {
 		},
 	}
 
+	// 9. Scenario Command
+	var scenarioFile string
+	var scenarioCmd = &cobra.Command{
+		Use:   "scenario",
+		Short: "Manage virtual device scenarios (pools)",
+	}
+	var scenarioApplyCmd = &cobra.Command{
+		Use:   "apply",
+		Short: "Apply a SimulatedDevicePool scenario from file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if scenarioFile == "" {
+				return fmt.Errorf("scenario file path must be specified via -f")
+			}
+			_, dynamicClient, _, err := cluster.NewClientset(kubeconfig)
+			if err != nil {
+				return err
+			}
+			content, err := os.ReadFile(scenarioFile)
+			if err != nil {
+				return fmt.Errorf("failed to read scenario file: %w", err)
+			}
+			var obj unstructured.Unstructured
+			if err := yaml.Unmarshal(content, &obj.Object); err != nil {
+				return fmt.Errorf("failed to parse scenario YAML: %w", err)
+			}
+			ns := obj.GetNamespace()
+			if ns == "" {
+				ns = namespace
+				obj.SetNamespace(ns)
+			}
+			gvr := schema.GroupVersionResource{
+				Group:    "draforge.oaslananka",
+				Version:  "v1alpha1",
+				Resource: "simulateddevicepools",
+			}
+			existing, err := dynamicClient.Resource(gvr).Namespace(ns).Get(context.Background(), obj.GetName(), metav1.GetOptions{})
+			if err == nil {
+				obj.SetResourceVersion(existing.GetResourceVersion())
+				_, err = dynamicClient.Resource(gvr).Namespace(ns).Update(context.Background(), &obj, metav1.UpdateOptions{})
+				if err == nil {
+					fmt.Printf("Successfully updated scenario %s/%s\n", ns, obj.GetName())
+				}
+				return err
+			}
+			_, err = dynamicClient.Resource(gvr).Namespace(ns).Create(context.Background(), &obj, metav1.CreateOptions{})
+			if err == nil {
+				fmt.Printf("Successfully applied scenario %s/%s\n", ns, obj.GetName())
+			}
+			return err
+		},
+	}
+	scenarioApplyCmd.Flags().StringVarP(&scenarioFile, "file", "f", "", "Path to the scenario YAML file")
+	var scenarioResetCmd = &cobra.Command{
+		Use:   "reset",
+		Short: "Delete all SimulatedDevicePool scenarios",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, dynamicClient, _, err := cluster.NewClientset(kubeconfig)
+			if err != nil {
+				return err
+			}
+			gvr := schema.GroupVersionResource{
+				Group:    "draforge.oaslananka",
+				Version:  "v1alpha1",
+				Resource: "simulateddevicepools",
+			}
+			list, err := dynamicClient.Resource(gvr).Namespace(namespace).List(context.Background(), metav1.ListOptions{})
+			if err != nil {
+				return err
+			}
+			for _, item := range list.Items {
+				fmt.Printf("Deleting SimulatedDevicePool scenario %s/%s...\n", namespace, item.GetName())
+				_ = dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.Background(), item.GetName(), metav1.DeleteOptions{})
+			}
+			fmt.Println("All SimulatedDevicePool scenarios reset.")
+			return nil
+		},
+	}
+	scenarioCmd.AddCommand(scenarioApplyCmd)
+	scenarioCmd.AddCommand(scenarioResetCmd)
+
+	// 10. Inject / Clear Fault Commands
+	var poolNameFlag string
+	var faultTypeFlag string
+
+	var injectFaultCmd = &cobra.Command{
+		Use:   "inject-fault",
+		Short: "Inject a fault into a SimulatedDevicePool",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if poolNameFlag == "" {
+				return fmt.Errorf("--pool must be specified")
+			}
+			if faultTypeFlag == "" {
+				return fmt.Errorf("--type must be specified (unhealthy, capacity-exhausted, disappear)")
+			}
+			if faultTypeFlag != "unhealthy" && faultTypeFlag != "capacity-exhausted" && faultTypeFlag != "disappear" {
+				return fmt.Errorf("invalid fault type: %s", faultTypeFlag)
+			}
+			_, dynamicClient, _, err := cluster.NewClientset(kubeconfig)
+			if err != nil {
+				return err
+			}
+			gvr := schema.GroupVersionResource{
+				Group:    "draforge.oaslananka",
+				Version:  "v1alpha1",
+				Resource: "simulateddevicepools",
+			}
+			sdp, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(context.Background(), poolNameFlag, metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to get pool %s/%s: %w", namespace, poolNameFlag, err)
+			}
+			err = unstructured.SetNestedField(sdp.Object, faultTypeFlag, "spec", "health")
+			if err != nil {
+				return err
+			}
+			_, err = dynamicClient.Resource(gvr).Namespace(namespace).Update(context.Background(), sdp, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Successfully injected fault %q into pool %s/%s\n", faultTypeFlag, namespace, poolNameFlag)
+			return nil
+		},
+	}
+	injectFaultCmd.Flags().StringVar(&poolNameFlag, "pool", "", "Name of the SimulatedDevicePool")
+	injectFaultCmd.Flags().StringVar(&faultTypeFlag, "type", "", "Type of fault (unhealthy, capacity-exhausted, disappear)")
+
+	var clearFaultCmd = &cobra.Command{
+		Use:   "clear-faults",
+		Short: "Clear all faults from a SimulatedDevicePool",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if poolNameFlag == "" {
+				return fmt.Errorf("--pool must be specified")
+			}
+			_, dynamicClient, _, err := cluster.NewClientset(kubeconfig)
+			if err != nil {
+				return err
+			}
+			gvr := schema.GroupVersionResource{
+				Group:    "draforge.oaslananka",
+				Version:  "v1alpha1",
+				Resource: "simulateddevicepools",
+			}
+			sdp, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(context.Background(), poolNameFlag, metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to get pool %s/%s: %w", namespace, poolNameFlag, err)
+			}
+			err = unstructured.SetNestedField(sdp.Object, "healthy", "spec", "health")
+			if err != nil {
+				return err
+			}
+			_, err = dynamicClient.Resource(gvr).Namespace(namespace).Update(context.Background(), sdp, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Successfully cleared faults from pool %s/%s\n", namespace, poolNameFlag)
+			return nil
+		},
+	}
+	clearFaultCmd.Flags().StringVar(&poolNameFlag, "pool", "", "Name of the SimulatedDevicePool")
+
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(discoverCmd)
 	rootCmd.AddCommand(claimsCmd)
@@ -240,6 +402,9 @@ func main() {
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(scenarioCmd)
+	rootCmd.AddCommand(injectFaultCmd)
+	rootCmd.AddCommand(clearFaultCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

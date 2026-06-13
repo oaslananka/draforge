@@ -1,0 +1,26 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *' # Nightly at 2 AM
+
+jobs:
+  run-e2e:
+    name: Run Remote E2E tests
+    if: ${{ github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - name: Save DigitalOcean Kubeconfig
+        run: doctl kubernetes cluster kubeconfig save draforge-cluster
+
+      - name: Run E2E Script
+        run: bash scripts/remote-e2e.sh

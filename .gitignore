@@ -14,3 +14,12 @@ secrets/
 age.key
 *.age
 .DS_Store
+
+# DRAForge exclusions
+coverage.out
+web/dist/
+web/node_modules/
+tfplan*
+*.sbom.json
+dist/
+bin/

@@ -20,14 +20,14 @@ import (
 
 // Server handles HTTP API requests and serves the frontend.
 type Server struct {
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 	port      int
 	mu        sync.Mutex
 	clients   map[chan string]bool
 }
 
 // NewServer creates a Server instance.
-func NewServer(clientset *kubernetes.Clientset, port int) *Server {
+func NewServer(clientset kubernetes.Interface, port int) *Server {
 	return &Server{
 		clientset: clientset,
 		port:      port,
@@ -51,6 +51,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/graph", s.cors(s.handleGraph))
 	mux.HandleFunc("/api/explain", s.cors(s.handleExplain))
 	mux.HandleFunc("/api/doctor", s.cors(s.handleDoctor))
+	mux.HandleFunc("/metrics", s.handleMetrics)
 
 	// 3. SSE Stream Endpoint
 	mux.HandleFunc("/api/stream", s.cors(s.handleStream))
@@ -319,4 +320,52 @@ func (s *Server) respondError(w http.ResponseWriter, err error, code int) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"error": err.Error(),
 	})
+}
+
+// Metrics
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	pools, devices, claims, err := discovery.DiscoverDRA(r.Context(), s.clientset)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf("# ERROR: %v\n", err)))
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+
+	// 1. Pools
+	fmt.Fprintf(w, "# HELP draforge_pools_total Total number of device pools\n")
+	fmt.Fprintf(w, "# TYPE draforge_pools_total gauge\n")
+	for _, p := range pools {
+		fmt.Fprintf(w, "draforge_pools_total{pool=%q,driver=%q,node=%q,synthetic=%t,health=%q} 1\n",
+			p.Name, p.DriverName, p.NodeName, p.IsSynthetic, p.Health)
+	}
+
+	// 2. Devices
+	fmt.Fprintf(w, "# HELP draforge_devices_total Total number of devices\n")
+	fmt.Fprintf(w, "# TYPE draforge_devices_total gauge\n")
+	for _, d := range devices {
+		fmt.Fprintf(w, "draforge_devices_total{device=%q,pool=%q,node=%q,type=%q,status=%q,synthetic=%t} 1\n",
+			d.Name, d.PoolName, d.NodeName, d.Type, d.Status, d.IsSynthetic)
+	}
+
+	// 3. Claims
+	fmt.Fprintf(w, "# HELP draforge_claims_total Total number of ResourceClaims\n")
+	fmt.Fprintf(w, "# TYPE draforge_claims_total gauge\n")
+	for _, c := range claims {
+		fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,status=%q} 1\n",
+			c.Name, c.Namespace, c.DeviceClassName, c.Status)
+	}
+
+	// 4. Faults count
+	faultCount := 0
+	for _, p := range pools {
+		if p.Health != "healthy" {
+			faultCount++
+		}
+	}
+	fmt.Fprintf(w, "# HELP draforge_active_faults_total Total number of active faults\n")
+	fmt.Fprintf(w, "# TYPE draforge_active_faults_total gauge\n")
+	fmt.Fprintf(w, "draforge_active_faults_total %d\n", faultCount)
 }

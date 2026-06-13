@@ -31,9 +31,9 @@ resource "digitalocean_kubernetes_cluster" "draforge_cluster" {
   version  = var.kubernetes_version
   vpc_uuid = digitalocean_vpc.draforge_vpc.id
 
-  ha            = false
-  auto_upgrade  = false
-  tags          = var.tags
+  ha           = false
+  auto_upgrade = false
+  tags         = var.tags
 
   node_pool {
     name       = "draforge-workers"

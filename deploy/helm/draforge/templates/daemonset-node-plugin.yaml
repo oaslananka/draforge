@@ -29,6 +29,11 @@ spec:
         - name: node-plugin
           image: "{{ .Values.global.imageRegistry }}/{{ .Values.nodePlugin.image.repository }}:{{ .Values.nodePlugin.image.tag }}"
           imagePullPolicy: {{ .Values.nodePlugin.image.pullPolicy }}
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           resources:
             {{- toYaml .Values.nodePlugin.resources | nindent 12 }}
           securityContext:

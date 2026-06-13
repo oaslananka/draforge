@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	resourcev1 "k8s.io/api/resource/v1"
@@ -27,12 +28,15 @@ var (
 
 // Reconciler watches SimulatedDevicePools and creates/updates Kubernetes ResourceSlices.
 type Reconciler struct {
-	clientset     *kubernetes.Clientset
-	dynamicClient dynamic.Interface
+	clientset            kubernetes.Interface
+	dynamicClient        dynamic.Interface
+	ReconcileErrorsCount int64
+	AllocationsSimulated int64
+	ActiveFaultsCount    int64
 }
 
 // NewReconciler creates a Reconciler instance.
-func NewReconciler(clientset *kubernetes.Clientset, dyn dynamic.Interface) *Reconciler {
+func NewReconciler(clientset kubernetes.Interface, dyn dynamic.Interface) *Reconciler {
 	return &Reconciler{
 		clientset:     clientset,
 		dynamicClient: dyn,
@@ -52,6 +56,7 @@ func (r *Reconciler) StartReconciliationLoop(ctx context.Context, interval time.
 		case <-ticker.C:
 			if err := r.Reconcile(ctx); err != nil {
 				fmt.Printf("Reconciliation error: %v\n", err)
+				atomic.AddInt64(&r.ReconcileErrorsCount, 1)
 			}
 		}
 	}
@@ -71,6 +76,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 
 	// Track active slices we manage
 	activeSliceNames := make(map[string]bool)
+	localFaultCount := int64(0)
 
 	for _, sdp := range sdps.Items {
 		spec, found, _ := unstructured.NestedMap(sdp.Object, "spec")
@@ -89,6 +95,9 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 		health, _, _ := unstructured.NestedString(spec, "health")
 		if health == "" {
 			health = "healthy"
+		}
+		if health != "healthy" {
+			localFaultCount++
 		}
 
 		// If no target nodes specified, apply to all nodes in the cluster
@@ -124,15 +133,40 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 			}
 		}
 
+		var publishedSlices []string
+		var activeFaults []string
+		if health != "healthy" {
+			activeFaults = append(activeFaults, health)
+		}
+
 		// For each target node, ensure ResourceSlice exists
 		for _, nodeName := range targetNodes {
 			sliceName := fmt.Sprintf("sim-slice-%s-%s-%s", sdp.GetName(), nodeName, sdp.GetNamespace())
 			sliceName = strings.ReplaceAll(sliceName, ".", "-")
-			activeSliceNames[sliceName] = true
 
-			if err := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, int(deviceCount), attrs, caps, len(targetNodes)); err != nil {
+			if health == "disappear" {
+				// disappear fault -> delete the slice if it exists
+				_ = r.clientset.ResourceV1().ResourceSlices().Delete(ctx, sliceName, metav1.DeleteOptions{})
+				continue
+			}
+
+			activeSliceNames[sliceName] = true
+			publishedSlices = append(publishedSlices, sliceName)
+
+			runDevCount := int(deviceCount)
+			if health == "capacity-exhausted" {
+				runDevCount = 0
+			}
+
+			if err := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, runDevCount, attrs, caps, len(targetNodes)); err != nil {
 				fmt.Printf("Failed to ensure ResourceSlice %s: %v\n", sliceName, err)
 			}
+		}
+
+		// Update the status subresource
+		if err := r.updateSDPStatus(ctx, &sdp, publishedSlices, activeFaults); err != nil {
+			// Ignore update errors if status subresource is not yet active/supported
+			_ = err
 		}
 	}
 
@@ -150,6 +184,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 		}
 	}
 
+	atomic.StoreInt64(&r.ActiveFaultsCount, localFaultCount)
 	return nil
 }
 
@@ -192,6 +227,7 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 			Labels: map[string]string{
 				"draforge.oaslananka/managed-by": "simulator",
 				"draforge.oaslananka/sdp-name":   sdpName,
+				"draforge.oaslananka/health":     health,
 				"project":                        "draforge",
 			},
 		},
@@ -218,5 +254,32 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 
 	// Create new
 	_, err = slicesClient.Create(ctx, slice, metav1.CreateOptions{})
+	return err
+}
+
+func (r *Reconciler) updateSDPStatus(ctx context.Context, sdp *unstructured.Unstructured, publishedSlices []string, activeFaults []string) error {
+	sdpCopy := sdp.DeepCopy()
+
+	slicesSlice := make([]interface{}, len(publishedSlices))
+	for i, s := range publishedSlices {
+		slicesSlice[i] = s
+	}
+
+	faultsSlice := make([]interface{}, len(activeFaults))
+	for i, f := range activeFaults {
+		faultsSlice[i] = f
+	}
+
+	status := map[string]interface{}{
+		"publishedSlices": slicesSlice,
+		"activeFaults":    faultsSlice,
+	}
+
+	err := unstructured.SetNestedMap(sdpCopy.Object, status, "status")
+	if err != nil {
+		return fmt.Errorf("failed to set status: %w", err)
+	}
+
+	_, err = r.dynamicClient.Resource(sdpGVR).Namespace(sdp.GetNamespace()).UpdateStatus(ctx, sdpCopy, metav1.UpdateOptions{})
 	return err
 }

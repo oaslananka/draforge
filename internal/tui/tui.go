@@ -27,14 +27,14 @@ const (
 
 // modelState holds the TUI state.
 type modelState struct {
-	clientset  *kubernetes.Clientset
-	activeTab  activeView
-	pools      []model.DevicePool
-	devices    []model.Device
-	claims     []model.ResourceClaimInfo
-	docReport  model.DoctorReport
-	err        error
-	loading    bool
+	clientset     *kubernetes.Clientset
+	activeTab     activeView
+	pools         []model.DevicePool
+	devices       []model.Device
+	claims        []model.ResourceClaimInfo
+	docReport     model.DoctorReport
+	err           error
+	loading       bool
 	lastRefreshed time.Time
 }
 

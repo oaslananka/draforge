@@ -1,41 +1,37 @@
-# Makefile for DRAForge
+# Makefile for DRAForge (delegates to Taskfile)
 
-.PHONY: all build test tui server clean infra-init infra-plan infra-apply infra-output infra-audit infra-destroy-plan
+.PHONY: all build test tui server clean infra-init infra-plan infra-apply infra-output infra-audit
 
 all: build
 
 build:
-	go build -o bin/draforge ./cmd/draforge
-	go build -o bin/draforge-controller ./cmd/draforge-controller
-	go build -o bin/draforge-sim-driver ./cmd/draforge-sim-driver
+	task build
 
 test:
-	go test -v -race ./...
+	task test
+
+fmt:
+	task fmt
+
+lint:
+	task lint
+
+vet:
+	task vet
 
 clean:
 	rm -rf bin/
 	rm -rf dist/
 
-# Terraform Targets
 infra-init:
-	cd infra/terraform/environments/showcase && terraform init
+	task infra:init
 
 infra-plan:
-	cd infra/terraform/environments/showcase && terraform plan -out=tfplan
-	cd infra/terraform/environments/showcase && terraform show -json tfplan > tfplan.json
-	python scripts/validate-plan.py infra/terraform/environments/showcase/tfplan.json
-
+	task infra:plan
+	task infra:validate
 
 infra-apply:
-	./scripts/audit-cloud-resources.sh
-	cd infra/terraform/environments/showcase && terraform apply tfplan
-	./scripts/audit-cloud-resources.sh
-
-infra-output:
-	cd infra/terraform/environments/showcase && terraform output
+	task infra:apply
 
 infra-audit:
-	./scripts/audit-cloud-resources.sh
-
-infra-destroy-plan:
-	cd infra/terraform/environments/showcase && terraform plan -destroy -out=tfdestroyplan
+	task infra:audit

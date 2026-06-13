@@ -2,10 +2,12 @@
 # Stage 1: Build Go Controller
 FROM golang:1.26.0 AS builder
 WORKDIR /app
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o draforge-controller ./cmd/draforge-controller
+ARG VERSION=v0.1.0
+ARG COMMIT=unknown
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.versionVal=${VERSION} -X main.commitSHA=${COMMIT}" -o draforge-controller ./cmd/draforge-controller
 
 # Stage 2: Runner
 FROM alpine:3.20.0

@@ -93,6 +93,11 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 
 			poolKey := driverName + "/" + poolName + "/" + nodeNameStr
 			pool, exists := poolMap[poolKey]
+			healthVal := "healthy"
+			if slice.Labels["draforge.oaslananka/health"] != "" {
+				healthVal = slice.Labels["draforge.oaslananka/health"]
+			}
+
 			if !exists {
 				isSynth := strings.Contains(poolName, "sim") || strings.Contains(driverName, "sim")
 				pool = &model.DevicePool{
@@ -100,11 +105,16 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 					DriverName:  driverName,
 					NodeName:    nodeNameStr,
 					DeviceType:  "unknown",
-					Health:      "healthy",
+					Health:      healthVal,
 					IsSynthetic: isSynth,
 					Labels:      slice.Labels,
 				}
 				poolMap[poolKey] = pool
+			} else {
+				// If any slice of the pool is unhealthy, mark the pool health as unhealthy
+				if healthVal != "healthy" {
+					pool.Health = healthVal
+				}
 			}
 
 			// Process devices in the slice
@@ -144,7 +154,7 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 					ID:          slice.Name + "/" + devSpec.Name,
 					Name:        devSpec.Name,
 					Type:        devType,
-					Status:      "healthy", // Default, driver reports health in status field if extended
+					Status:      healthVal, // Propagated health status
 					NodeName:    nodeNameStr,
 					PoolName:    poolName,
 					Attributes:  attrs,

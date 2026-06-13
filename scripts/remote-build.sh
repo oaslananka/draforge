@@ -38,7 +38,7 @@ cat build/remote/kaniko-job.yaml \
     | sed "s/COMPONENT_NAME/$COMPONENT/g" \
     | sed "s/RUN_ID/$RUN_ID/g" \
     | sed "s|REPO_URL|$REPO_URL|g" \
-    | sed "s/COMMIT_SHA/$COMMIT_SHA/g" \
+    | sed "s|COMMIT_SHA|$COMMIT_SHA|g" \
     | sed "s|REGISTRY_URL|$REGISTRY_URL|g" \
     | sed "s|IMAGE_NAME|$IMAGE_NAME|g" \
     | sed "s/TAG/$TAG/g" \

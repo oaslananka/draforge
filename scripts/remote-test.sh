@@ -23,7 +23,7 @@ MANIFEST_TEMP=$(mktemp)
 cat build/remote/test-job.yaml \
     | sed "s/RUN_ID/$RUN_ID/g" \
     | sed "s|REPO_URL|$REPO_URL|g" \
-    | sed "s/COMMIT_SHA/$COMMIT_SHA/g" \
+    | sed "s|COMMIT_SHA|$COMMIT_SHA|g" \
     > "$MANIFEST_TEMP"
 
 # 3. Apply the Job

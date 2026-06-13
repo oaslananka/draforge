@@ -8,7 +8,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	resourcev1b1 "k8s.io/api/resource/v1beta1"
+	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,13 +32,13 @@ func (r *Reconciler) StartAllocationSimulator(ctx context.Context, interval time
 
 // SimulateAllocation finds pending claims and assigns them to available virtual devices.
 func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
-	claimsClient := r.clientset.ResourceV1beta1().ResourceClaims("")
+	claimsClient := r.clientset.ResourceV1().ResourceClaims("")
 	claims, err := claimsClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 
-	slices, err := r.clientset.ResourceV1beta1().ResourceSlices().List(ctx, metav1.ListOptions{})
+	slices, err := r.clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 		}
 
 		// Find a matching slice/pool with available capacity
-		var targetSlice *resourcev1b1.ResourceSlice
+		var targetSlice *resourcev1.ResourceSlice
 		var targetDeviceName string
 		found := false
 
@@ -83,9 +83,9 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 
 			// Update claim status with allocation result
 			allocatedClaim := claim.DeepCopy()
-			allocatedClaim.Status.Allocation = &resourcev1b1.AllocationResult{
-				Devices: resourcev1b1.DeviceAllocationResult{
-					Results: []resourcev1b1.DeviceRequestAllocationResult{
+			allocatedClaim.Status.Allocation = &resourcev1.AllocationResult{
+				Devices: resourcev1.DeviceAllocationResult{
+					Results: []resourcev1.DeviceRequestAllocationResult{
 						{
 							Device: targetDeviceName,
 							Driver: targetSlice.Spec.Driver,
@@ -118,7 +118,7 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 	return nil
 }
 
-func (r *Reconciler) isDeviceAllocated(claims []resourcev1b1.ResourceClaim, poolName, devName string) bool {
+func (r *Reconciler) isDeviceAllocated(claims []resourcev1.ResourceClaim, poolName, devName string) bool {
 	for _, c := range claims {
 		if c.Status.Allocation != nil {
 			for _, res := range c.Status.Allocation.Devices.Results {

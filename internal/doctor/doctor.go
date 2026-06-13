@@ -75,7 +75,7 @@ func (c *APIAvailabilityCheck) Run(ctx context.Context, clientset kubernetes.Int
 		Category:     c.Category(),
 		Status:       model.StatusPass,
 		Severity:     "critical",
-		Evidence:     "resource.k8s.io/v1beta1 API group is active.",
+		Evidence:     "resource.k8s.io/v1 or v1beta1 API group is active.",
 		Remediation:  "No action required.",
 		DocReference: "https://kubernetes.io/docs/concepts/extend-kubernetes/compute-resource-sharing/",
 	}
@@ -92,7 +92,7 @@ func (c *APIAvailabilityCheck) Run(ctx context.Context, clientset kubernetes.Int
 	for _, g := range groups.Groups {
 		if g.Name == "resource.k8s.io" {
 			for _, v := range g.Versions {
-				if v.Version == "v1beta1" {
+				if v.Version == "v1beta1" || v.Version == "v1" {
 					found = true
 					break
 				}
@@ -102,7 +102,7 @@ func (c *APIAvailabilityCheck) Run(ctx context.Context, clientset kubernetes.Int
 
 	if !found {
 		res.Status = model.StatusFail
-		res.Evidence = "resource.k8s.io/v1beta1 API group is missing from the API server."
+		res.Evidence = "resource.k8s.io/v1 or v1beta1 API group is missing from the API server."
 		res.Remediation = "Upgrade cluster to Kubernetes v1.32+ or enable the DynamicResourceAllocation feature gate."
 	}
 
@@ -266,7 +266,7 @@ func (c *StaleResourceSliceCheck) Run(ctx context.Context, clientset kubernetes.
 		DocReference: "https://kubernetes.io/docs/concepts/extend-kubernetes/compute-resource-sharing/#resourceslice",
 	}
 
-	slices, err := clientset.ResourceV1beta1().ResourceSlices().List(ctx, metav1.ListOptions{})
+	slices, err := clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		res.Status = model.StatusUnknown
 		res.Evidence = fmt.Sprintf("Failed to list ResourceSlices: %v", err)

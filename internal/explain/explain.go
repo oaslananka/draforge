@@ -64,7 +64,7 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 
 	// 2. Check DeviceClass
 	classExists := false
-	classNames, err := clientset.ResourceV1beta1().DeviceClasses().List(ctx, metav1.ListOptions{})
+	classNames, err := clientset.ResourceV1().DeviceClasses().List(ctx, metav1.ListOptions{})
 	if err == nil {
 		for _, cls := range classNames.Items {
 			if cls.Name == target.DeviceClassName {

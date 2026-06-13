@@ -39,7 +39,7 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 		return nil, err
 	}
 
-	classes, err := clientset.ResourceV1beta1().DeviceClasses().List(ctx, metav1.ListOptions{})
+	classes, err := clientset.ResourceV1().DeviceClasses().List(ctx, metav1.ListOptions{})
 	var classList []string
 	if err == nil {
 		for _, c := range classes.Items {

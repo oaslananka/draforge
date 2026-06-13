@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	resourcev1b1 "k8s.io/api/resource/v1beta1"
+	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -137,14 +137,14 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 	}
 
 	// 2. Clean up orphaned ResourceSlices created by our controller
-	slices, err := r.clientset.ResourceV1beta1().ResourceSlices().List(ctx, metav1.ListOptions{})
+	slices, err := r.clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 	if err == nil {
 		for _, s := range slices.Items {
 			// Slices managed by simulator have the label: draforge.oaslananka/managed-by: simulator
 			if s.Labels["draforge.oaslananka/managed-by"] == "simulator" {
 				if !activeSliceNames[s.Name] {
 					fmt.Printf("Deleting orphaned ResourceSlice: %s\n", s.Name)
-					_ = r.clientset.ResourceV1beta1().ResourceSlices().Delete(ctx, s.Name, metav1.DeleteOptions{})
+					_ = r.clientset.ResourceV1().ResourceSlices().Delete(ctx, s.Name, metav1.DeleteOptions{})
 				}
 			}
 		}
@@ -154,33 +154,33 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 }
 
 func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, sdpName, driverName, poolName, nodeName, health string, devCount int, attrs map[string]string, caps map[string]resource.Quantity) error {
-	slicesClient := r.clientset.ResourceV1beta1().ResourceSlices()
+	slicesClient := r.clientset.ResourceV1().ResourceSlices()
 
 	// Build device list
-	var devices []resourcev1b1.Device
+	var devices []resourcev1.Device
 	for i := 0; i < devCount; i++ {
 		devName := fmt.Sprintf("dev-%d", i)
 
-		// Map attributes to v1beta1 DeviceAttribute
-		bAttrs := make(map[resourcev1b1.QualifiedName]resourcev1b1.DeviceAttribute)
+		// Map attributes to v1 DeviceAttribute
+		bAttrs := make(map[resourcev1.QualifiedName]resourcev1.DeviceAttribute)
 		for k, v := range attrs {
 			strVal := v
-			bAttrs[resourcev1b1.QualifiedName(k)] = resourcev1b1.DeviceAttribute{
+			bAttrs[resourcev1.QualifiedName(k)] = resourcev1.DeviceAttribute{
 				StringValue: &strVal,
 			}
 		}
 
-		// Map capacities to v1beta1 DeviceCapacity
-		bCaps := make(map[resourcev1b1.QualifiedName]resourcev1b1.DeviceCapacity)
+		// Map capacities to v1 DeviceCapacity
+		bCaps := make(map[resourcev1.QualifiedName]resourcev1.DeviceCapacity)
 		for k, v := range caps {
-			bCaps[resourcev1b1.QualifiedName(k)] = resourcev1b1.DeviceCapacity{
+			bCaps[resourcev1.QualifiedName(k)] = resourcev1.DeviceCapacity{
 				Value: v,
 			}
 		}
 
-		devices = append(devices, resourcev1b1.Device{
+		devices = append(devices, resourcev1.Device{
 			Name: devName,
-			Basic: &resourcev1b1.BasicDevice{
+			Basic: &resourcev1.BasicDevice{
 				Attributes: bAttrs,
 				Capacity:   bCaps,
 			},
@@ -188,7 +188,7 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 	}
 
 	// Build the ResourceSlice object
-	slice := &resourcev1b1.ResourceSlice{
+	slice := &resourcev1.ResourceSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
@@ -197,10 +197,10 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 				"project":                        "draforge",
 			},
 		},
-		Spec: resourcev1b1.ResourceSliceSpec{
+		Spec: resourcev1.ResourceSliceSpec{
 			Driver:   driverName,
 			NodeName: nodeName,
-			Pool: resourcev1b1.ResourcePool{
+			Pool: resourcev1.ResourcePool{
 				Name:       poolName,
 				Generation: 1,
 			},

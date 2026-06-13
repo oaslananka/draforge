@@ -20,11 +20,7 @@ spec:
         - protocol: TCP
           port: 8080
   egress:
-    - to:
-        - namespaceSelector: {}
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
+    - {}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -41,9 +37,5 @@ spec:
     - Egress
   ingress: [] # No incoming connections allowed to controller
   egress:
-    - to:
-        - namespaceSelector: {}
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
+    - {}
 {{- end }}

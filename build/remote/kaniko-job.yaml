@@ -28,8 +28,7 @@ spec:
         - --context=dir:///workspace
         - --dockerfile=/workspace/build/package/Dockerfile.COMPONENT_NAME
         - --destination=REGISTRY_URL/IMAGE_NAME:TAG
-        - --cache=true
-        - --cache-dir=/cache
+        - --cache=false
         resources:
           requests:
             cpu: "500m"

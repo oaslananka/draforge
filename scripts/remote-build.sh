@@ -5,7 +5,8 @@
 set -euo pipefail
 
 COMPONENT=${1:-""}
-TAG=${2:-"latest"}
+RAW_TAG=${2:-"latest"}
+TAG="${COMPONENT}-${RAW_TAG}"
 COMMIT_SHA=${3:-$(git rev-parse HEAD)}
 
 if [ -z "$COMPONENT" ]; then
@@ -15,7 +16,7 @@ fi
 
 REPO_URL="https://github.com/oaslananka/draforge.git"
 REGISTRY_URL="registry.digitalocean.com/draforge"
-IMAGE_NAME="draforge-$COMPONENT"
+IMAGE_NAME="draforge"
 RUN_ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6 ; echo '')
 JOB_NAME="draforge-build-$COMPONENT-$RUN_ID"
 

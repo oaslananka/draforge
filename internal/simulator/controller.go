@@ -1,0 +1,223 @@
+// Package simulator implements the virtual device pool manager and reconciliation logic.
+// SPDX-License-Identifier: Apache-2.0
+package simulator
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	resourcev1b1 "k8s.io/api/resource/v1beta1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+)
+
+var (
+	sdpGVR = schema.GroupVersionResource{
+		Group:    "draforge.oaslananka",
+		Version:  "v1alpha1",
+		Resource: "simulateddevicepools",
+	}
+)
+
+// Reconciler watches SimulatedDevicePools and creates/updates Kubernetes ResourceSlices.
+type Reconciler struct {
+	clientset     *kubernetes.Clientset
+	dynamicClient dynamic.Interface
+}
+
+// NewReconciler creates a Reconciler instance.
+func NewReconciler(clientset *kubernetes.Clientset, dyn dynamic.Interface) *Reconciler {
+	return &Reconciler{
+		clientset:     clientset,
+		dynamicClient: dyn,
+	}
+}
+
+// StartReconciliationLoop runs the reconciliation loop periodically.
+func (r *Reconciler) StartReconciliationLoop(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	fmt.Println("Starting SimulatedDevicePool reconciliation loop...")
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := r.Reconcile(ctx); err != nil {
+				fmt.Printf("Reconciliation error: %v\n", err)
+			}
+		}
+	}
+}
+
+// Reconcile performs one sync iteration.
+func (r *Reconciler) Reconcile(ctx context.Context) error {
+	// 1. List SimulatedDevicePools
+	sdps, err := r.dynamicClient.Resource(sdpGVR).Namespace("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		// If CRD is not registered yet, we skip reconciliation silently
+		if strings.Contains(err.Error(), "could not find the scale subresource") || strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		return fmt.Errorf("failed to list SimulatedDevicePools: %w", err)
+	}
+
+	// Track active slices we manage
+	activeSliceNames := make(map[string]bool)
+
+	for _, sdp := range sdps.Items {
+		spec, found, _ := unstructured.NestedMap(sdp.Object, "spec")
+		if !found {
+			continue
+		}
+
+		driverName, _, _ := unstructured.NestedString(spec, "driverName")
+		poolName, _, _ := unstructured.NestedString(spec, "poolName")
+		if poolName == "" {
+			poolName = sdp.GetName()
+		}
+		deviceType, _, _ := unstructured.NestedString(spec, "deviceType")
+		deviceCount, _, _ := unstructured.NestedInt64(spec, "deviceCount")
+		targetNodes, _, _ := unstructured.NestedStringSlice(spec, "targetNodes")
+		health, _, _ := unstructured.NestedString(spec, "health")
+		if health == "" {
+			health = "healthy"
+		}
+
+		// If no target nodes specified, apply to all nodes in the cluster
+		if len(targetNodes) == 0 {
+			nodes, err := r.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to list nodes: %w", err)
+			}
+			for _, node := range nodes.Items {
+				targetNodes = append(targetNodes, node.Name)
+			}
+		}
+
+		// Parse custom attributes and capacities
+		rawAttrs, _, _ := unstructured.NestedMap(spec, "attributes")
+		rawCaps, _, _ := unstructured.NestedMap(spec, "capacities")
+
+		attrs := make(map[string]string)
+		for k, v := range rawAttrs {
+			if s, ok := v.(string); ok {
+				attrs[k] = s
+			}
+		}
+		attrs["driver"] = driverName
+		attrs["type"] = deviceType
+
+		caps := make(map[string]resource.Quantity)
+		for k, v := range rawCaps {
+			if s, ok := v.(string); ok {
+				if q, err := resource.ParseQuantity(s); err == nil {
+					caps[k] = q
+				}
+			}
+		}
+
+		// For each target node, ensure ResourceSlice exists
+		for _, nodeName := range targetNodes {
+			sliceName := fmt.Sprintf("sim-slice-%s-%s-%s", sdp.GetName(), nodeName, sdp.GetNamespace())
+			sliceName = strings.ReplaceAll(sliceName, ".", "-")
+			activeSliceNames[sliceName] = true
+
+			if err := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, int(deviceCount), attrs, caps); err != nil {
+				fmt.Printf("Failed to ensure ResourceSlice %s: %v\n", sliceName, err)
+			}
+		}
+	}
+
+	// 2. Clean up orphaned ResourceSlices created by our controller
+	slices, err := r.clientset.ResourceV1beta1().ResourceSlices().List(ctx, metav1.ListOptions{})
+	if err == nil {
+		for _, s := range slices.Items {
+			// Slices managed by simulator have the label: draforge.oaslananka/managed-by: simulator
+			if s.Labels["draforge.oaslananka/managed-by"] == "simulator" {
+				if !activeSliceNames[s.Name] {
+					fmt.Printf("Deleting orphaned ResourceSlice: %s\n", s.Name)
+					_ = r.clientset.ResourceV1beta1().ResourceSlices().Delete(ctx, s.Name, metav1.DeleteOptions{})
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, sdpName, driverName, poolName, nodeName, health string, devCount int, attrs map[string]string, caps map[string]resource.Quantity) error {
+	slicesClient := r.clientset.ResourceV1beta1().ResourceSlices()
+
+	// Build device list
+	var devices []resourcev1b1.Device
+	for i := 0; i < devCount; i++ {
+		devName := fmt.Sprintf("dev-%d", i)
+
+		// Map attributes to v1beta1 DeviceAttribute
+		bAttrs := make(map[resourcev1b1.QualifiedName]resourcev1b1.DeviceAttribute)
+		for k, v := range attrs {
+			strVal := v
+			bAttrs[resourcev1b1.QualifiedName(k)] = resourcev1b1.DeviceAttribute{
+				StringValue: &strVal,
+			}
+		}
+
+		// Map capacities to v1beta1 DeviceCapacity
+		bCaps := make(map[resourcev1b1.QualifiedName]resourcev1b1.DeviceCapacity)
+		for k, v := range caps {
+			bCaps[resourcev1b1.QualifiedName(k)] = resourcev1b1.DeviceCapacity{
+				Value: v,
+			}
+		}
+
+		devices = append(devices, resourcev1b1.Device{
+			Name: devName,
+			Basic: &resourcev1b1.BasicDevice{
+				Attributes: bAttrs,
+				Capacity:   bCaps,
+			},
+		})
+	}
+
+	// Build the ResourceSlice object
+	slice := &resourcev1b1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"draforge.oaslananka/managed-by": "simulator",
+				"draforge.oaslananka/sdp-name":   sdpName,
+				"project":                        "draforge",
+			},
+		},
+		Spec: resourcev1b1.ResourceSliceSpec{
+			Driver:   driverName,
+			NodeName: nodeName,
+			Pool: resourcev1b1.ResourcePool{
+				Name:       poolName,
+				Generation: 1,
+			},
+			Devices: devices,
+		},
+	}
+
+	// Check if already exists
+	existing, err := slicesClient.Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		// Update existing
+		slice.ResourceVersion = existing.ResourceVersion
+		_, err = slicesClient.Update(ctx, slice, metav1.UpdateOptions{})
+		return err
+	}
+
+	// Create new
+	_, err = slicesClient.Create(ctx, slice, metav1.CreateOptions{})
+	return err
+}

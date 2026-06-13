@@ -1,0 +1,18 @@
+# Dockerfile for draforge-controller
+# Stage 1: Build Go Controller
+FROM golang:1.22.5-alpine AS builder
+RUN apk add --no-cache git
+WORKDIR /app
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o draforge-controller ./cmd/draforge-controller
+
+# Stage 2: Runner
+FROM alpine:3.20.0
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S draforge && adduser -S draforge -G draforge
+USER draforge
+WORKDIR /home/draforge
+COPY --from=builder /app/draforge-controller .
+ENTRYPOINT ["./draforge-controller"]

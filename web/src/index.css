@@ -1,0 +1,159 @@
+/* DRAForge Design System Stylesheet */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+:root {
+  /* HSL Tailored Dark Theme Color Palette */
+  --bg-primary: hsl(220, 24%, 7%);
+  --bg-secondary: hsl(220, 24%, 12%);
+  --bg-tertiary: hsl(220, 24%, 18%);
+  
+  --text-primary: hsl(210, 38%, 95%);
+  --text-secondary: hsl(215, 16%, 70%);
+  --text-muted: hsl(215, 12%, 48%);
+  
+  --accent-primary: hsl(262, 80%, 60%);    /* Neon Violet */
+  --accent-secondary: hsl(190, 90%, 50%);  /* Electric Cyan */
+  --accent-hover: hsl(262, 85%, 68%);
+  
+  --color-success: hsl(150, 75%, 45%);     /* Mint Green */
+  --color-warning: hsl(38, 92%, 55%);      /* Amber Gold */
+  --color-danger: hsl(355, 85%, 55%);      /* Crimson Red */
+  --color-info: hsl(200, 80%, 55%);        /* Sky Blue */
+
+  --border-light: hsla(215, 15%, 80%, 0.08);
+  --border-glow: hsla(262, 80%, 60%, 0.15);
+
+  --font-title: 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-code: 'Fira Code', monospace;
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  
+  --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Glassmorphism layouts */
+.glass-panel {
+  background: rgba(18, 22, 33, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.glass-panel:hover {
+  border-color: var(--border-glow);
+  box-shadow: 0 0 20px rgba(138, 43, 226, 0.15);
+}
+
+/* Dynamic glow badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+
+.badge-success {
+  background-color: hsla(150, 75%, 45%, 0.1);
+  color: var(--color-success);
+  border-color: hsla(150, 75%, 45%, 0.2);
+}
+
+.badge-warning {
+  background-color: hsla(38, 92%, 55%, 0.1);
+  color: var(--color-warning);
+  border-color: hsla(38, 92%, 55%, 0.2);
+}
+
+.badge-danger {
+  background-color: hsla(355, 85%, 55%, 0.1);
+  color: var(--color-danger);
+  border-color: hsla(355, 85%, 55%, 0.2);
+}
+
+/* Gradients and animations */
+.glow-text {
+  background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.accent-glow-text {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--border-light);
+  border-top-color: var(--accent-secondary);
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Micro-interactions */
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-family: var(--font-body);
+  transition: all var(--transition-fast);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(138, 43, 226, 0.45), 0 0 15px rgba(0, 191, 255, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}

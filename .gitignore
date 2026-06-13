@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform-state/
+kubeconfig*
+*.kubeconfig
+*.pem
+*.key
+credentials/
+secrets/
+age.key
+*.age
+.DS_Store

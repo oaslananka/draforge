@@ -1,0 +1,69 @@
+apiVersion: amc.draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+# This is a representation of the spec. In Kubernetes, the CRD definition is registered under customresourcedefinitions.apiextensions.k8s.io.
+# Let's write the complete Kubernetes CustomResourceDefinition manifest.
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: simulateddevicepools.draforge.oaslananka
+spec:
+  group: draforge.oaslananka
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - driverName
+                - deviceCount
+                - deviceType
+              properties:
+                driverName:
+                  type: string
+                poolName:
+                  type: string
+                deviceCount:
+                  type: integer
+                  minimum: 1
+                deviceType:
+                  type: string
+                targetNodes:
+                  type: array
+                  items:
+                    type: string
+                health:
+                  type: string
+                  default: "healthy"
+                attributes:
+                  type: object
+                  additionalProperties:
+                    type: string
+                capacities:
+                  type: object
+                  additionalProperties:
+                    type: string
+            status:
+              type: object
+              properties:
+                publishedSlices:
+                  type: array
+                  items:
+                    type: string
+                activeFaults:
+                  type: array
+                  items:
+                    type: string
+  scope: Namespaced
+  names:
+    plural: simulateddevicepools
+    singular: simulateddevicepool
+    kind: SimulatedDevicePool
+    shortNames:
+      - simpool
+      - sdp

@@ -1,0 +1,28 @@
+# Multi-stage Dockerfile for draforge-server
+# Stage 1: Build React Frontend Dashboard
+FROM node:20.15-alpine AS frontend-builder
+WORKDIR /web
+COPY web/package*.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Build Go API Server
+FROM golang:1.22.5-alpine AS backend-builder
+RUN apk add --no-cache git
+WORKDIR /app
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o draforge-server ./cmd/draforge-server
+
+# Stage 3: Runner
+FROM alpine:3.20.0
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S draforge && adduser -S draforge -G draforge
+USER draforge
+WORKDIR /home/draforge
+COPY --from=backend-builder /app/draforge-server .
+COPY --from=frontend-builder /web/dist ./web/dist
+EXPOSE 8080
+ENTRYPOINT ["./draforge-server"]

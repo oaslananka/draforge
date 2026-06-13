@@ -1,0 +1,43 @@
+version: '3'
+
+vars:
+  BASH_BIN: '{{if eq OS "windows"}}"C:\\Program Files\\Git\\bin\\bash.exe"{{else}}bash{{end}}'
+
+tasks:
+  build:
+    desc: Build all binaries
+    cmds:
+      - go build -o bin/draforge ./cmd/draforge
+      - go build -o bin/draforge-server ./cmd/draforge-server
+      - go build -o bin/draforge-controller ./cmd/draforge-controller
+      - go build -o bin/draforge-sim-driver ./cmd/draforge-sim-driver
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - go test -v -race ./...
+
+  infra:init:
+    desc: Initialize Terraform
+    cmds:
+      - cd infra/terraform/environments/showcase && terraform init
+
+  infra:plan:
+    desc: Generate and validate Terraform plan
+    cmds:
+      - cd infra/terraform/environments/showcase && terraform plan -out=tfplan
+      - cd infra/terraform/environments/showcase && terraform show -json tfplan > tfplan.json
+      - python scripts/validate-plan.py infra/terraform/environments/showcase/tfplan.json
+
+  infra:apply:
+    desc: Apply Terraform plan
+    cmds:
+      - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
+      - cd infra/terraform/environments/showcase && terraform apply tfplan
+      - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
+
+  infra:audit:
+    desc: Audit active cloud resources
+    cmds:
+      - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
+

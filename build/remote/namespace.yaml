@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: draforge-ci
+  labels:
+    project: draforge
+    environment: ci

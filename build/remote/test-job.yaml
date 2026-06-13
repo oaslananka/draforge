@@ -23,7 +23,7 @@ spec:
           mountPath: /workspace
       containers:
       - name: test-runner
-        image: golang:1.22.5-alpine
+        image: golang:1.26.0
         workingDir: /workspace
         command:
         - sh

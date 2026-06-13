@@ -2,7 +2,8 @@
 
 global:
   imageRegistry: registry.digitalocean.com/draforge
-  imagePullSecrets: []
+  imagePullSecrets:
+    - name: registry-draforge
 
 server:
   replicaCount: 1

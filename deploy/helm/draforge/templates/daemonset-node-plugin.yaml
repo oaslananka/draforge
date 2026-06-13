@@ -17,6 +17,10 @@ spec:
         app.kubernetes.io/component: node-plugin
     spec:
       serviceAccountName: {{ include "draforge.fullname" . }}-node-plugin
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         fsGroup: 1000
         runAsNonRoot: true

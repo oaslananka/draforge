@@ -73,7 +73,18 @@ done
 
 # 7. Check final status of the Job
 echo "==> Checking test completion status..."
-status=$(kubectl get job -n draforge-ci "$JOB_NAME" -o jsonpath='{.status.succeeded}' 2>/dev/null || true)
+status=""
+for i in {1..10}; do
+    status=$(kubectl get job -n draforge-ci "$JOB_NAME" -o jsonpath='{.status.succeeded}' 2>/dev/null || true)
+    if [ "$status" = "1" ]; then
+        break
+    fi
+    failed=$(kubectl get job -n draforge-ci "$JOB_NAME" -o jsonpath='{.status.failed}' 2>/dev/null || true)
+    if [ -n "$failed" ] && [ "$failed" -gt 0 ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$status" = "1" ]; then
     echo "SUCCESS: Remote tests passed!"

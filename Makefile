@@ -6,7 +6,6 @@ all: build
 
 build:
 	go build -o bin/draforge ./cmd/draforge
-	go build -o bin/draforge-server ./cmd/draforge-server
 	go build -o bin/draforge-controller ./cmd/draforge-controller
 	go build -o bin/draforge-sim-driver ./cmd/draforge-sim-driver
 

@@ -13,7 +13,7 @@ WORKDIR /app
 COPY go.mod ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o draforge-server ./cmd/draforge-server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o draforge ./cmd/draforge
 
 # Stage 3: Runner
 FROM alpine:3.20.0
@@ -21,7 +21,7 @@ RUN apk add --no-cache ca-certificates && \
     addgroup -S draforge && adduser -S draforge -G draforge
 USER draforge
 WORKDIR /home/draforge
-COPY --from=backend-builder /app/draforge-server .
+COPY --from=backend-builder /app/draforge .
 COPY --from=frontend-builder /web/dist ./web/dist
 EXPOSE 8080
-ENTRYPOINT ["./draforge-server"]
+ENTRYPOINT ["./draforge", "serve"]

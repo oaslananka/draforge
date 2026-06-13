@@ -29,7 +29,7 @@ func NewGraphBuilder() *GraphBuilder {
 }
 
 // BuildGraph queries the cluster and builds nodes and edges representing the live relationships.
-func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset *kubernetes.Clientset, namespaceFilter, driverFilter string) (*model.ResourceGraph, error) {
+func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Interface, namespaceFilter, driverFilter string) (*model.ResourceGraph, error) {
 	gb.nodes = []model.GraphNode{}
 	gb.edges = []model.GraphEdge{}
 

@@ -14,9 +14,9 @@ import (
 )
 
 // ExplainClaim analyzes a ResourceClaim and returns an explanation tree.
-func ExplainClaim(ctx context.Context, clientset *kubernetes.Clientset, namespace, claimName string) (*model.ExplainResult, error) {
+func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace, claimName string) (*model.ExplainResult, error) {
 	// Fetch live DRA resources
-	pools, devices, claims, err := discovery.DiscoverDRA(ctx, clientset)
+	_, devices, claims, err := discovery.DiscoverDRA(ctx, clientset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover cluster state: %w", err)
 	}
@@ -32,12 +32,6 @@ func ExplainClaim(ctx context.Context, clientset *kubernetes.Clientset, namespac
 
 	if target == nil {
 		return nil, fmt.Errorf("ResourceClaim %s/%s not found", namespace, claimName)
-	}
-
-	// Fetch raw claim for detailed spec checks
-	rawClaim, err := clientset.ResourceV1beta1().ResourceClaims(namespace).Get(ctx, claimName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get raw ResourceClaim: %w", err)
 	}
 
 	result := &model.ExplainResult{

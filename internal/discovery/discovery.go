@@ -13,7 +13,7 @@ import (
 )
 
 // DiscoverDRA queries the Kubernetes cluster for all DRA-related objects and maps them to our model.
-func DiscoverDRA(ctx context.Context, clientset *kubernetes.Clientset) ([]model.DevicePool, []model.Device, []model.ResourceClaimInfo, error) {
+func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.DevicePool, []model.Device, []model.ResourceClaimInfo, error) {
 	var pools []model.DevicePool
 	var devices []model.Device
 	var claims []model.ResourceClaimInfo

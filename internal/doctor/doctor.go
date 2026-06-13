@@ -19,7 +19,7 @@ type Check interface {
 	ID() string
 	Name() string
 	Category() string
-	Run(ctx context.Context, clientset *kubernetes.Clientset) model.DoctorCheckResult
+	Run(ctx context.Context, clientset kubernetes.Interface) model.DoctorCheckResult
 }
 
 // Registry manages the set of diagnostic checks.
@@ -44,7 +44,7 @@ func (r *Registry) Register(c Check) {
 }
 
 // RunDiagnostics executes all registered checks and returns a summary report.
-func (r *Registry) RunDiagnostics(ctx context.Context, clientset *kubernetes.Clientset) model.DoctorReport {
+func (r *Registry) RunDiagnostics(ctx context.Context, clientset kubernetes.Interface) model.DoctorReport {
 	report := model.DoctorReport{
 		Timestamp: time.Now(),
 		Summary:   make(map[string]int),
@@ -68,7 +68,7 @@ type APIAvailabilityCheck struct{}
 func (c *APIAvailabilityCheck) ID() string       { return "DRA-001" }
 func (c *APIAvailabilityCheck) Name() string     { return "DRA API Availability" }
 func (c *APIAvailabilityCheck) Category() string { return "cluster" }
-func (c *APIAvailabilityCheck) Run(ctx context.Context, clientset *kubernetes.Clientset) model.DoctorCheckResult {
+func (c *APIAvailabilityCheck) Run(ctx context.Context, clientset kubernetes.Interface) model.DoctorCheckResult {
 	res := model.DoctorCheckResult{
 		ID:           c.ID(),
 		Name:         c.Name(),
@@ -115,7 +115,7 @@ type KubernetesVersionCheck struct{}
 func (c *KubernetesVersionCheck) ID() string       { return "DRA-002" }
 func (c *KubernetesVersionCheck) Name() string     { return "Kubernetes Version Compatibility" }
 func (c *KubernetesVersionCheck) Category() string { return "cluster" }
-func (c *KubernetesVersionCheck) Run(ctx context.Context, clientset *kubernetes.Clientset) model.DoctorCheckResult {
+func (c *KubernetesVersionCheck) Run(ctx context.Context, clientset kubernetes.Interface) model.DoctorCheckResult {
 	res := model.DoctorCheckResult{
 		ID:           c.ID(),
 		Name:         c.Name(),
@@ -155,7 +155,7 @@ type OrphanedClaimsCheck struct{}
 func (c *OrphanedClaimsCheck) ID() string       { return "DRA-003" }
 func (c *OrphanedClaimsCheck) Name() string     { return "Orphaned ResourceClaims" }
 func (c *OrphanedClaimsCheck) Category() string { return "claim" }
-func (c *OrphanedClaimsCheck) Run(ctx context.Context, clientset *kubernetes.Clientset) model.DoctorCheckResult {
+func (c *OrphanedClaimsCheck) Run(ctx context.Context, clientset kubernetes.Interface) model.DoctorCheckResult {
 	res := model.DoctorCheckResult{
 		ID:           c.ID(),
 		Name:         c.Name(),
@@ -196,7 +196,7 @@ type PodReferenceCheck struct{}
 func (c *PodReferenceCheck) ID() string       { return "DRA-004" }
 func (c *PodReferenceCheck) Name() string     { return "Pod Claim References" }
 func (c *PodReferenceCheck) Category() string { return "claim" }
-func (c *PodReferenceCheck) Run(ctx context.Context, clientset *kubernetes.Clientset) model.DoctorCheckResult {
+func (c *PodReferenceCheck) Run(ctx context.Context, clientset kubernetes.Interface) model.DoctorCheckResult {
 	res := model.DoctorCheckResult{
 		ID:           c.ID(),
 		Name:         c.Name(),
@@ -254,7 +254,7 @@ type StaleResourceSliceCheck struct{}
 func (c *StaleResourceSliceCheck) ID() string       { return "DRA-005" }
 func (c *StaleResourceSliceCheck) Name() string     { return "ResourceSlice Consistency" }
 func (c *StaleResourceSliceCheck) Category() string { return "driver" }
-func (c *StaleResourceSliceCheck) Run(ctx context.Context, clientset *kubernetes.Clientset) model.DoctorCheckResult {
+func (c *StaleResourceSliceCheck) Run(ctx context.Context, clientset kubernetes.Interface) model.DoctorCheckResult {
 	res := model.DoctorCheckResult{
 		ID:           c.ID(),
 		Name:         c.Name(),

@@ -1,7 +1,6 @@
 # Dockerfile for draforge-sim-driver
 # Stage 1: Build Go Driver
-FROM golang:1.22.5-alpine AS builder
-RUN apk add --no-cache git
+FROM golang:1.26.0 AS builder
 WORKDIR /app
 COPY go.mod ./
 RUN go mod download

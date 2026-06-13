@@ -8,8 +8,7 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build Go API Server
-FROM golang:1.22.5-alpine AS backend-builder
-RUN apk add --no-cache git
+FROM golang:1.26.0 AS backend-builder
 WORKDIR /app
 COPY go.mod ./
 RUN go mod download

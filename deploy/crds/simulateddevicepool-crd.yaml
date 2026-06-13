@@ -1,8 +1,3 @@
-apiVersion: amc.draforge.oaslananka/v1alpha1
-kind: SimulatedDevicePool
-# This is a representation of the spec. In Kubernetes, the CRD definition is registered under customresourcedefinitions.apiextensions.k8s.io.
-# Let's write the complete Kubernetes CustomResourceDefinition manifest.
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:

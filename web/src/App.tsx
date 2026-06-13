@@ -1,6 +1,8 @@
 // web/src/App.tsx
 // SPDX-License-Identifier: Apache-2.0
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+
+const versionVal = 'v0.1.0-rc.1';
 
 // Types matching Go model structs
 interface Device {

@@ -128,7 +128,7 @@ func DiscoverDRA(ctx context.Context, clientset *kubernetes.Clientset) ([]model.
 					}
 					// Extract capacities
 					for capName, capVal := range devSpec.Basic.Capacity {
-						caps[string(capName)] = capVal.Value()
+						caps[string(capName)] = capVal.Value.Value()
 					}
 				}
 

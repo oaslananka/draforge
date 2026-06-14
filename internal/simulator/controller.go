@@ -102,9 +102,9 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 
 		// If no target nodes specified, apply to all nodes in the cluster
 		if len(targetNodes) == 0 {
-			nodes, err := r.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-			if err != nil {
-				return fmt.Errorf("failed to list nodes: %w", err)
+			nodes, listErr := r.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+			if listErr != nil {
+				return fmt.Errorf("failed to list nodes: %w", listErr)
 			}
 			for _, node := range nodes.Items {
 				targetNodes = append(targetNodes, node.Name)
@@ -127,7 +127,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 		caps := make(map[string]resource.Quantity)
 		for k, v := range rawCaps {
 			if s, ok := v.(string); ok {
-				if q, err := resource.ParseQuantity(s); err == nil {
+				if q, parseErr := resource.ParseQuantity(s); parseErr == nil {
 					caps[k] = q
 				}
 			}
@@ -158,8 +158,8 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 				runDevCount = 0
 			}
 
-			if err := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, runDevCount, attrs, caps, len(targetNodes)); err != nil {
-				fmt.Printf("Failed to ensure ResourceSlice %s: %v\n", sliceName, err)
+			if ensureErr := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, runDevCount, attrs, caps, len(targetNodes)); ensureErr != nil {
+				fmt.Printf("Failed to ensure ResourceSlice %s: %v\n", sliceName, ensureErr)
 			}
 		}
 

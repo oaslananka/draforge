@@ -257,8 +257,8 @@ func main() {
 				return fmt.Errorf("failed to read scenario file: %w", err)
 			}
 			var obj unstructured.Unstructured
-			if err := yaml.Unmarshal(content, &obj.Object); err != nil {
-				return fmt.Errorf("failed to parse scenario YAML: %w", err)
+			if unmarshalErr := yaml.Unmarshal(content, &obj.Object); unmarshalErr != nil {
+				return fmt.Errorf("failed to parse scenario YAML: %w", unmarshalErr)
 			}
 			ns := obj.GetNamespace()
 			if ns == "" {

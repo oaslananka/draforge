@@ -128,13 +128,13 @@ func (s *Server) cors(next http.HandlerFunc) http.HandlerFunc {
 // Healthz
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	_, _ = w.Write([]byte("ok"))
 }
 
 // Readyz
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ready"))
+	_, _ = w.Write([]byte("ready"))
 }
 
 // Summary
@@ -156,7 +156,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		"timestamp":    time.Now(),
 	}
 
-	json.NewEncoder(w).Encode(summary)
+	_ = json.NewEncoder(w).Encode(summary)
 }
 
 // Pools
@@ -166,7 +166,7 @@ func (s *Server) handlePools(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, err, http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(pools)
+	_ = json.NewEncoder(w).Encode(pools)
 }
 
 // Devices
@@ -176,7 +176,7 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, err, http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(devices)
+	_ = json.NewEncoder(w).Encode(devices)
 }
 
 // Claims
@@ -186,7 +186,7 @@ func (s *Server) handleClaims(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, err, http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(claims)
+	_ = json.NewEncoder(w).Encode(claims)
 }
 
 // Graph
@@ -317,7 +317,7 @@ func (s *Server) startSSEBroadcaster(ctx context.Context) {
 
 func (s *Server) respondError(w http.ResponseWriter, err error, code int) {
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error": err.Error(),
 	})
 }
@@ -327,7 +327,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	pools, devices, claims, err := discovery.DiscoverDRA(r.Context(), s.clientset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("# ERROR: %v\n", err)))
+		_, _ = w.Write([]byte(fmt.Sprintf("# ERROR: %v\n", err)))
 		return
 	}
 

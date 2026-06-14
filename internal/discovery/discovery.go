@@ -110,11 +110,9 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 					Labels:      slice.Labels,
 				}
 				poolMap[poolKey] = pool
-			} else {
+			} else if healthVal != "healthy" {
 				// If any slice of the pool is unhealthy, mark the pool health as unhealthy
-				if healthVal != "healthy" {
-					pool.Health = healthVal
-				}
+				pool.Health = healthVal
 			}
 
 			// Process devices in the slice
@@ -130,15 +128,16 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 				// Extract attributes
 				for attrName, attrVal := range devSpec.Attributes {
 					attrNameStr := string(attrName)
-					if attrVal.StringValue != nil {
+					switch {
+					case attrVal.StringValue != nil:
 						attrs[attrNameStr] = *attrVal.StringValue
 						// Infer type from model attribute if present
 						if strings.EqualFold(attrNameStr, "type") || strings.EqualFold(attrNameStr, "model") {
 							devType = strings.ToLower(*attrVal.StringValue)
 						}
-					} else if attrVal.IntValue != nil {
+					case attrVal.IntValue != nil:
 						attrs[attrNameStr] = fmt.Sprintf("%d", *attrVal.IntValue)
-					} else if attrVal.BoolValue != nil {
+					case attrVal.BoolValue != nil:
 						attrs[attrNameStr] = fmt.Sprintf("%t", *attrVal.BoolValue)
 					}
 				}

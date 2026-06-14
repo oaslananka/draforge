@@ -134,10 +134,8 @@ func TestSimulateAllocation(t *testing.T) {
 		results := allocatedClaim.Status.Allocation.Devices.Results
 		if len(results) != 1 {
 			t.Errorf("expected 1 allocation result, got %d", len(results))
-		} else {
-			if results[0].Device != "dev-0" {
-				t.Errorf("expected device dev-0, got %s", results[0].Device)
-			}
+		} else if results[0].Device != "dev-0" {
+			t.Errorf("expected device dev-0, got %s", results[0].Device)
 		}
 	}
 }

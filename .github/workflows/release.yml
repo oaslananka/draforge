@@ -26,6 +26,21 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+
+      - name: Build Web SPA
+        run: |
+          pnpm --dir web install --frozen-lockfile
+          pnpm --dir web build
+
       - name: Setup Syft
         uses: anchore/sbom-action/download-syft@v0.17.0
 

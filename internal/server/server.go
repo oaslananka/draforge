@@ -197,7 +197,7 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, err, http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(g)
+	_ = json.NewEncoder(w).Encode(g)
 }
 
 // Explain
@@ -214,14 +214,14 @@ func (s *Server) handleExplain(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, err, http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(res)
+	_ = json.NewEncoder(w).Encode(res)
 }
 
 // Doctor
 func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {
 	docRegistry := doctor.NewRegistry()
 	report := docRegistry.RunDiagnostics(r.Context(), s.clientset)
-	json.NewEncoder(w).Encode(report)
+	_ = json.NewEncoder(w).Encode(report)
 }
 
 // Stream (Server-Sent Events)

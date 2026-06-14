@@ -143,7 +143,7 @@ func updateCDISpec(ctx context.Context, clientset kubernetes.Interface, nodeName
 							ContainerEdits: ContainerEdits{
 								Env: []string{
 									fmt.Sprintf("DRAFORGE_VIRTUAL_DEVICE=%s", dev.Device),
-									fmt.Sprintf("DRAFORGE_VIRTUAL_TYPE=sim-device"),
+									"DRAFORGE_VIRTUAL_TYPE=sim-device",
 									fmt.Sprintf("DRAFORGE_CLAIM_NAME=%s", claim.Name),
 									fmt.Sprintf("DRAFORGE_CLAIM_NAMESPACE=%s", claim.Namespace),
 								},

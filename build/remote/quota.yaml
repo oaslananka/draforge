@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ci-quota
+  namespace: draforge-ci
+spec:
+  hard:
+    pods: "5"
+    requests.cpu: "3"
+    requests.memory: "4Gi"
+    limits.cpu: "4"
+    limits.memory: "6Gi"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ci-limits
+  namespace: draforge-ci
+spec:
+  limits:
+    - default:
+        cpu: "1"
+        memory: "1.5Gi"
+      defaultRequest:
+        cpu: "500m"
+        memory: "1Gi"
+      type: Container

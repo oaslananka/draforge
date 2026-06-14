@@ -1,0 +1,90 @@
+# deploy/helm/draforge/values.yaml
+
+global:
+  imageRegistry: registry.digitalocean.com/draforge
+  imagePullSecrets:
+    - name: registry-draforge
+
+server:
+  replicaCount: 1
+  image:
+    repository: draforge
+    tag: "server-latest"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+
+controller:
+  replicaCount: 1
+  image:
+    repository: draforge
+    tag: "controller-latest"
+    pullPolicy: Always
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+
+nodePlugin:
+  image:
+    repository: draforge
+    tag: "sim-driver-latest"
+    pullPolicy: Always
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  securityContext:
+    privileged: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+
+gateway:
+  enabled: true
+  className: cilium
+  hostname: "" # Dynamically set or fallback
+  ingress:
+    enabled: false
+    className: nginx
+    annotations: {}
+
+networkPolicies:
+  enabled: true

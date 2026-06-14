@@ -1,0 +1,7 @@
+FROM alpine:3.20.0
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S draforge && adduser -S draforge -G draforge
+USER draforge
+WORKDIR /home/draforge
+COPY draforge-sim-driver .
+ENTRYPOINT ["./draforge-sim-driver"]

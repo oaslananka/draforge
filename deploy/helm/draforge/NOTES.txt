@@ -1,0 +1,13 @@
+DRAForge is successfully deployed!
+
+Server API & Dashboard:
+  - Accessible internally at: {{ include "draforge.fullname" . }}-server.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.server.service.port }}
+  {{- if .Values.gateway.enabled }}
+  - Accessible externally via Gateway API.
+  {{- else if .Values.gateway.ingress.enabled }}
+  - Accessible externally via Ingress.
+  {{- end }}
+
+Components deployed:
+  - Simulator Controller: Deployment
+  - Node Plugin (CDI): DaemonSet

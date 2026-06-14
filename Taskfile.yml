@@ -1,0 +1,121 @@
+version: '3'
+
+vars:
+  GO_BIN: 'C:/Users/Admin/go-sdk/go/bin/go.exe'
+  GOFMT_BIN: 'C:/Users/Admin/go-sdk/go/bin/gofmt.exe'
+  GORELEASER_BIN: 'C:/Users/Admin/go/bin/goreleaser.exe'
+  BASH_BIN: '{{if eq OS "windows"}}"C:\\Program Files\\Git\\bin\\bash.exe"{{else}}bash{{end}}'
+
+tasks:
+  build:
+    desc: Build all binaries
+    cmds:
+      - '{{.GO_BIN}} build -o bin/draforge.exe ./cmd/draforge'
+      - '{{.GO_BIN}} build -o bin/draforge-controller.exe ./cmd/draforge-controller'
+      - '{{.GO_BIN}} build -o bin/draforge-sim-driver.exe ./cmd/draforge-sim-driver'
+
+  fmt:
+    desc: Format all code (Go and Terraform)
+    cmds:
+      - '{{.GOFMT_BIN}} -w internal cmd pkg tests'
+      - cd infra/terraform/environments/showcase && terraform fmt
+
+  lint:
+    desc: Lint Go code
+    cmds:
+      - golangci-lint run ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - '{{.GO_BIN}} vet ./...'
+
+  vuln:
+    desc: Run govulncheck
+    cmds:
+      - govulncheck ./...
+
+  test:
+    desc: Run Go unit tests with race detector and coverage
+    cmds:
+      - '{{.GO_BIN}} test -v -race -coverprofile=coverage.out ./...'
+
+  web:install:
+    desc: Install web dependencies using pnpm
+    cmds:
+      - cd web && pnpm install --frozen-lockfile
+
+  web:lint:
+    desc: Lint web app
+    cmds:
+      - cd web && pnpm lint
+
+  web:build:
+    desc: Build web app
+    cmds:
+      - cd web && pnpm build
+
+  helm:lint:
+    desc: Lint Helm charts
+    cmds:
+      - helm lint deploy/helm/draforge
+
+  infra:init:
+    desc: Initialize Terraform
+    cmds:
+      - cd infra/terraform/environments/showcase && terraform init
+
+  infra:plan:
+    desc: Generate Terraform plan
+    cmds:
+      - cd infra/terraform/environments/showcase && terraform plan -out=tfplan
+      - cd infra/terraform/environments/showcase && terraform show -json tfplan > tfplan.json
+
+  infra:validate:
+    desc: Validate Terraform plan via validation policy
+    cmds:
+      - python scripts/validate-plan.py infra/terraform/environments/showcase/tfplan.json
+
+  infra:apply:
+    desc: Apply Terraform changes
+    cmds:
+      - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
+      - cd infra/terraform/environments/showcase && terraform apply tfplan
+      - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
+
+  infra:audit:
+    desc: Audit active DigitalOcean resources
+    cmds:
+      - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
+
+  sbom:
+    desc: Generate CycloneDX SBOM
+    cmds:
+      - syft dir:. -o cyclonedx-json > draforge.sbom.json
+
+  release:local:
+    desc: Run GoReleaser dry-run release locally
+    cmds:
+      - '{{.GORELEASER_BIN}} release --snapshot --clean --skip=docker,sbom,sign'
+
+  demo:up:
+    desc: Deploy the live showcase demo to DOKS
+    cmds:
+      - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
+      - cd infra/terraform/environments/showcase && terraform plan -out=tfplan
+      - cd infra/terraform/environments/showcase && terraform show -json tfplan > tfplan.json
+      - python scripts/validate-plan.py infra/terraform/environments/showcase/tfplan.json
+      - cd infra/terraform/environments/showcase && terraform apply tfplan
+      - '{{.BASH_BIN}} scripts/remote-build.sh server'
+      - '{{.BASH_BIN}} scripts/remote-build.sh controller'
+      - '{{.BASH_BIN}} scripts/remote-build.sh sim-driver'
+      - helm upgrade --install draforge deploy/helm/draforge -n draforge-system --create-namespace
+      - kubectl apply -f examples/scenarios/basic-gpu.yaml
+
+  demo:down:
+    desc: Tear down the live showcase demo and all billable cloud infrastructure
+    cmds:
+      - helm uninstall draforge -n draforge-system --ignore-not-found=true
+      - kubectl delete -f examples/scenarios/basic-gpu.yaml --ignore-not-found=true
+      - cd infra/terraform/environments/showcase && terraform destroy -auto-approve
+      - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'

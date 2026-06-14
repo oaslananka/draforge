@@ -1,0 +1,15 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: mixed-edge-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: edge-devices
+  deviceCount: 3
+  deviceType: mixed
+  attributes:
+    model: "FPGA-Xilinx-Alveo"
+    vendor: "Xilinx"
+  capacities:
+    lanes: "16"

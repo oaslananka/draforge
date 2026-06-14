@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "draforge.fullname" . }}-node-plugin
+  labels:
+    {{- include "draforge.labels" . | nindent 4 }}
+    app.kubernetes.io/component: node-plugin
+spec:
+  selector:
+    matchLabels:
+      {{- include "draforge.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: node-plugin
+  template:
+    metadata:
+      labels:
+        {{- include "draforge.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: node-plugin
+    spec:
+      serviceAccountName: {{ include "draforge.fullname" . }}-node-plugin
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: node-plugin
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.nodePlugin.image.repository }}:{{ .Values.nodePlugin.image.tag }}"
+          imagePullPolicy: {{ .Values.nodePlugin.image.pullPolicy }}
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            {{- toYaml .Values.nodePlugin.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: cdi-dir
+              mountPath: /var/lib/kubelet/device-plugins/cdi
+      volumes:
+        - name: cdi-dir
+          emptyDir: {}

@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: draforge-test-RUN_ID
+  namespace: draforge-ci
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+      - name: clone
+        image: alpine/git:2.45.2
+        command:
+        - sh
+        - -c
+        - |
+          git clone REPO_URL /workspace && \
+          cd /workspace && \
+          git checkout COMMIT_SHA
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+      containers:
+      - name: test-runner
+        image: golang:1.26.0
+        workingDir: /workspace
+        command:
+        - sh
+        - -c
+        - |
+          go test -v -race ./...
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1.5"
+            memory: "2Gi"
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+      volumes:
+      - name: workspace
+        emptyDir: {}

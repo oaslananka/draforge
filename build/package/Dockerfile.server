@@ -1,0 +1,30 @@
+# Multi-stage Dockerfile for draforge-server
+# Stage 1: Build React Frontend Dashboard
+FROM node:20.15-alpine AS frontend-builder
+WORKDIR /web
+RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY web/ ./
+RUN pnpm build
+
+# Stage 2: Build Go API Server
+FROM golang:1.26.0 AS backend-builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=v0.1.0
+ARG COMMIT=unknown
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.versionVal=${VERSION} -X main.commitSHA=${COMMIT}" -o draforge ./cmd/draforge
+
+# Stage 3: Runner
+FROM alpine:3.20.0
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S draforge && adduser -S draforge -G draforge
+USER draforge
+WORKDIR /home/draforge
+COPY --from=backend-builder /app/draforge .
+COPY --from=frontend-builder /web/dist ./web/dist
+EXPOSE 8080
+ENTRYPOINT ["./draforge", "serve"]

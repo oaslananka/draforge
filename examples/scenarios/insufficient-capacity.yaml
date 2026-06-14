@@ -1,0 +1,15 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: low-capacity-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: restricted-devices
+  deviceCount: 1
+  deviceType: gpu
+  attributes:
+    model: "NVIDIA-T4-Virtual"
+    vendor: "NVIDIA"
+  capacities:
+    memory: "4Gi"

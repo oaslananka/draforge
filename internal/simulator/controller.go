@@ -164,9 +164,9 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 		}
 
 		// Update the status subresource
-		if err := r.updateSDPStatus(ctx, &sdp, publishedSlices, activeFaults); err != nil {
+		if statusErr := r.updateSDPStatus(ctx, &sdp, publishedSlices, activeFaults); statusErr != nil {
 			// Ignore update errors if status subresource is not yet active/supported
-			_ = err
+			_ = statusErr
 		}
 	}
 

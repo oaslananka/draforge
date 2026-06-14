@@ -74,7 +74,7 @@ sboms:
 
 signs:
   - id: checksums
-    signature: "${signature}"
+    signature: "${artifact}.sig"
     cmd: cosign
     args:
       - "sign-blob"

@@ -227,6 +227,14 @@ docker_manifests:
       - "ghcr.io/oaslananka/draforge-sim-driver:latest-amd64"
       - "ghcr.io/oaslananka/draforge-sim-driver:latest-arm64"
 
+docker_signs:
+  - artifacts: all
+    cmd: cosign
+    args:
+      - "sign"
+      - "--yes"
+      - "${artifact}"
+
 changelog:
   sort: asc
   filters:

@@ -22,7 +22,7 @@ jobs:
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.59.1
+          version: v1.64.5
 
       - name: Run vet
         run: go vet ./...
@@ -96,6 +96,9 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.0
+
+      - name: Terraform Init
+        run: terraform -chdir=infra/terraform/environments/showcase init -backend=false
 
       - name: Terraform Format Check
         run: terraform -chdir=infra/terraform/environments/showcase fmt -check

@@ -82,6 +82,9 @@ signs:
       - "${artifact}"
       - "--yes"
     artifacts: checksum
+    env:
+      - ACTIONS_ID_TOKEN_REQUEST_URL={{ .Env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+      - ACTIONS_ID_TOKEN_REQUEST_TOKEN={{ .Env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
 
 dockers:
   - image_templates:
@@ -234,6 +237,9 @@ docker_signs:
       - "sign"
       - "--yes"
       - "${artifact}"
+    env:
+      - ACTIONS_ID_TOKEN_REQUEST_URL={{ .Env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+      - ACTIONS_ID_TOKEN_REQUEST_TOKEN={{ .Env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
 
 changelog:
   sort: asc

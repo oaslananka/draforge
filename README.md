@@ -68,6 +68,8 @@ To run DRAForge locally using a Go development environment and a `kind` cluster:
    ```
 
 ### Quickstart B: DigitalOcean Kubernetes (DOKS) Showcase
+> **⚠️ Billable Resources**: This task provisions a live DOKS cluster and DOCR registry on your DigitalOcean account and incurs cloud costs. Always run `task demo:down` when finished to destroy all billable resources.
+
 To deploy a live read-only public showcase to DOKS:
 
 ```bash
@@ -99,16 +101,16 @@ task demo:down
 
 ## Screenshots
 
-Screenshots of the terminal UI and web dashboard are stored in [docs/assets/](file:///c:/Users/Admin/Desktop/OASLANANKA/draforge/docs/assets).
+Screenshots of the terminal UI and web dashboard are stored in [docs/assets/](docs/assets/).
 
 ---
 
 ## Security Model
 
-DRAForge enforces a read-only public API model. The Go web server exposes read-only endpoints and SSE streams to the dashboard, preventing any write actions or pod execution from the web UI. Cluster modifications (scenario application and fault injections) are strictly restricted to the CLI and authenticated using the administrator's local `kubeconfig` (see [ADR-0009](file:///c:/Users/Admin/Desktop/OASLANANKA/draforge/docs/adr/0009-public-readonly.md)).
+DRAForge enforces a read-only public API model. The Go web server exposes read-only endpoints and SSE streams to the dashboard, preventing any write actions or pod execution from the web UI. Cluster modifications (scenario application and fault injections) are strictly restricted to the CLI and authenticated using the administrator's local `kubeconfig` (see [ADR-0009](docs/adr/0009-public-readonly.md)).
 
 ---
 
 ## License
 
-This project is licensed under the Apache License, Version 2.0. See [LICENSE](file:///c:/Users/Admin/Desktop/OASLANANKA/draforge/LICENSE) for the full license text.
+This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full license text.

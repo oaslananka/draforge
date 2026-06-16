@@ -108,7 +108,7 @@ func main() {
 				fmt.Println(string(data))
 			} else {
 				fmt.Printf("%-25s %-15s %-15s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASS", "STATUS")
-				fmt.Println(string(make([]byte, 75)))
+				fmt.Println(strings.Repeat("-", 75))
 				for _, c := range claims {
 					fmt.Printf("%-25s %-15s %-15s %-15s\n", c.Name, c.Namespace, c.DeviceClassName, c.Status)
 				}

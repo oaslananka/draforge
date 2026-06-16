@@ -22,6 +22,11 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -37,14 +42,17 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
-      - name: Run unit tests
-        run: go test -v -race -coverprofile=coverage.out ./...
+      - name: Run unit tests (fast)
+        run: go test ./...
+
+      - name: Run race detector with coverage
+        run: go test -race -coverprofile=coverage.out ./...
 
       - name: Verify coverage floor
         run: |
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-          echo "Total coverage: $COVERAGE%"
-          awk -v cov="$COVERAGE" 'BEGIN { if (cov < 55.0) { print "Error: Coverage is below 55.0%"; exit 1 } }'
+          cov=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: $cov%"
+          awk -v cov="$cov" 'BEGIN { if (cov + 0 < 55.0) { print "Error: Coverage is below 55.0%"; exit 1 } }'
 
   web:
     name: Web Lint & Build
@@ -75,7 +83,7 @@ jobs:
         run: pnpm --dir web build
 
   helm:
-    name: Helm Chart Lint
+    name: Helm Chart Lint & Template
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -88,6 +96,30 @@ jobs:
 
       - name: Lint Helm Chart
         run: helm lint deploy/helm/draforge
+
+      - name: Helm template smoke test
+        run: helm template draforge deploy/helm/draforge
+
+  goreleaser:
+    name: GoReleaser Dry-Run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          install-only: true
+
+      - name: Dry-run snapshot
+        run: goreleaser release --snapshot --clean --skip=docker,sbom,sign
 
   infra:
     name: Terraform Validate
@@ -112,7 +144,7 @@ jobs:
 
   ci-pass:
     name: CI Pass
-    needs: [go, web, helm, infra]
+    needs: [go, web, helm, goreleaser, infra]
     runs-on: ubuntu-latest
     steps:
       - name: Complete

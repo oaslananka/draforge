@@ -46,10 +46,21 @@ tasks:
     cmds:
       - govulncheck ./...
 
-  test:
+  test:unit:
+    desc: Run Go unit tests (fast, no race)
+    cmds:
+      - '{{.GO_BIN}} test ./...'
+
+  test:race:
     desc: Run Go unit tests with race detector and coverage
     cmds:
-      - '{{.GO_BIN}} test -v -race -coverprofile=coverage.out ./...'
+      - '{{.GO_BIN}} test -race "-coverprofile=coverage.out" ./...'
+
+  test:
+    desc: Run unit tests followed by race+coverage (default CI flow)
+    cmds:
+      - task: test:unit
+      - task: test:race
 
   web:install:
     desc: Install web dependencies using pnpm

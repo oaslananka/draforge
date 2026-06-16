@@ -19,6 +19,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+var (
+	versionVal = "v0.1.0"
+	commitSHA  = "dev"
+)
+
 // CDIDevice represents a CDI device entry.
 type CDIDevice struct {
 	Name           string         `json:"name"`

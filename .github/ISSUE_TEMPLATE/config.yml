@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: DRAForge Security
+    url: https://github.com/oaslananka/draforge/blob/main/SECURITY.md
+    about: Report a security vulnerability — do not use a public issue.
+  - name: DRAForge Discussions
+    url: https://github.com/oaslananka/draforge/discussions
+    about: Q&A, ideas, and general discussion.

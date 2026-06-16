@@ -46,22 +46,22 @@ builds:
 
 archives:
   - id: draforge
-    builds:
+    ids:
       - draforge
-    format: tar.gz
+    formats: [tar.gz]
     name_template: "draforge_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
   - id: draforge-controller
-    builds:
+    ids:
       - draforge-controller
-    format: tar.gz
+    formats: [tar.gz]
     name_template: "draforge-controller_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
   - id: draforge-sim-driver
-    builds:
+    ids:
       - draforge-sim-driver
-    format: tar.gz
+    formats: [tar.gz]
     name_template: "draforge-sim-driver_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:

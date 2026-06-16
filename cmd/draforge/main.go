@@ -34,6 +34,16 @@ var (
 )
 
 func main() {
+	rootCmd := NewRootCommand()
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+// NewRootCommand builds the complete DRAForge CLI command tree.
+// Extracted from main() for testability — tests can call this and capture
+// output via cmd.SetOut / cmd.SetErr without spawning a subprocess.
+func NewRootCommand() *cobra.Command {
 	var rootCmd = &cobra.Command{
 		Use:   "draforge",
 		Short: "DRAForge: Observe, simulate, and diagnose Kubernetes DRA.",
@@ -48,7 +58,7 @@ func main() {
 		Use:   "version",
 		Short: "Print the version and commit SHA",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("DRAForge %s (Commit: %s)\n", versionVal, commitSHA)
+			cmd.Printf("DRAForge %s (Commit: %s)\n", versionVal, commitSHA)
 		},
 	}
 
@@ -57,12 +67,12 @@ func main() {
 		Use:   "discover",
 		Short: "Discover and model active DRA resources",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientset, _, _, err := cluster.NewClientset(kubeconfig)
+			cs, _, _, err := cluster.NewClientset(kubeconfig)
 			if err != nil {
 				return err
 			}
 
-			pools, devices, claims, err := discovery.DiscoverDRA(context.Background(), clientset)
+			pools, devices, claims, err := discovery.DiscoverDRA(context.Background(), cs)
 			if err != nil {
 				return err
 			}
@@ -74,16 +84,16 @@ func main() {
 					"devices": devices,
 					"claims":  claims,
 				}, "", "  ")
-				fmt.Println(string(data))
+				cmd.Println(string(data))
 			case "yaml":
 				data, _ := yaml.Marshal(map[string]interface{}{
 					"pools":   pools,
 					"devices": devices,
 					"claims":  claims,
 				})
-				fmt.Println(string(data))
+				cmd.Println(string(data))
 			default:
-				fmt.Printf("Discovered %d Device Pools, %d Devices, %d ResourceClaims\n", len(pools), len(devices), len(claims))
+				cmd.Printf("Discovered %d Device Pools, %d Devices, %d ResourceClaims\n", len(pools), len(devices), len(claims))
 			}
 			return nil
 		},
@@ -94,23 +104,23 @@ func main() {
 		Use:   "claims",
 		Short: "List ResourceClaims",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientset, _, _, err := cluster.NewClientset(kubeconfig)
+			cs, _, _, err := cluster.NewClientset(kubeconfig)
 			if err != nil {
 				return err
 			}
-			_, _, claims, err := discovery.DiscoverDRA(context.Background(), clientset)
+			_, _, claims, err := discovery.DiscoverDRA(context.Background(), cs)
 			if err != nil {
 				return err
 			}
 
 			if outputFmt == "json" {
 				data, _ := json.MarshalIndent(claims, "", "  ")
-				fmt.Println(string(data))
+				cmd.Println(string(data))
 			} else {
-				fmt.Printf("%-25s %-15s %-15s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASS", "STATUS")
-				fmt.Println(strings.Repeat("-", 75))
+				cmd.Printf("%-25s %-15s %-15s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASS", "STATUS")
+				cmd.Println(strings.Repeat("-", 75))
 				for _, c := range claims {
-					fmt.Printf("%-25s %-15s %-15s %-15s\n", c.Name, c.Namespace, c.DeviceClassName, c.Status)
+					cmd.Printf("%-25s %-15s %-15s %-15s\n", c.Name, c.Namespace, c.DeviceClassName, c.Status)
 				}
 			}
 			return nil
@@ -122,24 +132,24 @@ func main() {
 		Use:   "graph",
 		Short: "Construct the resource relationship graph",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientset, _, _, err := cluster.NewClientset(kubeconfig)
+			cs, _, _, err := cluster.NewClientset(kubeconfig)
 			if err != nil {
 				return err
 			}
 			gb := graph.NewGraphBuilder()
-			g, err := gb.BuildGraph(context.Background(), clientset, namespace, "")
+			g, err := gb.BuildGraph(context.Background(), cs, namespace, "")
 			if err != nil {
 				return err
 			}
 
 			switch outputFmt {
 			case "dot":
-				fmt.Println(graph.ToDOT(g))
+				cmd.Println(graph.ToDOT(g))
 			case "mermaid":
-				fmt.Println(graph.ToMermaid(g))
+				cmd.Println(graph.ToMermaid(g))
 			default:
 				data, _ := json.MarshalIndent(g, "", "  ")
-				fmt.Println(string(data))
+				cmd.Println(string(data))
 			}
 			return nil
 		},
@@ -151,26 +161,26 @@ func main() {
 		Short: "Explain why a ResourceClaim is pending",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientset, _, _, err := cluster.NewClientset(kubeconfig)
+			cs, _, _, err := cluster.NewClientset(kubeconfig)
 			if err != nil {
 				return err
 			}
-			res, err := explain.ExplainClaim(context.Background(), clientset, namespace, args[0])
+			res, err := explain.ExplainClaim(context.Background(), cs, namespace, args[0])
 			if err != nil {
 				return err
 			}
 
 			if outputFmt == "json" {
 				data, _ := json.MarshalIndent(res, "", "  ")
-				fmt.Println(string(data))
+				cmd.Println(string(data))
 			} else {
-				fmt.Printf("Claim: %s (Allocated: %t)\n", res.TargetName, res.Allocated)
-				fmt.Println("Reason Tree:")
-				printReasonNode(res.ReasonTree, 0)
+				cmd.Printf("Claim: %s (Allocated: %t)\n", res.TargetName, res.Allocated)
+				cmd.Println("Reason Tree:")
+				printReasonNode(res.ReasonTree, 0, cmd)
 				if len(res.Remedy) > 0 {
-					fmt.Println("\nSuggested Remedies:")
+					cmd.Println("\nSuggested Remedies:")
 					for i, rem := range res.Remedy {
-						fmt.Printf("  %d. %s\n", i+1, rem)
+						cmd.Printf("  %d. %s\n", i+1, rem)
 					}
 				}
 			}
@@ -183,24 +193,24 @@ func main() {
 		Use:   "doctor",
 		Short: "Run cluster and driver diagnostics",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientset, _, _, err := cluster.NewClientset(kubeconfig)
+			cs, _, _, err := cluster.NewClientset(kubeconfig)
 			if err != nil {
 				return err
 			}
 			registry := doctor.NewRegistry()
-			report := registry.RunDiagnostics(context.Background(), clientset)
+			report := registry.RunDiagnostics(context.Background(), cs)
 
 			if outputFmt == "json" {
 				data, _ := json.MarshalIndent(report, "", "  ")
-				fmt.Println(string(data))
+				cmd.Println(string(data))
 			} else {
-				fmt.Printf("Diagnostics Report (%s)\n", report.Timestamp.Format(time.RFC1123))
-				fmt.Printf("Summary: PASS=%d WARN=%d FAIL=%d\n\n", report.Summary["PASS"], report.Summary["WARN"], report.Summary["FAIL"])
+				cmd.Printf("Diagnostics Report (%s)\n", report.Timestamp.Format(time.RFC1123))
+				cmd.Printf("Summary: PASS=%d WARN=%d FAIL=%d\n\n", report.Summary["PASS"], report.Summary["WARN"], report.Summary["FAIL"])
 				for _, res := range report.Results {
-					fmt.Printf("[%s] %s: %s\n", res.Status, res.ID, res.Name)
-					fmt.Printf("      Evidence: %s\n", res.Evidence)
+					cmd.Printf("[%s] %s: %s\n", res.Status, res.ID, res.Name)
+					cmd.Printf("      Evidence: %s\n", res.Evidence)
 					if res.Status != "PASS" {
-						fmt.Printf("      Remediation: %s\n", res.Remediation)
+						cmd.Printf("      Remediation: %s\n", res.Remediation)
 					}
 				}
 			}
@@ -213,27 +223,29 @@ func main() {
 		Use:   "tui",
 		Short: "Launch Bubble Tea Terminal UI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientset, _, _, err := cluster.NewClientset(kubeconfig)
+			cs, _, _, err := cluster.NewClientset(kubeconfig)
 			if err != nil {
 				return err
 			}
-			return tui.RunTUI(clientset)
+			return tui.RunTUI(cs)
 		},
 	}
 
 	// 8. Serve Command
+	var serverPort int
 	var serveCmd = &cobra.Command{
 		Use:   "serve",
 		Short: "Start HTTP API and React SPA Dashboard server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientset, _, _, err := cluster.NewClientset(kubeconfig)
+			cs, _, _, err := cluster.NewClientset(kubeconfig)
 			if err != nil {
 				return err
 			}
-			srv := server.NewServer(clientset, 8080)
+			srv := server.NewServer(cs, serverPort)
 			return srv.Start(context.Background())
 		},
 	}
+	serveCmd.Flags().IntVarP(&serverPort, "server-port", "p", 8080, "HTTP server listening port")
 
 	// 9. Scenario Command
 	var scenarioFile string
@@ -275,13 +287,13 @@ func main() {
 				obj.SetResourceVersion(existing.GetResourceVersion())
 				_, err = dynamicClient.Resource(gvr).Namespace(ns).Update(context.Background(), &obj, metav1.UpdateOptions{})
 				if err == nil {
-					fmt.Printf("Successfully updated scenario %s/%s\n", ns, obj.GetName())
+					cmd.Printf("Successfully updated scenario %s/%s\n", ns, obj.GetName())
 				}
 				return err
 			}
 			_, err = dynamicClient.Resource(gvr).Namespace(ns).Create(context.Background(), &obj, metav1.CreateOptions{})
 			if err == nil {
-				fmt.Printf("Successfully applied scenario %s/%s\n", ns, obj.GetName())
+				cmd.Printf("Successfully applied scenario %s/%s\n", ns, obj.GetName())
 			}
 			return err
 		},
@@ -305,10 +317,10 @@ func main() {
 				return err
 			}
 			for _, item := range list.Items {
-				fmt.Printf("Deleting SimulatedDevicePool scenario %s/%s...\n", namespace, item.GetName())
+				cmd.Printf("Deleting SimulatedDevicePool scenario %s/%s...\n", namespace, item.GetName())
 				_ = dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.Background(), item.GetName(), metav1.DeleteOptions{})
 			}
-			fmt.Println("All SimulatedDevicePool scenarios reset.")
+			cmd.Println("All SimulatedDevicePool scenarios reset.")
 			return nil
 		},
 	}
@@ -353,7 +365,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Successfully injected fault %q into pool %s/%s\n", faultTypeFlag, namespace, poolNameFlag)
+			cmd.Printf("Successfully injected fault %q into pool %s/%s\n", faultTypeFlag, namespace, poolNameFlag)
 			return nil
 		},
 	}
@@ -388,7 +400,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Successfully cleared faults from pool %s/%s\n", namespace, poolNameFlag)
+			cmd.Printf("Successfully cleared faults from pool %s/%s\n", namespace, poolNameFlag)
 			return nil
 		},
 	}
@@ -406,19 +418,17 @@ func main() {
 	rootCmd.AddCommand(injectFaultCmd)
 	rootCmd.AddCommand(clearFaultCmd)
 
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
-	}
+	return rootCmd
 }
 
-func printReasonNode(node model.ReasonNode, depth int) {
+func printReasonNode(node model.ReasonNode, depth int, cmd *cobra.Command) {
 	indent := strings.Repeat("  ", depth)
 	statusSym := "✔"
 	if node.Confidence == "confirmed" {
 		statusSym = "✖"
 	}
-	fmt.Printf("%s%s %s (%s)\n", indent, statusSym, node.Message, node.Confidence)
+	cmd.Printf("%s%s %s (%s)\n", indent, statusSym, node.Message, node.Confidence)
 	for _, child := range node.Children {
-		printReasonNode(child, depth+1)
+		printReasonNode(child, depth+1, cmd)
 	}
 }

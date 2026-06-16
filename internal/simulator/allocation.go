@@ -123,6 +123,12 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 				fmt.Printf("Failed to update status for claim %s: %v\n", claim.Name, err)
 			} else {
 				atomic.AddInt64(&r.AllocationsSimulated, 1)
+				for i := range claims.Items {
+					if claims.Items[i].UID == claim.UID {
+						claims.Items[i] = *allocatedClaim
+						break
+					}
+				}
 			}
 		}
 	}

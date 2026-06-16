@@ -17,6 +17,11 @@ import (
 	"github.com/oaslananka/draforge/internal/simulator"
 )
 
+var (
+	versionVal = "v0.1.0"
+	commitSHA  = "dev"
+)
+
 func main() {
 	var kubeconfig string
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Absolute path to the kubeconfig file")

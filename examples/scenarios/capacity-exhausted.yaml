@@ -1,0 +1,16 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: exhausted-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: gpu-pool
+  deviceCount: 2
+  deviceType: gpu
+  health: capacity-exhausted
+  attributes:
+    model: "NVIDIA-H100-Virtual"
+    vendor: "NVIDIA"
+  capacities:
+    memory: "80Gi"

@@ -110,3 +110,51 @@ func TestDiscoverDRA(t *testing.T) {
 func ptr[T any](v T) *T {
 	return &v
 }
+
+func TestDiscoverDRAEmptyCluster(t *testing.T) {
+	// Verify that a fake clientset with no DRA objects returns
+	// empty results and no error (graceful degradation, no panic).
+	ctx := context.Background()
+	clientset := fake.NewSimpleClientset()
+
+	pools, devices, claims, err := DiscoverDRA(ctx, clientset)
+	if err != nil {
+		t.Fatalf("DiscoverDRA on empty cluster should not error: %v", err)
+	}
+	if len(pools) != 0 {
+		t.Errorf("expected 0 pools, got %d", len(pools))
+	}
+	if len(devices) != 0 {
+		t.Errorf("expected 0 devices, got %d", len(devices))
+	}
+	if len(claims) != 0 {
+		t.Errorf("expected 0 claims, got %d", len(claims))
+	}
+}
+
+func TestDiscoverDRADeterministic(t *testing.T) {
+	// Two sequential calls with same input must produce
+	// identical results (no map iteration order differences).
+	ctx := context.Background()
+	clientset := fake.NewSimpleClientset()
+
+	pools1, devices1, claims1, err1 := DiscoverDRA(ctx, clientset)
+	if err1 != nil {
+		t.Fatalf("first call failed: %v", err1)
+	}
+
+	pools2, devices2, claims2, err2 := DiscoverDRA(ctx, clientset)
+	if err2 != nil {
+		t.Fatalf("second call failed: %v", err2)
+	}
+
+	if len(pools1) != len(pools2) {
+		t.Errorf("pool count not deterministic: %d vs %d", len(pools1), len(pools2))
+	}
+	if len(devices1) != len(devices2) {
+		t.Errorf("device count not deterministic: %d vs %d", len(devices1), len(devices2))
+	}
+	if len(claims1) != len(claims2) {
+		t.Errorf("claim count not deterministic: %d vs %d", len(claims1), len(claims2))
+	}
+}

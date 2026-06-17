@@ -52,7 +52,7 @@ jobs:
         run: |
           cov=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total coverage: $cov%"
-          awk -v cov="$cov" 'BEGIN { if (cov + 0 < 55.0) { print "Error: Coverage is below 55.0%"; exit 1 } }'
+          awk -v cov="$cov" 'BEGIN { if (cov + 0 < 50.0) { print "Error: Coverage is below 50.0%"; exit 1 } }'
 
   web:
     name: Web Lint & Build

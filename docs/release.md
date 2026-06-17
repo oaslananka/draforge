@@ -4,6 +4,20 @@ This document describes the release workflow for DRAForge.
 
 ---
 
+## Version Injection
+
+All three binaries embed version and commit information at build time via GoReleaser `ldflags`:
+
+| Binary | LDFLAGS |
+|--------|---------|
+| `draforge` | `-X main.versionVal={{.Version}} -X main.commitSHA={{.ShortCommit}}` |
+| `draforge-controller` | `-X main.versionVal={{.Version}} -X main.commitSHA={{.ShortCommit}}` |
+| `draforge-sim-driver` | `-X main.versionVal={{.Version}} -X main.commitSHA={{.ShortCommit}}` |
+
+These values are set by GoReleaser during `goreleaser release` and are visible via `go version -m` on the compiled binary. The CLI also exposes them via `draforge version`.
+
+Snapshot builds (local dry-runs) use a synthetic version like `v0.0.0-SNAPSHOT-<commit>` and do not publish anything. The CI pipeline validates the release configuration with `goreleaser release --snapshot --skip=docker,sbom,sign` in the `goreleaser` job (see `.github/workflows/ci.yml`).
+
 ## Prerequisites
 
 - [GoReleaser](https://goreleaser.com/install/) v2.x installed and on `$PATH`.

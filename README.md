@@ -45,6 +45,25 @@ graph TD
 
 ---
 
+## Install
+
+### From source (Go 1.26+)
+
+```bash
+go install github.com/oaslananka/draforge/cmd/draforge@latest
+```
+
+Or clone and build locally:
+
+```bash
+git clone https://github.com/oaslananka/draforge.git
+cd draforge
+task build          # Builds all three binaries into bin/
+./bin/draforge version
+```
+
+Binaries are also available as pre-built archives from the [GitHub Releases](https://github.com/oaslananka/draforge/releases) page.
+
 ## Quickstart
 
 ### Quickstart A: Local Kind cluster development
@@ -80,6 +99,50 @@ This script audits resource limits, runs Terraform provisioners, builds images r
 To tear down the showcase and clean all billable resources:
 ```bash
 task demo:down
+```
+
+## Testing
+
+```bash
+# Run all unit tests (fast, no race)
+go test ./...
+# or: task test:unit
+
+# Run unit tests with race detector and coverage
+go test -race -coverprofile=coverage.out ./...
+# or: task test:race
+
+# Run all Go vet checks
+go vet ./...
+# or: task vet
+
+# Run full CI suite (unit + race)
+task test
+```
+
+End-to-end tests require a real Kubernetes cluster with DRA feature gate and are gated by `DRAFORGE_E2E=1`:
+
+```bash
+DRAFORGE_E2E=1 go test ./tests/e2e -v
+```
+
+## Release
+
+See [docs/release.md](docs/release.md) for the full release process.
+
+### Local snapshot build (no publishing)
+
+```bash
+task release:local
+# or: goreleaser release --snapshot --clean --skip=docker,sbom,sign
+```
+
+### Tagged release
+
+```bash
+git tag v0.x.x
+git push origin v0.x.x
+goreleaser release --clean
 ```
 
 ---

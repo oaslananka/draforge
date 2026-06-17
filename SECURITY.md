@@ -43,6 +43,10 @@ The DRAForge web dashboard is intentionally **read-only**:
   documentation.
 - If you must share configuration for debugging, redact all sensitive values
   before posting.
+- Use environment variables or secret management tools (e.g., GitHub Secrets,
+  Vault, 1Password) for all credentials.
+- The repository is configured with Dependabot for dependency updates and expects
+  GitHub secret scanning to be enabled on the repository.
 
 ### Cloud Demo Risks
 - The Terraform showcase deployment provisions billable DigitalOcean resources.
@@ -50,6 +54,9 @@ The DRAForge web dashboard is intentionally **read-only**:
   the Terraform plan before applying.
 - Demo deployments expose the dashboard publicly — do not use in production
   or with sensitive data.
+- The E2E workflow (`.github/workflows/e2e.yml`) requires the `DIGITALOCEAN_TOKEN`
+  secret and provisions cloud resources. It is gated to the upstream repository
+  and requires explicit confirmation before running.
 
 ### RBAC Minimum Permissions
 - DRAForge follows the principle of least privilege.
@@ -58,6 +65,29 @@ The DRAForge web dashboard is intentionally **read-only**:
   - `ResourceClaim`, `ResourceSlice`, `DeviceClass` read
   - Pod and event read access
 - If extending RBAC, ensure permissions are no broader than necessary.
+
+### GitHub Security Features (Recommended)
+
+To fully secure this repository, enable the following GitHub settings:
+
+| Feature | Purpose | How to Enable |
+|---------|---------|---------------|
+| Branch protection | Prevent force-pushes and deletion of `main` | Settings > Branches > Add rule |
+| Required status checks | Block merges if CI fails | Branch protection rule > "Require status checks" |
+| PR reviews | Require at least one review before merge | Branch protection rule > "Require pull request reviews" |
+| Dependabot security updates | Auto-merge dependency fixes | Settings > Security & analysis > Dependabot security updates |
+| Secret scanning | Detect accidental credential commits | Settings > Security & analysis > Secret scanning |
+| Code scanning (CodeQL) | Automated vulnerability detection | Already configured in `.github/workflows/security.yml` |
+
+### CI/CD Security
+
+- Normal CI (`ci.yml`) does not require any cloud credentials and runs safely
+  on forks and PRs.
+- E2E tests (`e2e.yml`) require `DIGITALOCEAN_TOKEN` and are gated to the
+  upstream repository. They only trigger on `workflow_dispatch` (manual) or
+  nightly schedule.
+- Release workflow (`release.yml`) requires `GITHUB_TOKEN` with `packages: write`
+  and is gated to the upstream repository.
 
 ## Responsible Disclosure
 

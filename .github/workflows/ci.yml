@@ -92,7 +92,7 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v5
         with:
-          version: v3.14.0
+          version: v3.17.3
 
       - name: Lint Helm Chart
         run: helm lint deploy/helm/draforge
@@ -115,7 +115,7 @@ jobs:
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
+          version: v2.16.0
           install-only: true
 
       - name: Dry-run snapshot

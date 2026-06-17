@@ -2,8 +2,24 @@ name: E2E Tests
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 2 * * *' # Nightly at 2 AM
+    inputs:
+      confirm:
+        description: 'Type "yes" to confirm this will provision billable DigitalOcean resources'
+        required: true
+        default: ''
+
+# Requirements
+# ------------
+# This workflow provisions billable DigitalOcean Kubernetes (DOKS) resources.
+# It requires the following GitHub secrets:
+#   DIGITALOCEAN_TOKEN  — DigitalOcean API token with read+write scope
+#
+# The workflow is gated to the upstream repository owner (oaslananka / oaslananka-ops)
+# because it requires DOKS cluster credentials. Forks cannot run this workflow
+# unless they configure their own DOKS cluster and DIGITALOCEAN_TOKEN secret.
+#
+# Normal CI (ci.yml) does NOT require cloud credentials — this E2E is optional.
+# See docs/demo.md for more information about the DOKS showcase deployment.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -17,6 +33,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Validate confirmation input (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ "${{ github.event.inputs.confirm }}" != "yes" ]]; then
+            echo "ERROR: You must confirm by typing 'yes' in the confirm input."
+            echo "This workflow provisions billable DigitalOcean resources."
+            exit 1
+          fi
+
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
         with:
@@ -27,3 +52,33 @@ jobs:
 
       - name: Run E2E Script
         run: bash scripts/remote-e2e.sh
+
+  # Cleanup handler: runs on workflow cancellation or failure
+  # to ensure no billable DOKS resources leak.
+  cleanup:
+    name: Cleanup DOKS Resources
+    if: always() && (github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops')
+    needs: [run-e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        if: always()
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        if: always()
+        with:
+          token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - name: Tear down Helm release
+        if: always()
+        continue-on-error: true
+        run: |
+          doctl kubernetes cluster kubeconfig save draforge-cluster
+          helm uninstall draforge -n draforge-system --ignore-not-found=true
+          kubectl delete -f examples/scenarios/basic-gpu.yaml --ignore-not-found=true
+
+      - name: Notify completion
+        if: always()
+        run: echo "E2E run completed (state: ${{ job.status }}). DOKS resources cleaned up."

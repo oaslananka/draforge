@@ -79,7 +79,6 @@ signs:
     args:
       - "sign-blob"
       - "--output=${signature}"
-      - "--bundle=${signature}.bundle"
       - "${artifact}"
       - "--yes"
     artifacts: checksum

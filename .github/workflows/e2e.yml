@@ -4,41 +4,86 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Type "yes" to confirm this will provision billable DigitalOcean resources'
+        description: 'Type "run-e2e-doks" to confirm this will provision billable DigitalOcean resources'
         required: true
+        type: string
         default: ''
+      cluster_name:
+        description: 'Existing DOKS cluster name to use for remote E2E tests'
+        required: true
+        type: string
+        default: 'draforge-cluster'
+      commit_sha:
+        description: 'Optional commit SHA to test; leave empty to use the checked-out commit'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-doks-${{ github.ref }}
+  cancel-in-progress: false
 
 # Requirements
 # ------------
-# This workflow provisions billable DigitalOcean Kubernetes (DOKS) resources.
-# It requires the following GitHub secrets:
-#   DIGITALOCEAN_TOKEN  — DigitalOcean API token with read+write scope
+# This workflow is manual-only and can provision billable DigitalOcean Kubernetes
+# resources. It requires the DIGITALOCEAN_TOKEN GitHub secret with read+write scope.
 #
-# The workflow is gated to the upstream repository owner (oaslananka / oaslananka-ops)
-# because it requires DOKS cluster credentials. Forks cannot run this workflow
-# unless they configure their own DOKS cluster and DIGITALOCEAN_TOKEN secret.
+# Safety gates:
+# - manual workflow_dispatch only
+# - exact confirmation phrase: run-e2e-doks
+# - upstream owner guard
+# - read-only GITHUB_TOKEN permissions
+# - serialized runs per ref
+# - timeout to avoid stuck jobs
+# - best-effort cleanup after attempted runs
 #
-# Normal CI (ci.yml) does NOT require cloud credentials — this E2E is optional.
-# See docs/demo.md for more information about the DOKS showcase deployment.
+# Normal CI (ci.yml) does NOT require cloud credentials; this E2E is optional.
+# See docs/demo.md for the DOKS showcase deployment runbook.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  DOKS_CLUSTER_NAME: ${{ inputs.cluster_name }}
 
 jobs:
   run-e2e:
     name: Run Remote E2E tests
     if: ${{ github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: e2e-doks
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate confirmation input (manual trigger)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Validate manual inputs and required secret
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          CLUSTER_NAME: ${{ inputs.cluster_name }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
-          if [[ "${{ github.event.inputs.confirm }}" != "yes" ]]; then
-            echo "ERROR: You must confirm by typing 'yes' in the confirm input."
-            echo "This workflow provisions billable DigitalOcean resources."
+          set -euo pipefail
+
+          if [[ "$CONFIRM" != "run-e2e-doks" ]]; then
+            echo "ERROR: Type 'run-e2e-doks' in the confirm input to run this billable E2E workflow." >&2
+            exit 1
+          fi
+
+          if [[ -z "$DIGITALOCEAN_TOKEN" ]]; then
+            echo "ERROR: DIGITALOCEAN_TOKEN secret is not configured." >&2
+            exit 1
+          fi
+
+          if [[ ! "$CLUSTER_NAME" =~ ^[A-Za-z0-9._-]{1,63}$ ]]; then
+            echo "ERROR: cluster_name must be 1-63 chars and contain only letters, numbers, dot, underscore or dash." >&2
+            exit 1
+          fi
+
+          if [[ -n "$COMMIT_SHA" && ! "$COMMIT_SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            echo "ERROR: commit_sha must be a 7-40 character hexadecimal Git SHA." >&2
             exit 1
           fi
 
@@ -48,18 +93,25 @@ jobs:
           token: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
       - name: Save DigitalOcean Kubeconfig
-        run: doctl kubernetes cluster kubeconfig save draforge-cluster
+        run: doctl kubernetes cluster kubeconfig save "$DOKS_CLUSTER_NAME"
 
       - name: Run E2E Script
-        run: bash scripts/remote-e2e.sh
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$COMMIT_SHA" ]]; then
+            bash scripts/remote-e2e.sh "$COMMIT_SHA"
+          else
+            bash scripts/remote-e2e.sh
+          fi
 
-  # Cleanup handler: runs on workflow cancellation or failure
-  # to ensure no billable DOKS resources leak.
   cleanup:
     name: Cleanup DOKS Resources
-    if: always() && (github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops')
+    if: ${{ always() && needs.run-e2e.result != 'skipped' && (github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops') }}
     needs: [run-e2e]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -71,11 +123,11 @@ jobs:
         with:
           token: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
-      - name: Tear down Helm release
+      - name: Tear down Helm release and sample resources
         if: always()
         continue-on-error: true
         run: |
-          doctl kubernetes cluster kubeconfig save draforge-cluster
+          doctl kubernetes cluster kubeconfig save "${{ inputs.cluster_name }}"
           helm uninstall draforge -n draforge-system --ignore-not-found=true
           kubectl delete -f examples/scenarios/basic-gpu.yaml --ignore-not-found=true
 

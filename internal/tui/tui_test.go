@@ -3,6 +3,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -249,7 +250,7 @@ func TestRefreshMsgError(t *testing.T) {
 	if updated.loading {
 		t.Error("expected loading false after error refreshMsg")
 	}
-	if updated.err != errTestRefresh {
+	if !errors.Is(updated.err, errTestRefresh) {
 		t.Errorf("expected errTestRefresh, got: %v", updated.err)
 	}
 }

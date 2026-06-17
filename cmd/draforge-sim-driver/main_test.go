@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"strings"
 	"testing"
@@ -17,7 +18,7 @@ func TestSimDriverHelpOutput(t *testing.T) {
 	kubeconfig := fs.String("kubeconfig", "", "Path to kubeconfig file")
 
 	err := fs.Parse([]string{"--help"})
-	if err != flag.ErrHelp {
+	if !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("expected flag.ErrHelp, got: %v", err)
 	}
 
@@ -102,6 +103,9 @@ func TestCDISpecStructure(t *testing.T) {
 	}
 	if spec.CDIVersion != "0.5.0" {
 		t.Errorf("CDIVersion: got %q, want 0.5.0", spec.CDIVersion)
+	}
+	if spec.Kind != "draforge.oaslananka/sim" {
+		t.Errorf("Kind: got %q, want draforge.oaslananka/sim", spec.Kind)
 	}
 	if len(spec.Devices) != 1 {
 		t.Errorf("expected 1 device, got %d", len(spec.Devices))

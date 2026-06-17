@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func TestControllerHelpOutput(t *testing.T) {
 
 	// Simulate --help — stdlib flag returns ErrHelp which is expected
 	err := fs.Parse([]string{"--help"})
-	if err != flag.ErrHelp {
+	if !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("expected flag.ErrHelp, got: %v", err)
 	}
 

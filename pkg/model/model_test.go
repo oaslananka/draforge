@@ -277,8 +277,17 @@ func TestReasonNodeTree(t *testing.T) {
 		},
 	}
 
+	if root.Message != "Claim pending" {
+		t.Errorf("expected root message, got %q", root.Message)
+	}
 	if root.Confidence != "confirmed" {
 		t.Errorf("expected confirmed, got %q", root.Confidence)
+	}
+	if root.Evidence != "No matching node found" {
+		t.Errorf("expected root evidence, got %q", root.Evidence)
+	}
+	if root.SourceType != "Claim" {
+		t.Errorf("expected source type Claim, got %q", root.SourceType)
 	}
 	if len(root.Children) != 1 {
 		t.Fatalf("expected 1 child, got %d", len(root.Children))
@@ -302,6 +311,12 @@ func TestExplainResultAllocated(t *testing.T) {
 	}
 	if r.TargetName != "my-claim" {
 		t.Errorf("TargetName: got %q, want my-claim", r.TargetName)
+	}
+	if r.TargetType != "claim" {
+		t.Errorf("TargetType: got %q, want claim", r.TargetType)
+	}
+	if r.Remedy != nil {
+		t.Errorf("expected nil Remedy, got %#v", r.Remedy)
 	}
 }
 
@@ -367,6 +382,9 @@ func TestDoctorReportSummary(t *testing.T) {
 		},
 	}
 
+	if r.Timestamp.IsZero() {
+		t.Error("expected non-zero Timestamp")
+	}
 	if r.Summary["PASS"] != 5 {
 		t.Errorf("Summary[PASS]: got %d, want 5", r.Summary["PASS"])
 	}

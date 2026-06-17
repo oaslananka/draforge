@@ -21,11 +21,12 @@ import (
 
 // Server handles HTTP API requests and serves the frontend.
 type Server struct {
-	clientset      kubernetes.Interface
-	port           int
-	allowedOrigins string
-	mu             sync.Mutex
-	clients        map[chan string]bool
+	clientset            kubernetes.Interface
+	port                 int
+	allowedOrigins       string
+	allowedOriginsParsed []string // pre-parsed from allowedOrigins, avoids split/trim per request
+	mu                   sync.Mutex
+	clients              map[chan string]bool
 }
 
 // NewServer creates a Server instance.
@@ -37,11 +38,19 @@ func NewServer(clientset kubernetes.Interface, port int) *Server {
 		allowedOrigins = "*"
 	}
 
+	var parsed []string
+	if allowedOrigins != "*" {
+		for _, o := range strings.Split(allowedOrigins, ",") {
+			parsed = append(parsed, strings.TrimSpace(o))
+		}
+	}
+
 	return &Server{
-		clientset:      clientset,
-		port:           port,
-		allowedOrigins: allowedOrigins,
-		clients:        make(map[chan string]bool),
+		clientset:            clientset,
+		port:                 port,
+		allowedOrigins:       allowedOrigins,
+		allowedOriginsParsed: parsed,
+		clients:              make(map[chan string]bool),
 	}
 }
 
@@ -128,14 +137,26 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 // CORS middleware for APIs
 // Uses s.allowedOrigins which defaults to "*" (read-only public model)
 // and can be narrowed via the CORS_ALLOWED_ORIGINS env var.
+// Allowed origins are parsed once at server init for performance.
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if s.allowedOrigins == "*" || origin == "" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 		} else {
-			for _, allowed := range strings.Split(s.allowedOrigins, ",") {
-				allowed = strings.TrimSpace(allowed)
+			origins := s.allowedOriginsParsed
+			if origins == nil {
+				for _, o := range strings.Split(s.allowedOrigins, ",") {
+					o = strings.TrimSpace(o)
+					if origin == o {
+						w.Header().Set("Access-Control-Allow-Origin", origin)
+						w.Header().Set("Vary", "Origin")
+						break
+					}
+				}
+				goto done
+			}
+			for _, allowed := range origins {
 				if origin == allowed {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
 					w.Header().Set("Vary", "Origin")
@@ -143,6 +164,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 				}
 			}
 		}
+	done:
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 

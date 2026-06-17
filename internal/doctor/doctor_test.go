@@ -10,6 +10,8 @@ import (
 	"github.com/oaslananka/draforge/pkg/model"
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/version"
+	discoveryfake "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -86,6 +88,45 @@ func TestAPIAvailabilityCheckDeterministic(t *testing.T) {
 	}
 	if res1.Remediation != res2.Remediation {
 		t.Errorf("remediation not deterministic: %q != %q", res1.Remediation, res2.Remediation)
+	}
+}
+
+func TestKubernetesVersionCheck(t *testing.T) {
+	tests := []struct {
+		name     string
+		major    string
+		minor    string
+		expected model.DoctorCheckStatus
+	}{
+		{name: "v1.9 should FAIL", major: "1", minor: "9", expected: model.StatusFail},
+		{name: "v1.31 should FAIL", major: "1", minor: "31", expected: model.StatusFail},
+		{name: "v1.32 should WARN", major: "1", minor: "32", expected: model.StatusWarn},
+		{name: "v1.33 should WARN", major: "1", minor: "33", expected: model.StatusWarn},
+		{name: "v1.34 should PASS", major: "1", minor: "34", expected: model.StatusPass},
+		{name: "v1.35 should PASS", major: "1", minor: "35", expected: model.StatusPass},
+		{name: "malformed major should UNKNOWN", major: "abc", minor: "32", expected: model.StatusUnknown},
+		{name: "malformed minor should UNKNOWN", major: "1", minor: "xyz", expected: model.StatusUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clientset := fake.NewSimpleClientset()
+			fd, ok := clientset.Discovery().(*discoveryfake.FakeDiscovery)
+			if !ok {
+				t.Fatal("clientset.Discovery() is not *FakeDiscovery")
+			}
+			fd.FakedServerVersion = &version.Info{
+				Major:      tt.major,
+				Minor:      tt.minor,
+				GitVersion: "v" + tt.major + "." + tt.minor + ".0",
+			}
+
+			check := &KubernetesVersionCheck{}
+			res := check.Run(context.Background(), clientset)
+			if res.Status != tt.expected {
+				t.Errorf("expected status %q, got %q (evidence: %q)", tt.expected, res.Status, res.Evidence)
+			}
+		})
 	}
 }
 

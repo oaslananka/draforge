@@ -81,4 +81,5 @@ jobs:
 
       - name: Notify completion
         if: always()
-        run: echo "E2E run completed (state: ${{ job.status }}). DOKS resources cleaned up."
+        run: |
+          echo "E2E run completed (state: ${{ job.status }}). DOKS resources cleaned up."

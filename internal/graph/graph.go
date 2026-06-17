@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/oaslananka/draforge/internal/discovery"
@@ -15,23 +16,32 @@ import (
 )
 
 // GraphBuilder manages construction and formatting of the resource graph.
+// It uses internal dedup maps to guarantee deterministic, O(1) deduplicated output.
 type GraphBuilder struct {
 	nodes []model.GraphNode
 	edges []model.GraphEdge
+
+	nodeIDs map[string]struct{}
+	edgeIDs map[string]struct{}
 }
 
 // NewGraphBuilder instantiates a GraphBuilder.
 func NewGraphBuilder() *GraphBuilder {
-	return &GraphBuilder{
-		nodes: []model.GraphNode{},
-		edges: []model.GraphEdge{},
-	}
+	return &GraphBuilder{}
+}
+
+// edgeKey returns a deterministic key for deduplicating edges.
+// The \x00 separator ensures from/to/type cannot produce collisions.
+func edgeKey(from, to, edgeType string) string {
+	return from + "\x00" + to + "\x00" + edgeType
 }
 
 // BuildGraph queries the cluster and builds nodes and edges representing the live relationships.
 func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Interface, namespaceFilter, driverFilter string) (*model.ResourceGraph, error) {
 	gb.nodes = []model.GraphNode{}
 	gb.edges = []model.GraphEdge{}
+	gb.nodeIDs = make(map[string]struct{})
+	gb.edgeIDs = make(map[string]struct{})
 
 	// 1. Fetch live objects
 	pools, devices, claims, err := discovery.DiscoverDRA(ctx, clientset)
@@ -45,6 +55,12 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 		for _, c := range classes.Items {
 			classList = append(classList, c.Name)
 		}
+	}
+
+	// Pre-compute pool→driver mapping for device filter.
+	poolToDriver := make(map[string]string, len(pools))
+	for _, p := range pools {
+		poolToDriver[p.Name] = p.DriverName
 	}
 
 	// 2. Add Namespace nodes (deduplicated)
@@ -92,8 +108,12 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 
 	// 4. Add Device nodes
 	for _, d := range devices {
-		if driverFilter != "" && !strings.Contains(d.ID, driverFilter) {
-			continue
+		// Driver filter: use pool-driver relationship, not substring match.
+		if driverFilter != "" {
+			poolDriver := poolToDriver[d.PoolName]
+			if poolDriver != driverFilter {
+				continue
+			}
 		}
 
 		devID := "device/" + d.ID
@@ -144,7 +164,6 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 
 		// Edge: Claim -> Allocated Device
 		if c.AllocatedDevice != "" {
-			// Find exact matching device node ID
 			foundDevice := false
 			for _, dev := range devices {
 				if dev.Name == c.AllocatedDevice && (c.AllocatedNode == "" || dev.NodeName == c.AllocatedNode) {
@@ -180,19 +199,35 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 		}
 	}
 
+	// 7. Stable sort for deterministic output ordering.
+	sort.Slice(gb.nodes, func(i, j int) bool {
+		return gb.nodes[i].ID < gb.nodes[j].ID
+	})
+	sort.Slice(gb.edges, func(i, j int) bool {
+		if gb.edges[i].From != gb.edges[j].From {
+			return gb.edges[i].From < gb.edges[j].From
+		}
+		if gb.edges[i].To != gb.edges[j].To {
+			return gb.edges[i].To < gb.edges[j].To
+		}
+		return gb.edges[i].Type < gb.edges[j].Type
+	})
+
 	return &model.ResourceGraph{
 		Nodes: gb.nodes,
 		Edges: gb.edges,
 	}, nil
 }
 
+// addNode adds a node if it does not already exist (O(1) dedup via map).
 func (gb *GraphBuilder) addNode(id, nodeType, label string, meta map[string]interface{}) {
-	// Deduplicate nodes
-	for _, n := range gb.nodes {
-		if n.ID == id {
-			return
-		}
+	if gb.nodeIDs == nil {
+		gb.nodeIDs = make(map[string]struct{})
 	}
+	if _, exists := gb.nodeIDs[id]; exists {
+		return
+	}
+	gb.nodeIDs[id] = struct{}{}
 	gb.nodes = append(gb.nodes, model.GraphNode{
 		ID:       id,
 		Type:     nodeType,
@@ -201,13 +236,16 @@ func (gb *GraphBuilder) addNode(id, nodeType, label string, meta map[string]inte
 	})
 }
 
+// addEdge adds an edge if it does not already exist (O(1) dedup via map).
 func (gb *GraphBuilder) addEdge(from, to, edgeType string) {
-	// Deduplicate edges
-	for _, e := range gb.edges {
-		if e.From == from && e.To == to && e.Type == edgeType {
-			return
-		}
+	if gb.edgeIDs == nil {
+		gb.edgeIDs = make(map[string]struct{})
 	}
+	key := edgeKey(from, to, edgeType)
+	if _, exists := gb.edgeIDs[key]; exists {
+		return
+	}
+	gb.edgeIDs[key] = struct{}{}
 	gb.edges = append(gb.edges, model.GraphEdge{
 		From: from,
 		To:   to,
@@ -244,13 +282,13 @@ func ToDOT(g *model.ResourceGraph) string {
 		case "Driver":
 			color = "purple"
 		}
-		sb.WriteString(fmt.Sprintf("  \"%s\" [label=\"%s\\n(%s)\", fillcolor=%s];\n", n.ID, escapedLabel, n.Type, color))
+		fmt.Fprintf(&sb, "  \"%s\" [label=\"%s\\n(%s)\", fillcolor=%s];\n", n.ID, escapedLabel, n.Type, color)
 	}
 	sb.WriteString("\n")
 
 	// Print edges
 	for _, e := range g.Edges {
-		sb.WriteString(fmt.Sprintf("  \"%s\" -> \"%s\" [label=\"%s\"];\n", e.From, e.To, e.Type))
+		fmt.Fprintf(&sb, "  \"%s\" -> \"%s\" [label=\"%s\"];\n", e.From, e.To, e.Type)
 	}
 
 	sb.WriteString("}\n")
@@ -268,7 +306,7 @@ func ToMermaid(g *model.ResourceGraph) string {
 		cleanID = strings.ReplaceAll(cleanID, "-", "_")
 		cleanID = strings.ReplaceAll(cleanID, ".", "_")
 		escapedLabel := strings.ReplaceAll(n.Label, "\"", "")
-		sb.WriteString(fmt.Sprintf("  %s[\"%s<br/>(%s)\"]\n", cleanID, escapedLabel, n.Type))
+		fmt.Fprintf(&sb, "  %s[\"%s<br/>(%s)\"]\n", cleanID, escapedLabel, n.Type)
 	}
 	sb.WriteString("\n")
 
@@ -280,7 +318,7 @@ func ToMermaid(g *model.ResourceGraph) string {
 		cleanTo := strings.ReplaceAll(e.To, "/", "_")
 		cleanTo = strings.ReplaceAll(cleanTo, "-", "_")
 		cleanTo = strings.ReplaceAll(cleanTo, ".", "_")
-		sb.WriteString(fmt.Sprintf("  %s -->|%s| %s\n", cleanFrom, e.Type, cleanTo))
+		fmt.Fprintf(&sb, "  %s -->|%s| %s\n", cleanFrom, e.Type, cleanTo)
 	}
 
 	return sb.String()

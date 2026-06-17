@@ -17,9 +17,11 @@ age.key
 
 # DRAForge exclusions
 coverage.out
+coverage
 web/dist/
 web/node_modules/
 tfplan*
 *.sbom.json
 dist/
 bin/
+*.exe

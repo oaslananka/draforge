@@ -19,6 +19,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+var (
+	versionVal = "v0.1.0"
+	commitSHA  = "dev"
+)
+
 // CDIDevice represents a CDI device entry.
 type CDIDevice struct {
 	Name           string         `json:"name"`
@@ -54,7 +59,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Starting DRAForge Synthetic Node Plugin (CDI dir: %s, nodeName: %s)...\n", cdiDir, nodeName)
+	fmt.Printf("DRAForge Synthetic Node Plugin %s (commit: %s) starting (CDI dir: %s, nodeName: %s)...\n", versionVal, commitSHA, cdiDir, nodeName)
 
 	if err := os.MkdirAll(cdiDir, 0755); err != nil {
 		fmt.Printf("Warning: Failed to create CDI directory %s: %v. Using temporary simulation path.\n", cdiDir, err)

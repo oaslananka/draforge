@@ -8,6 +8,24 @@ spec:
     - name: v1alpha1
       served: true
       storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Driver
+          type: string
+          jsonPath: .spec.driverName
+        - name: Devices
+          type: integer
+          jsonPath: .spec.deviceCount
+        - name: Type
+          type: string
+          jsonPath: .spec.deviceType
+        - name: Health
+          type: string
+          jsonPath: .spec.health
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
       schema:
         openAPIV3Schema:
           type: object
@@ -35,6 +53,11 @@ spec:
                 health:
                   type: string
                   default: "healthy"
+                  enum:
+                    - healthy
+                    - unhealthy
+                    - capacity-exhausted
+                    - disappear
                 attributes:
                   type: object
                   additionalProperties:

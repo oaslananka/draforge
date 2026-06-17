@@ -1,14 +1,25 @@
 version: '3'
 
 vars:
-  GO_BIN: 'C:/Users/Admin/go-sdk/go/bin/go.exe'
-  GOFMT_BIN: 'C:/Users/Admin/go-sdk/go/bin/gofmt.exe'
-  GORELEASER_BIN: 'C:/Users/Admin/go/bin/goreleaser.exe'
-  BASH_BIN: '{{if eq OS "windows"}}"C:\\Program Files\\Git\\bin\\bash.exe"{{else}}bash{{end}}'
+  # Binary paths — resolve from PATH by default, override via environment variable
+  GO_BIN: '{{default "go" .GO_BIN}}'
+  GOFMT_BIN: '{{default "gofmt" .GOFMT_BIN}}'
+  GORELEASER_BIN: '{{default "goreleaser" .GORELEASER_BIN}}'
+
+  # Platform-agnostic shell — Task's shell field handles this natively; keep a
+  # portable fallback for any task that explicitly needs bash syntax.
+  BASH_BIN: '{{default "bash" .BASH_BIN}}'
 
 tasks:
   build:
     desc: Build all binaries
+    cmds:
+      - '{{.GO_BIN}} build -o bin/draforge ./cmd/draforge'
+      - '{{.GO_BIN}} build -o bin/draforge-controller ./cmd/draforge-controller'
+      - '{{.GO_BIN}} build -o bin/draforge-sim-driver ./cmd/draforge-sim-driver'
+
+  build:windows:
+    desc: Build all binaries for Windows (.exe)
     cmds:
       - '{{.GO_BIN}} build -o bin/draforge.exe ./cmd/draforge'
       - '{{.GO_BIN}} build -o bin/draforge-controller.exe ./cmd/draforge-controller'
@@ -35,10 +46,21 @@ tasks:
     cmds:
       - govulncheck ./...
 
-  test:
+  test:unit:
+    desc: Run Go unit tests (fast, no race)
+    cmds:
+      - '{{.GO_BIN}} test ./...'
+
+  test:race:
     desc: Run Go unit tests with race detector and coverage
     cmds:
-      - '{{.GO_BIN}} test -v -race -coverprofile=coverage.out ./...'
+      - '{{.GO_BIN}} test -race "-coverprofile=coverage.out" ./...'
+
+  test:
+    desc: Run unit tests followed by race+coverage (default CI flow)
+    cmds:
+      - task: test:unit
+      - task: test:race
 
   web:install:
     desc: Install web dependencies using pnpm

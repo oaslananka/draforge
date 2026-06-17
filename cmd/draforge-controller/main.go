@@ -17,6 +17,11 @@ import (
 	"github.com/oaslananka/draforge/internal/simulator"
 )
 
+var (
+	versionVal = "v0.1.0"
+	commitSHA  = "dev"
+)
+
 func main() {
 	var kubeconfig string
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Absolute path to the kubeconfig file")
@@ -32,7 +37,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Println("Initializing DRAForge Simulation Controller...")
+	fmt.Printf("DRAForge Simulation Controller %s (commit: %s) starting...\n", versionVal, commitSHA)
 
 	// 2. Initialize Reconciler
 	reconciler := simulator.NewReconciler(clientset, dynamicClient)
@@ -42,17 +47,17 @@ func main() {
 		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "# HELP draforge_controller_reconcile_errors_total Total number of reconciliation errors\n")
-			fmt.Fprintf(w, "# TYPE draforge_controller_reconcile_errors_total counter\n")
-			fmt.Fprintf(w, "draforge_controller_reconcile_errors_total %d\n", atomic.LoadInt64(&reconciler.ReconcileErrorsCount))
+			_, _ = fmt.Fprintf(w, "# HELP draforge_controller_reconcile_errors_total Total number of reconciliation errors\n")
+			_, _ = fmt.Fprintf(w, "# TYPE draforge_controller_reconcile_errors_total counter\n")
+			_, _ = fmt.Fprintf(w, "draforge_controller_reconcile_errors_total %d\n", atomic.LoadInt64(&reconciler.ReconcileErrorsCount))
 
-			fmt.Fprintf(w, "# HELP draforge_controller_allocations_simulated_total Total number of simulated allocations\n")
-			fmt.Fprintf(w, "# TYPE draforge_controller_allocations_simulated_total counter\n")
-			fmt.Fprintf(w, "draforge_controller_allocations_simulated_total %d\n", atomic.LoadInt64(&reconciler.AllocationsSimulated))
+			_, _ = fmt.Fprintf(w, "# HELP draforge_controller_allocations_simulated_total Total number of simulated allocations\n")
+			_, _ = fmt.Fprintf(w, "# TYPE draforge_controller_allocations_simulated_total counter\n")
+			_, _ = fmt.Fprintf(w, "draforge_controller_allocations_simulated_total %d\n", atomic.LoadInt64(&reconciler.AllocationsSimulated))
 
-			fmt.Fprintf(w, "# HELP draforge_controller_active_faults Total number of active faults\n")
-			fmt.Fprintf(w, "# TYPE draforge_controller_active_faults gauge\n")
-			fmt.Fprintf(w, "draforge_controller_active_faults %d\n", atomic.LoadInt64(&reconciler.ActiveFaultsCount))
+			_, _ = fmt.Fprintf(w, "# HELP draforge_controller_active_faults Total number of active faults\n")
+			_, _ = fmt.Fprintf(w, "# TYPE draforge_controller_active_faults gauge\n")
+			_, _ = fmt.Fprintf(w, "draforge_controller_active_faults %d\n", atomic.LoadInt64(&reconciler.ActiveFaultsCount))
 		})
 		fmt.Println("Controller metrics server listening on :8082...")
 		_ = http.ListenAndServe(":8082", nil)

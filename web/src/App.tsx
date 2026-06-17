@@ -1,92 +1,26 @@
-// web/src/App.tsx
-// SPDX-License-Identifier: Apache-2.0
 import { useState, useEffect, useRef } from 'react';
+import type {
+  Device,
+  DevicePool,
+  ResourceClaimInfo,
+  DoctorReport,
+  ResourceGraph,
+  ExplainResult,
+  ReasonNode,
+  TabId,
+  SSEStatus,
+} from './api/types';
+import {
+  fetchSummary,
+  fetchPools,
+  fetchDevices,
+  fetchClaims,
+  fetchDoctor,
+  fetchExplain,
+} from './api/api';
+import type { Summary } from './api/types';
 
 const versionVal = 'v0.1.0-rc.1';
-
-// Types matching Go model structs
-interface Device {
-  id: string;
-  name: string;
-  type: string;
-  status: string;
-  nodeName: string;
-  poolName: string;
-  attributes: Record<string, string>;
-  capacities: Record<string, number>;
-  isSynthetic: boolean;
-}
-
-interface DevicePool {
-  name: string;
-  driverName: string;
-  nodeName: string;
-  deviceCount: number;
-  deviceType: string;
-  health: string;
-  isSynthetic: boolean;
-}
-
-interface ResourceClaimInfo {
-  name: string;
-  namespace: string;
-  deviceClassName: string;
-  status: string;
-  ownerPodName: string;
-  allocatedDevice?: string;
-  allocatedNode?: string;
-}
-
-interface DoctorCheckResult {
-  id: string;
-  name: string;
-  category: string;
-  status: string;
-  severity: string;
-  evidence: string;
-  remediation: string;
-  docReference: string;
-}
-
-interface DoctorReport {
-  timestamp: string;
-  summary: Record<string, number>;
-  results: DoctorCheckResult[];
-}
-
-interface GraphNode {
-  id: string;
-  type: string;
-  label: string;
-  metadata?: Record<string, any>;
-}
-
-interface GraphEdge {
-  from: string;
-  to: string;
-  type: string;
-}
-
-interface ResourceGraph {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-}
-
-interface ReasonNode {
-  message: string;
-  confidence: string;
-  evidence: string;
-  sourceType: string;
-  children?: ReasonNode[];
-}
-
-interface ExplainResult {
-  targetName: string;
-  targetType: string;
-  allocated: boolean;
-  reasonTree: ReasonNode;
-  remedy: string[];
-}
 
 interface NodePosition {
   id: string;
@@ -101,17 +35,17 @@ interface NodePosition {
 function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGraph | null, onSelectClaim: (name: string) => void }) {
   const width = 800;
   const height = 500;
-  
+
   const [nodes, setNodes] = useState<NodePosition[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodePosition | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [hoveredEdge, setHoveredEdge] = useState<GraphEdge | null>(null);
-  
+  const [hoveredEdge, setHoveredEdge] = useState<ResourceGraph['edges'][0] | null>(null);
+  const [graphEmpty, setGraphEmpty] = useState(false);
+
   const nodesRef = useRef<NodePosition[]>([]);
   const draggingIdRef = useRef<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  
-  // Zoom and Pan states
+
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const isPanningRef = useRef(false);
@@ -119,16 +53,26 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
 
   // Sync / Diff nodes on graphData changes
   useEffect(() => {
-    if (!graphData) return;
-    
+    if (!graphData) {
+      setGraphEmpty(true);
+      return;
+    }
+    const safeNodes = graphData.nodes ?? [];
+    const safeEdges = graphData.edges ?? [];
+    if (safeNodes.length === 0 && safeEdges.length === 0) {
+      setGraphEmpty(true);
+      return;
+    }
+    setGraphEmpty(false);
+
     const currentNodes = [...nodesRef.current];
-    const newNodes: NodePosition[] = graphData.nodes.map(n => {
+    const newNodes: NodePosition[] = safeNodes.map(n => {
       const existing = currentNodes.find(cn => cn.id === n.id);
       if (existing) {
         return {
           ...existing,
           type: n.type,
-          label: n.label
+          label: n.label,
         };
       }
       return {
@@ -138,10 +82,10 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
         vx: 0,
         vy: 0,
         type: n.type,
-        label: n.label
+        label: n.label,
       };
     });
-    
+
     nodesRef.current = newNodes;
     setNodes(newNodes);
   }, [graphData]);
@@ -149,33 +93,31 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
   // Physics Simulation loop
   useEffect(() => {
     let animationFrameId: number;
-    
+
     const tick = () => {
       const current = nodesRef.current;
       if (current.length === 0) {
         animationFrameId = requestAnimationFrame(tick);
         return;
       }
-      
+
       const charge = 1200;
       const gravity = 0.05;
       const linkStrength = 0.06;
       const friction = 0.8;
-      
-      // 1. Repulsion between all nodes
+
       for (let i = 0; i < current.length; i++) {
         const n1 = current[i];
         if (n1.id === draggingIdRef.current) continue;
-        
+
         for (let j = 0; j < current.length; j++) {
           if (i === j) continue;
           const n2 = current[j];
-          
           const dx = n1.x - n2.x;
           const dy = n1.y - n2.y;
           const distSq = dx * dx + dy * dy + 0.1;
           const dist = Math.sqrt(distSq);
-          
+
           if (dist < 180) {
             const force = charge / distSq;
             n1.vx += (dx / dist) * force;
@@ -183,59 +125,43 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
           }
         }
       }
-      
-      // 2. Attraction along edges
-      if (graphData && graphData.edges) {
-        graphData.edges.forEach(edge => {
-          const source = current.find(n => n.id === edge.from);
-          const target = current.find(n => n.id === edge.to);
-          
-          if (source && target) {
-            const dx = target.x - source.x;
-            const dy = target.y - source.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
-            
-            const force = dist * linkStrength;
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-            
-            if (source.id !== draggingIdRef.current) {
-              source.vx += fx;
-              source.vy += fy;
-            }
-            if (target.id !== draggingIdRef.current) {
-              target.vx -= fx;
-              target.vy -= fy;
-            }
-          }
-        });
-      }
-      
-      // 3. Gravity / Center attraction and position update
+
+      const graphEdges = graphData?.edges ?? [];
+      graphEdges.forEach(edge => {
+        const source = current.find(n => n.id === edge.from);
+        const target = current.find(n => n.id === edge.to);
+        if (source && target) {
+          const dx = target.x - source.x;
+          const dy = target.y - source.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+          const force = dist * linkStrength;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          if (source.id !== draggingIdRef.current) { source.vx += fx; source.vy += fy; }
+          if (target.id !== draggingIdRef.current) { target.vx -= fx; target.vy -= fy; }
+        }
+      });
+
       current.forEach(n => {
         if (n.id === draggingIdRef.current) return;
-        
         const dx = width / 2 - n.x;
         const dy = height / 2 - n.y;
         n.vx += dx * gravity;
         n.vy += dy * gravity;
-        
         n.x += n.vx;
         n.y += n.vy;
-        
         n.vx *= friction;
         n.vy *= friction;
       });
-      
+
       setNodes([...current]);
       animationFrameId = requestAnimationFrame(tick);
     };
-    
+
     animationFrameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrameId);
   }, [graphData]);
 
-  // Drag handlers
   const handleNodeMouseDown = (e: React.MouseEvent, node: NodePosition) => {
     e.stopPropagation();
     draggingIdRef.current = node.id;
@@ -246,7 +172,6 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
       const rect = svgRef.current.getBoundingClientRect();
       const mouseX = (e.clientX - rect.left - pan.x) / zoom;
       const mouseY = (e.clientY - rect.top - pan.y) / zoom;
-      
       const current = nodesRef.current;
       const node = current.find(n => n.id === draggingIdRef.current);
       if (node) {
@@ -257,52 +182,35 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
         setNodes([...current]);
       }
     } else if (isPanningRef.current) {
-      setPan({
-        x: e.clientX - panStartRef.current.x,
-        y: e.clientY - panStartRef.current.y
-      });
+      setPan({ x: e.clientX - panStartRef.current.x, y: e.clientY - panStartRef.current.y });
     }
   };
 
-  const handleMouseUp = () => {
-    draggingIdRef.current = null;
-    isPanningRef.current = false;
-  };
+  const handleMouseUp = () => { draggingIdRef.current = null; isPanningRef.current = false; };
 
   const handleSvgMouseDown = (e: React.MouseEvent) => {
     isPanningRef.current = true;
-    panStartRef.current = {
-      x: e.clientX - pan.x,
-      y: e.clientY - pan.y
-    };
+    panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
   };
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = 1.1;
-    if (e.deltaY < 0) {
-      setZoom(prev => Math.min(prev * zoomFactor, 3));
-    } else {
-      setZoom(prev => Math.max(prev / zoomFactor, 0.5));
-    }
+    if (e.deltaY < 0) { setZoom(prev => Math.min(prev * zoomFactor, 3)); }
+    else { setZoom(prev => Math.max(prev / zoomFactor, 0.5)); }
   };
 
-  const handleResetZoom = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
+  const handleResetZoom = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
-  // Node styling helpers
   const getNodeColor = (type: string, id: string) => {
     if (type === 'Device' && id.includes('missing')) return '#ef4444';
+    const safeNodes = graphData?.nodes ?? [];
     if (type === 'ResourceClaim') {
-      const claim = graphData?.nodes.find(n => n.id === id);
-      if (claim?.metadata?.status === 'Pending') return '#f59e0b';
+      const claim = safeNodes.find(n => n.id === id);
+      if (claim?.metadata && typeof claim.metadata === 'object' && (claim.metadata as Record<string, unknown>).status === 'Pending') return '#f59e0b';
     }
-    
     switch (type) {
-      case 'Pod': return '#10b981';
-      case 'ResourceClaim': return '#10b981';
+      case 'Pod': case 'ResourceClaim': return '#10b981';
       case 'Device': return '#3b82f6';
       case 'Pool': return '#8b5cf6';
       case 'Driver': return '#6366f1';
@@ -321,6 +229,14 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
       default: return 18;
     }
   };
+
+  if (graphEmpty) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+        <p>No resource relationships to display. Deploy a SimulatedDevicePool scenario to populate the graph.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', gap: '20px', flexDirection: 'column' }}>
@@ -355,7 +271,7 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
             </defs>
 
             <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-              {graphData?.edges.map((edge, idx) => {
+              {(graphData?.edges ?? []).map((edge, idx) => {
                 const source = nodes.find(n => n.id === edge.from);
                 const target = nodes.find(n => n.id === edge.to);
                 if (!source || !target) return null;
@@ -378,10 +294,9 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
                       y2={target.y}
                       stroke={strokeColor}
                       strokeWidth={isHovered ? 3 : 1.5}
-                      strokeDasharray={edge.type === 'managed-by' ? '4 4' : 'none'}
+                      strokeDasharray={edge.type === 'managed-by' ? '4 4' : undefined}
                       markerEnd={isDanger ? "url(#arrow-danger)" : "url(#arrow)"}
                       opacity={hoveredNodeId && !isHovered ? 0.2 : 0.8}
-                      style={{ transition: 'stroke-width 0.2s, opacity 0.2s' }}
                     />
                     {isHovered && (
                       <text
@@ -414,14 +329,13 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
                     onClick={() => setSelectedNode(node)}
                     onMouseEnter={() => setHoveredNodeId(node.id)}
                     onMouseLeave={() => setHoveredNodeId(null)}
-                    style={{ cursor: 'pointer', opacity, transition: 'opacity 0.2s' }}
+                    style={{ cursor: 'pointer', opacity }}
                   >
                     <circle
                       r={radius}
                       fill={color}
                       stroke="white"
                       strokeWidth={isHovered ? 2.5 : 1.5}
-                      style={{ filter: isHovered ? 'drop-shadow(0px 0px 8px rgba(255,255,255,0.4))' : 'none' }}
                     />
                     <text
                       dy=".3em"
@@ -461,7 +375,6 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   <p><strong>ID:</strong> {selectedNode.id}</p>
                 </div>
-                
                 {selectedNode.type === 'ResourceClaim' && (
                   <button
                     className="badge badge-warning"
@@ -482,93 +395,127 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
   );
 }
 
+function useSSE(onGraph: (data: ResourceGraph) => void) {
+  const [sseStatus, setSseStatus] = useState<SSEStatus>('disconnected');
+  const onGraphRef = useRef(onGraph);
+  onGraphRef.current = onGraph;
+
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let delay = 1000;
+    const maxDelay = 5000;
+    let closed = false;
+
+    function connect() {
+      if (closed) return;
+      es = new EventSource('/api/stream');
+
+      es.onopen = () => {
+        setSseStatus('connected');
+        delay = 1000; // reset on success
+      };
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as unknown;
+          if (data && typeof data === 'object' && 'nodes' in data) {
+            onGraphRef.current(data as ResourceGraph);
+          }
+        } catch {
+          console.error('Failed to parse SSE graph stream');
+        }
+      };
+
+      es.onerror = () => {
+        es?.close();
+        es = null;
+        if (closed) return;
+        setSseStatus('reconnecting');
+        retryTimer = setTimeout(() => {
+          delay = Math.min(delay * 2, maxDelay);
+          connect();
+        }, delay);
+      };
+    }
+
+    connect();
+
+    return () => {
+      closed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      es?.close();
+      es = null;
+    };
+  }, []);
+
+  return sseStatus;
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'pools' | 'devices' | 'claims' | 'graph' | 'explain' | 'doctor'>('overview');
-  const [summary, setSummary] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
+
+  // Data states per section
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [pools, setPools] = useState<DevicePool[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [claims, setClaims] = useState<ResourceClaimInfo[]>([]);
   const [doctorReport, setDoctorReport] = useState<DoctorReport | null>(null);
   const [graphData, setGraphData] = useState<ResourceGraph | null>(null);
-  
-  // Explain States
+
+  // Per-section loading states
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [loadingPools, setLoadingPools] = useState(true);
+  const [loadingDevices, setLoadingDevices] = useState(true);
+  const [loadingClaims, setLoadingClaims] = useState(true);
+  const [loadingDoctor, setLoadingDoctor] = useState(true);
+
+  // Global error and explain states
+  const [globalError, setGlobalError] = useState('');
   const [selectedClaim, setSelectedClaim] = useState<string>('');
   const [explainResult, setExplainResult] = useState<ExplainResult | null>(null);
-  const [explainError, setExplainError] = useState<string>('');
+  const [explainError, setExplainError] = useState('');
+  const [loadingExplain, setLoadingExplain] = useState(false);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // SSE status
+  const sseStatus = useSSE(setGraphData);
 
-  // Fetch basic data
-  const fetchData = async () => {
-    try {
-      const summaryRes = await fetch('/api/summary');
-      const summaryData = await summaryRes.json();
-      setSummary(summaryData);
+  // Fetch all initial data
+  const fetchAllData = async () => {
+    setGlobalError('');
 
-      const poolsRes = await fetch('/api/pools');
-      setPools(await poolsRes.json());
-
-      const devicesRes = await fetch('/api/devices');
-      setDevices(await devicesRes.json());
-
-      const claimsRes = await fetch('/api/claims');
-      const claimsData = await claimsRes.json();
-      setClaims(claimsData);
-      if (claimsData.length > 0 && !selectedClaim) {
-        setSelectedClaim(claimsData[0].name);
-      }
-
-      const doctorRes = await fetch('/api/doctor');
-      setDoctorReport(await doctorRes.json());
-
-      setError('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch cluster data');
-    } finally {
-      setLoading(false);
-    }
+    await Promise.allSettled([
+      fetchSummary().then(setSummary).catch(e => setGlobalError(e.message || 'Failed to load summary')).finally(() => setLoadingSummary(false)),
+      fetchPools().then(setPools).catch(() => {}).finally(() => setLoadingPools(false)),
+      fetchDevices().then(setDevices).catch(() => {}).finally(() => setLoadingDevices(false)),
+      fetchClaims().then(data => {
+        setClaims(data);
+        if (data.length > 0 && !selectedClaim) {
+          setSelectedClaim(data[0].name);
+        }
+      }).catch(() => {}).finally(() => setLoadingClaims(false)),
+      fetchDoctor().then(setDoctorReport).catch(() => {}).finally(() => setLoadingDoctor(false)),
+    ]);
   };
 
   useEffect(() => {
-    fetchData();
-    
-    // Server-Sent Events for Live Graph Updates
-    const eventSource = new EventSource('/api/stream');
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        setGraphData(data);
-      } catch (e) {
-        console.error('Failed to parse SSE graph stream:', e);
-      }
-    };
-
-    eventSource.onerror = (err) => {
-      console.warn('SSE stream lost connection, attempting reconnect...', err);
-    };
-
-    return () => {
-      eventSource.close();
-    };
+    fetchAllData();
   }, []);
 
   // Fetch claim explanation
   const handleExplain = async (claimName: string) => {
     if (!claimName) return;
+    setLoadingExplain(true);
+    setExplainError('');
     try {
-      setExplainError('');
-      const res = await fetch(`/api/explain?claim=${claimName}&namespace=default`);
-      const data = await res.json();
-      if (data.error) {
-        setExplainError(data.error);
-        setExplainResult(null);
-      } else {
-        setExplainResult(data);
-      }
-    } catch (err: any) {
-      setExplainError('Failed to fetch explanation tree.');
+      const data = await fetchExplain(claimName);
+      setExplainResult(data);
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setExplainError(err?.message || 'Failed to fetch explanation tree.');
       setExplainResult(null);
+    } finally {
+      setLoadingExplain(false);
     }
   };
 
@@ -578,11 +525,10 @@ export default function App() {
     }
   }, [selectedClaim]);
 
-  // Recursively render explain reason tree
   const renderReasonNode = (node: ReasonNode, depth = 0) => {
     const isSuccess = node.confidence === 'confirmed' && !node.message.includes('could not');
     const badgeClass = isSuccess ? 'badge-success' : 'badge-warning';
-    
+
     return (
       <div key={node.message} style={{ marginLeft: `${depth * 20}px`, marginTop: '10px', borderLeft: '2px solid var(--border-light)', paddingLeft: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -597,7 +543,9 @@ export default function App() {
     );
   };
 
-  if (loading) {
+  const initialLoading = loadingSummary && loadingPools && loadingDevices && loadingClaims && loadingDoctor;
+
+  if (initialLoading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '20px' }}>
         <div className="spinner"></div>
@@ -606,13 +554,19 @@ export default function App() {
     );
   }
 
+  const sseBadgeClass = sseStatus === 'connected' ? 'badge-success' : sseStatus === 'reconnecting' ? 'badge-warning' : 'badge-danger';
+  const sseLabel = sseStatus === 'connected' ? 'Stream Connected' : sseStatus === 'reconnecting' ? 'Reconnecting...' : 'Disconnected';
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <header style={{ padding: '20px 40px', background: 'rgba(12, 15, 23, 0.8)', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backdropFilter: 'blur(8px)' }}>
-        <div>
-          <h1 className="glow-text" style={{ fontSize: '1.8rem', fontFamily: 'var(--font-title)' }}>DRAForge</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Dynamic Resource Allocation Developer Platform</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div>
+            <h1 className="glow-text" style={{ fontSize: '1.8rem', fontFamily: 'var(--font-title)' }}>DRAForge</h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Dynamic Resource Allocation Developer Platform</p>
+          </div>
+          <span className={`badge ${sseBadgeClass}`} style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{sseLabel}</span>
         </div>
         <nav style={{ display: 'flex', gap: '15px' }}>
           {(['overview', 'pools', 'devices', 'claims', 'graph', 'explain', 'doctor'] as const).map(tab => (
@@ -636,153 +590,191 @@ export default function App() {
 
       {/* Main Body */}
       <main style={{ flex: 1, padding: '40px' }}>
-        {error && (
+        {globalError && (
           <div className="glass-panel" style={{ borderColor: 'var(--color-danger)', marginBottom: '30px', display: 'flex', alignItems: 'center', gap: '15px' }}>
             <span className="badge badge-danger">Connection Error</span>
-            <p>{error}</p>
+            <p>{globalError}</p>
           </div>
         )}
 
-        {/* Tab content switch */}
+        {sseStatus !== 'connected' && activeTab === 'graph' && (
+          <div className="glass-panel" style={{ borderColor: 'var(--color-warning)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="badge badge-warning">Live Stream</span>
+            <p style={{ fontSize: '0.9rem', margin: 0 }}>
+              {sseStatus === 'reconnecting' ? 'Dashboard stream disconnected. Reconnecting...' : 'Dashboard stream disconnected.'}
+            </p>
+          </div>
+        )}
+
+        {/* --- Overview --- */}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-            {/* Counts Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
-              <div className="glass-panel">
-                <h3 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Simulated Pools</h3>
-                <h2 style={{ fontSize: '2.5rem', marginTop: '10px' }} className="accent-glow-text">{summary?.poolsCount ?? 0}</h2>
+            {loadingSummary ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                <p>Loading DRAForge summary...</p>
               </div>
-              <div className="glass-panel">
-                <h3 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Discovered Devices</h3>
-                <h2 style={{ fontSize: '2.5rem', marginTop: '10px' }} className="accent-glow-text">{summary?.devicesCount ?? 0}</h2>
-              </div>
-              <div className="glass-panel">
-                <h3 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Active Claims</h3>
-                <h2 style={{ fontSize: '2.5rem', marginTop: '10px' }} className="accent-glow-text">{summary?.claimsCount ?? 0}</h2>
-              </div>
-            </div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+                  <div className="glass-panel">
+                    <h3 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Simulated Pools</h3>
+                    <h2 style={{ fontSize: '2.5rem', marginTop: '10px' }} className="accent-glow-text">{summary?.poolsCount ?? 0}</h2>
+                  </div>
+                  <div className="glass-panel">
+                    <h3 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Discovered Devices</h3>
+                    <h2 style={{ fontSize: '2.5rem', marginTop: '10px' }} className="accent-glow-text">{summary?.devicesCount ?? 0}</h2>
+                  </div>
+                  <div className="glass-panel">
+                    <h3 style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Active Claims</h3>
+                    <h2 style={{ fontSize: '2.5rem', marginTop: '10px' }} className="accent-glow-text">{summary?.claimsCount ?? 0}</h2>
+                  </div>
+                </div>
 
-            {/* Quick overview detail */}
-            <div className="glass-panel">
-              <h2 style={{ marginBottom: '15px' }}>Dynamic Resource Allocation Status</h2>
-              <p style={{ color: 'var(--text-secondary)' }}>
-                DRAForge is running on DOKS in region <strong>fra1</strong>. Both worker nodes are healthy. All devices below are simulated synthetic devices, clearly labeled as mock hardware.
-              </p>
-            </div>
+                <div className="glass-panel">
+                  <h2 style={{ marginBottom: '15px' }}>Dynamic Resource Allocation Status</h2>
+                  <p style={{ color: 'var(--text-secondary)' }}>
+                    DRAForge is running on DOKS in region <strong>fra1</strong>. Both worker nodes are healthy. All devices below are simulated synthetic devices, clearly labeled as mock hardware.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         )}
 
+        {/* --- Pools --- */}
         {activeTab === 'pools' && (
           <div className="glass-panel">
             <h2 style={{ marginBottom: '20px' }}>Virtual Device Pools</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '12px' }}>POOL NAME</th>
-                  <th style={{ padding: '12px' }}>DRIVER</th>
-                  <th style={{ padding: '12px' }}>NODE</th>
-                  <th style={{ padding: '12px' }}>DEVICE TYPE</th>
-                  <th style={{ padding: '12px' }}>STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pools.map(pool => (
-                  <tr key={pool.name + pool.nodeName} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                    <td style={{ padding: '12px' }}><strong>{pool.name}</strong></td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{pool.driverName}</td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{pool.nodeName}</td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{pool.deviceType}</td>
-                    <td style={{ padding: '12px' }}>
-                      <span className="badge badge-success">{pool.health}</span>
-                    </td>
+            {loadingPools ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                <p>Loading device pools...</p>
+              </div>
+            ) : pools.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <p>No DRA resources discovered yet.</p>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
+                    <th style={{ padding: '12px' }}>POOL NAME</th>
+                    <th style={{ padding: '12px' }}>DRIVER</th>
+                    <th style={{ padding: '12px' }}>NODE</th>
+                    <th style={{ padding: '12px' }}>DEVICE TYPE</th>
+                    <th style={{ padding: '12px' }}>STATUS</th>
                   </tr>
-                ))}
-                {pools.length === 0 && (
-                  <tr>
-                    <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No active device pools found.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {pools.map(pool => (
+                    <tr key={pool.name + pool.nodeName} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                      <td style={{ padding: '12px' }}><strong>{pool.name}</strong></td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{pool.driverName}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{pool.nodeName}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{pool.deviceType}</td>
+                      <td style={{ padding: '12px' }}>
+                        <span className="badge badge-success">{pool.health}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
+        {/* --- Devices --- */}
         {activeTab === 'devices' && (
           <div className="glass-panel">
             <h2 style={{ marginBottom: '20px' }}>Discovered Devices</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '12px' }}>DEVICE NAME</th>
-                  <th style={{ padding: '12px' }}>TYPE</th>
-                  <th style={{ padding: '12px' }}>NODE</th>
-                  <th style={{ padding: '12px' }}>POOL</th>
-                  <th style={{ padding: '12px' }}>SYNTHETIC</th>
-                  <th style={{ padding: '12px' }}>STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.map(dev => (
-                  <tr key={dev.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                    <td style={{ padding: '12px' }}><strong>{dev.name}</strong></td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{dev.type}</td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{dev.nodeName}</td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{dev.poolName}</td>
-                    <td style={{ padding: '12px' }}>
-                      <span className="badge badge-success">{dev.isSynthetic ? 'Yes' : 'No'}</span>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <span className="badge badge-success">{dev.status}</span>
-                    </td>
+            {loadingDevices ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                <p>Loading devices...</p>
+              </div>
+            ) : devices.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <p>No DRA resources discovered yet.</p>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
+                    <th style={{ padding: '12px' }}>DEVICE NAME</th>
+                    <th style={{ padding: '12px' }}>TYPE</th>
+                    <th style={{ padding: '12px' }}>NODE</th>
+                    <th style={{ padding: '12px' }}>POOL</th>
+                    <th style={{ padding: '12px' }}>SYNTHETIC</th>
+                    <th style={{ padding: '12px' }}>STATUS</th>
                   </tr>
-                ))}
-                {devices.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No discovered devices. Publish a SimulatedDevicePool scenario.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {devices.map(dev => (
+                    <tr key={dev.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                      <td style={{ padding: '12px' }}><strong>{dev.name}</strong></td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{dev.type}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{dev.nodeName}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{dev.poolName}</td>
+                      <td style={{ padding: '12px' }}>
+                        <span className="badge badge-success">{dev.isSynthetic ? 'Yes' : 'No'}</span>
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        <span className="badge badge-success">{dev.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
+        {/* --- Claims --- */}
         {activeTab === 'claims' && (
           <div className="glass-panel">
             <h2 style={{ marginBottom: '20px' }}>Resource Claims</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '12px' }}>CLAIM NAME</th>
-                  <th style={{ padding: '12px' }}>NAMESPACE</th>
-                  <th style={{ padding: '12px' }}>CLASS</th>
-                  <th style={{ padding: '12px' }}>CONSUMER POD</th>
-                  <th style={{ padding: '12px' }}>ALLOCATED DEVICE</th>
-                  <th style={{ padding: '12px' }}>STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {claims.map(claim => (
-                  <tr key={claim.name} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                    <td style={{ padding: '12px' }}><strong>{claim.name}</strong></td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.namespace}</td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.deviceClassName}</td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.ownerPodName || 'None'}</td>
-                    <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.allocatedDevice || 'Pending'}</td>
-                    <td style={{ padding: '12px' }}>
-                      <span className={`badge ${claim.status === 'Allocated' ? 'badge-success' : 'badge-warning'}`}>{claim.status}</span>
-                    </td>
+            {loadingClaims ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                <p>Loading claims...</p>
+              </div>
+            ) : claims.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <p>No ResourceClaims found in the current cluster.</p>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
+                    <th style={{ padding: '12px' }}>CLAIM NAME</th>
+                    <th style={{ padding: '12px' }}>NAMESPACE</th>
+                    <th style={{ padding: '12px' }}>CLASS</th>
+                    <th style={{ padding: '12px' }}>CONSUMER POD</th>
+                    <th style={{ padding: '12px' }}>ALLOCATED DEVICE</th>
+                    <th style={{ padding: '12px' }}>STATUS</th>
                   </tr>
-                ))}
-                {claims.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No active ResourceClaims in namespace.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {claims.map(claim => (
+                    <tr key={claim.name} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                      <td style={{ padding: '12px' }}><strong>{claim.name}</strong></td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.namespace}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.deviceClassName}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.ownerPodName || 'None'}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.allocatedDevice || 'Pending'}</td>
+                      <td style={{ padding: '12px' }}>
+                        <span className={`badge ${claim.status === 'Allocated' ? 'badge-success' : 'badge-warning'}`}>{claim.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
+        {/* --- Graph --- */}
         {activeTab === 'graph' && (
           <div className="glass-panel">
             <h2 style={{ marginBottom: '20px' }}>Resource Relationship Graph</h2>
@@ -796,6 +788,7 @@ export default function App() {
           </div>
         )}
 
+        {/* --- Explain --- */}
         {activeTab === 'explain' && (
           <div className="glass-panel">
             <h2 style={{ marginBottom: '20px' }}>Allocation Explanation Engine</h2>
@@ -820,19 +813,33 @@ export default function App() {
               </select>
             </div>
 
-            {explainError && (
+            {loadingExplain && (
+              <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                <p>Diagnosing allocation...</p>
+              </div>
+            )}
+
+            {explainError && !loadingExplain && (
               <div className="glass-panel" style={{ borderColor: 'var(--color-danger)' }}>
                 <p>{explainError}</p>
               </div>
             )}
 
-            {explainResult && (
+            {explainResult && !loadingExplain && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <span className={`badge ${explainResult.allocated ? 'badge-success' : 'badge-warning'}`}>
+                    {explainResult.allocated ? 'Allocated' : 'Not Allocated'}
+                  </span>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    {explainResult.targetType}: <strong>{explainResult.targetName}</strong>
+                  </span>
+                </div>
                 <div className="glass-panel" style={{ background: 'var(--bg-secondary)' }}>
                   <h3>Reason Tree Diagnostic</h3>
                   {renderReasonNode(explainResult.reasonTree)}
                 </div>
-
                 {explainResult.remedy.length > 0 && (
                   <div className="glass-panel" style={{ borderColor: 'var(--color-warning)' }}>
                     <h3 style={{ color: 'var(--color-warning)', marginBottom: '10px' }}>Suggested Remediation Steps</h3>
@@ -845,13 +852,25 @@ export default function App() {
                 )}
               </div>
             )}
+
+            {!explainResult && !explainError && !loadingExplain && (
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                <p>Select a claim above to diagnose its allocation status.</p>
+              </div>
+            )}
           </div>
         )}
 
+        {/* --- Doctor --- */}
         {activeTab === 'doctor' && (
           <div className="glass-panel">
             <h2 style={{ marginBottom: '20px' }}>Cluster Diagnostics (Doctor)</h2>
-            {doctorReport && (
+            {loadingDoctor ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                <p>Running diagnostics...</p>
+              </div>
+            ) : doctorReport ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ display: 'flex', gap: '15px' }}>
                   <span className="badge badge-success">PASS: {doctorReport.summary['PASS'] ?? 0}</span>
@@ -878,6 +897,10 @@ export default function App() {
                     );
                   })}
                 </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <p>Unable to load DRAForge diagnostics.</p>
               </div>
             )}
           </div>

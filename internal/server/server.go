@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -20,18 +21,36 @@ import (
 
 // Server handles HTTP API requests and serves the frontend.
 type Server struct {
-	clientset kubernetes.Interface
-	port      int
-	mu        sync.Mutex
-	clients   map[chan string]bool
+	clientset            kubernetes.Interface
+	port                 int
+	allowedOrigins       string
+	allowedOriginsParsed []string // pre-parsed from allowedOrigins, avoids split/trim per request
+	mu                   sync.Mutex
+	clients              map[chan string]bool
 }
 
 // NewServer creates a Server instance.
+// Configuration is read from environment variables where applicable:
+//   - CORS_ALLOWED_ORIGINS: comma-separated list (default "*")
 func NewServer(clientset kubernetes.Interface, port int) *Server {
+	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if allowedOrigins == "" {
+		allowedOrigins = "*"
+	}
+
+	var parsed []string
+	if allowedOrigins != "*" {
+		for _, o := range strings.Split(allowedOrigins, ",") {
+			parsed = append(parsed, strings.TrimSpace(o))
+		}
+	}
+
 	return &Server{
-		clientset: clientset,
-		port:      port,
-		clients:   make(map[chan string]bool),
+		clientset:            clientset,
+		port:                 port,
+		allowedOrigins:       allowedOrigins,
+		allowedOriginsParsed: parsed,
+		clients:              make(map[chan string]bool),
 	}
 }
 
@@ -44,29 +63,29 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/readyz", s.handleReadyz)
 
 	// 2. API Endpoints (Read-Only)
-	mux.HandleFunc("/api/summary", s.cors(s.handleSummary))
-	mux.HandleFunc("/api/pools", s.cors(s.handlePools))
-	mux.HandleFunc("/api/devices", s.cors(s.handleDevices))
-	mux.HandleFunc("/api/claims", s.cors(s.handleClaims))
-	mux.HandleFunc("/api/graph", s.cors(s.handleGraph))
-	mux.HandleFunc("/api/explain", s.cors(s.handleExplain))
-	mux.HandleFunc("/api/doctor", s.cors(s.handleDoctor))
-	mux.HandleFunc("/metrics", s.handleMetrics)
+	mux.Handle("/api/summary", s.cors(s.requestLogging(http.HandlerFunc(s.handleSummary))))
+	mux.Handle("/api/pools", s.cors(s.requestLogging(http.HandlerFunc(s.handlePools))))
+	mux.Handle("/api/devices", s.cors(s.requestLogging(http.HandlerFunc(s.handleDevices))))
+	mux.Handle("/api/claims", s.cors(s.requestLogging(http.HandlerFunc(s.handleClaims))))
+	mux.Handle("/api/graph", s.cors(s.requestLogging(http.HandlerFunc(s.handleGraph))))
+	mux.Handle("/api/explain", s.cors(s.requestLogging(http.HandlerFunc(s.handleExplain))))
+	mux.Handle("/api/doctor", s.cors(s.requestLogging(http.HandlerFunc(s.handleDoctor))))
+	mux.Handle("/metrics", s.requestLogging(http.HandlerFunc(s.handleMetrics)))
 
 	// 3. SSE Stream Endpoint
-	mux.HandleFunc("/api/stream", s.cors(s.handleStream))
+	mux.Handle("/api/stream", s.cors(s.requestLogging(http.HandlerFunc(s.handleStream))))
 
 	// 4. Frontend static files
 	// Serve files from web/dist
 	fileServer := http.FileServer(http.Dir("./web/dist"))
-	mux.Handle("/", s.securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/", s.securityHeaders(s.requestLogging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Fallback to index.html for React SPA routing
 		if !strings.HasPrefix(r.URL.Path, "/api") && !strings.Contains(r.URL.Path, ".") {
 			http.ServeFile(w, r, "./web/dist/index.html")
 			return
 		}
 		fileServer.ServeHTTP(w, r)
-	})))
+	}))))
 
 	// Start background SSE broadcaster
 	go s.startSSEBroadcaster(ctx)
@@ -100,18 +119,52 @@ func (s *Server) Start(ctx context.Context) error {
 // Security Headers middleware
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:;")
+		// CSP: 'unsafe-inline' is required for React SPA with Vite HMR and
+		// for inline style/script tags emitted by the production build.
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self' 'unsafe-inline'; "+
+				"style-src 'self' 'unsafe-inline'; img-src 'self' data:; "+
+				"connect-src 'self' ws: wss:;")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy",
+			"geolocation=(), microphone=(), camera=(), payment=(), usb=()")
 		next.ServeHTTP(w, r)
 	})
 }
 
 // CORS middleware for APIs
-func (s *Server) cors(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*") // Read-only public API
+// Uses s.allowedOrigins which defaults to "*" (read-only public model)
+// and can be narrowed via the CORS_ALLOWED_ORIGINS env var.
+// Allowed origins are parsed once at server init for performance.
+func (s *Server) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if s.allowedOrigins == "*" || origin == "" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		} else {
+			origins := s.allowedOriginsParsed
+			if origins == nil {
+				for _, o := range strings.Split(s.allowedOrigins, ",") {
+					o = strings.TrimSpace(o)
+					if origin == o {
+						w.Header().Set("Access-Control-Allow-Origin", origin)
+						w.Header().Set("Vary", "Origin")
+						break
+					}
+				}
+				goto done
+			}
+			for _, allowed := range origins {
+				if origin == allowed {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Vary", "Origin")
+					break
+				}
+			}
+		}
+	done:
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
@@ -122,7 +175,31 @@ func (s *Server) cors(next http.HandlerFunc) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		next.ServeHTTP(w, r)
-	}
+	})
+}
+
+// requestLogging logs HTTP method, path, status code and duration.
+// Sensitive query parameters are not logged.
+func (s *Server) requestLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(lrw, r)
+		duration := time.Since(start)
+		fmt.Printf("[%s] %s %s - %d (%s)\n",
+			r.Method, r.URL.Path, r.URL.RawQuery, lrw.statusCode, duration)
+	})
+}
+
+// loggingResponseWriter wraps http.ResponseWriter to capture the status code.
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
 }
 
 // Healthz
@@ -237,7 +314,8 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messageChan := make(chan string)
+	// Buffered channel prevents slow consumers from blocking the broadcaster.
+	messageChan := make(chan string, 1)
 	s.mu.Lock()
 	s.clients[messageChan] = true
 	s.mu.Unlock()
@@ -254,7 +332,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	g, err := gb.BuildGraph(r.Context(), s.clientset, "", "")
 	if err == nil {
 		if data, err := json.Marshal(g); err == nil {
-			fmt.Fprintf(w, "data: %s\n\n", string(data))
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", string(data))
 			flusher.Flush()
 		}
 	}
@@ -265,7 +343,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		case <-notify:
 			return
 		case msg := <-messageChan:
-			fmt.Fprintf(w, "data: %s\n\n", msg)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", msg)
 			flusher.Flush()
 		}
 	}
@@ -315,10 +393,27 @@ func (s *Server) startSSEBroadcaster(ctx context.Context) {
 	}
 }
 
+// apiErrorResponse is the standard error envelope for all API endpoints.
+type apiErrorResponse struct {
+	Error apiErrorDetail `json:"error"`
+}
+
+type apiErrorDetail struct {
+	Message string `json:"message"`
+	Code    string `json:"code"`
+}
+
 func (s *Server) respondError(w http.ResponseWriter, err error, code int) {
+	codeStr := "internal_error"
+	if code >= 400 && code < 500 {
+		codeStr = "bad_request"
+	}
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error": err.Error(),
+	_ = json.NewEncoder(w).Encode(apiErrorResponse{
+		Error: apiErrorDetail{
+			Message: err.Error(),
+			Code:    codeStr,
+		},
 	})
 }
 
@@ -327,7 +422,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	pools, devices, claims, err := discovery.DiscoverDRA(r.Context(), s.clientset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(fmt.Sprintf("# ERROR: %v\n", err)))
+		_, _ = fmt.Fprintf(w, "# ERROR: %v\n", err)
 		return
 	}
 
@@ -335,37 +430,59 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	// 1. Pools
-	fmt.Fprintf(w, "# HELP draforge_pools_total Total number of device pools\n")
-	fmt.Fprintf(w, "# TYPE draforge_pools_total gauge\n")
+	_, _ = fmt.Fprintf(w, "# HELP draforge_pools_total Total number of device pools\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_pools_total gauge\n")
 	for _, p := range pools {
-		fmt.Fprintf(w, "draforge_pools_total{pool=%q,driver=%q,node=%q,synthetic=%t,health=%q} 1\n",
+		_, _ = fmt.Fprintf(w, "draforge_pools_total{pool=%q,driver=%q,node=%q,synthetic=%t,health=%q} 1\n",
 			p.Name, p.DriverName, p.NodeName, p.IsSynthetic, p.Health)
 	}
 
 	// 2. Devices
-	fmt.Fprintf(w, "# HELP draforge_devices_total Total number of devices\n")
-	fmt.Fprintf(w, "# TYPE draforge_devices_total gauge\n")
+	_, _ = fmt.Fprintf(w, "# HELP draforge_devices_total Total number of devices\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_devices_total gauge\n")
 	for _, d := range devices {
-		fmt.Fprintf(w, "draforge_devices_total{device=%q,pool=%q,node=%q,type=%q,status=%q,synthetic=%t} 1\n",
+		_, _ = fmt.Fprintf(w, "draforge_devices_total{device=%q,pool=%q,node=%q,type=%q,status=%q,synthetic=%t} 1\n",
 			d.Name, d.PoolName, d.NodeName, d.Type, d.Status, d.IsSynthetic)
 	}
 
 	// 3. Claims
-	fmt.Fprintf(w, "# HELP draforge_claims_total Total number of ResourceClaims\n")
-	fmt.Fprintf(w, "# TYPE draforge_claims_total gauge\n")
+	_, _ = fmt.Fprintf(w, "# HELP draforge_claims_total Total number of ResourceClaims\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_claims_total gauge\n")
 	for _, c := range claims {
-		fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,status=%q} 1\n",
+		_, _ = fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,status=%q} 1\n",
 			c.Name, c.Namespace, c.DeviceClassName, c.Status)
 	}
 
-	// 4. Faults count
+	// 4. Summary metrics (low cardinality)
+	_, _ = fmt.Fprintf(w, "# HELP draforge_pools_count Total device pools\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_pools_count gauge\n")
+	_, _ = fmt.Fprintf(w, "draforge_pools_count %d\n", len(pools))
+
+	_, _ = fmt.Fprintf(w, "# HELP draforge_devices_count Total devices across all pools\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_devices_count gauge\n")
+	_, _ = fmt.Fprintf(w, "draforge_devices_count %d\n", len(devices))
+
+	_, _ = fmt.Fprintf(w, "# HELP draforge_claims_count Total resource claims\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_claims_count gauge\n")
+	_, _ = fmt.Fprintf(w, "draforge_claims_count %d\n", len(claims))
+
+	// Claims by status
+	statusCounts := make(map[string]int)
+	for _, c := range claims {
+		statusCounts[c.Status]++
+	}
+	for status, count := range statusCounts {
+		_, _ = fmt.Fprintf(w, "draforge_claims_by_status{status=%q} %d\n", status, count)
+	}
+
+	// 5. Faults count
 	faultCount := 0
 	for _, p := range pools {
 		if p.Health != "healthy" {
 			faultCount++
 		}
 	}
-	fmt.Fprintf(w, "# HELP draforge_active_faults_total Total number of active faults\n")
-	fmt.Fprintf(w, "# TYPE draforge_active_faults_total gauge\n")
-	fmt.Fprintf(w, "draforge_active_faults_total %d\n", faultCount)
+	_, _ = fmt.Fprintf(w, "# HELP draforge_active_faults_total Total number of active faults\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_active_faults_total gauge\n")
+	_, _ = fmt.Fprintf(w, "draforge_active_faults_total %d\n", faultCount)
 }

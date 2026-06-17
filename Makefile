@@ -1,6 +1,12 @@
 # Makefile for DRAForge (delegates to Taskfile)
+# SPDX-License-Identifier: Apache-2.0
 
-.PHONY: all build test tui server clean infra-init infra-plan infra-apply infra-output infra-audit
+.DEFAULT_GOAL := all
+
+.PHONY: all build test fmt lint vet vuln clean
+.PHONY: web-install web-lint web-build
+.PHONY: helm-lint sbom release-local
+.PHONY: infra-init infra-plan infra-apply infra-audit
 
 all: build
 
@@ -19,9 +25,38 @@ lint:
 vet:
 	task vet
 
+vuln:
+	task vuln
+
 clean:
 	rm -rf bin/
 	rm -rf dist/
+
+# --- Web ---
+
+web-install:
+	task web:install
+
+web-lint:
+	task web:lint
+
+web-build:
+	task web:build
+
+# --- Helm ---
+
+helm-lint:
+	task helm:lint
+
+# --- Release ---
+
+sbom:
+	task sbom
+
+release-local:
+	task release:local
+
+# --- Infrastructure ---
 
 infra-init:
 	task infra:init

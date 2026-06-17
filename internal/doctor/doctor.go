@@ -5,6 +5,7 @@ package doctor
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,7 +63,7 @@ func (r *Registry) RunDiagnostics(ctx context.Context, clientset kubernetes.Inte
 
 // --- Check Implementations ---
 
-// APIAvailabilityCheck verifies resource.k8s.io/v1beta1 exists.
+// APIAvailabilityCheck verifies resource.k8s.io/v1 exists.
 type APIAvailabilityCheck struct{}
 
 func (c *APIAvailabilityCheck) ID() string       { return "DRA-001" }
@@ -102,8 +103,8 @@ func (c *APIAvailabilityCheck) Run(ctx context.Context, clientset kubernetes.Int
 
 	if !found {
 		res.Status = model.StatusFail
-		res.Evidence = "resource.k8s.io/v1 or v1beta1 API group is missing from the API server."
-		res.Remediation = "Upgrade cluster to Kubernetes v1.32+ or enable the DynamicResourceAllocation feature gate."
+		res.Evidence = "resource.k8s.io/v1 API group is missing from the API server."
+		res.Remediation = "Enable or upgrade to a Kubernetes version that serves resource.k8s.io/v1 DRA APIs (v1.34+)."
 	}
 
 	return res
@@ -137,13 +138,30 @@ func (c *KubernetesVersionCheck) Run(ctx context.Context, clientset kubernetes.I
 
 	res.Evidence = fmt.Sprintf("Detected Kubernetes version %s.", info.GitVersion)
 
-	// Clean version parsing
-	major := info.Major
-	minor := strings.TrimSuffix(info.Minor, "+")
-	if major < "1" || (major == "1" && minor < "32") {
+	majorRaw := info.Major
+	minorRaw := strings.TrimSuffix(info.Minor, "+")
+
+	major, err := strconv.Atoi(majorRaw)
+	if err != nil {
+		res.Status = model.StatusUnknown
+		res.Evidence = fmt.Sprintf("Failed to parse Kubernetes major version %q: %v", majorRaw, err)
+		return res
+	}
+	minor, err := strconv.Atoi(minorRaw)
+	if err != nil {
+		res.Status = model.StatusUnknown
+		res.Evidence = fmt.Sprintf("Failed to parse Kubernetes minor version %q: %v", minorRaw, err)
+		return res
+	}
+
+	if major < 1 || (major == 1 && minor < 32) {
+		res.Status = model.StatusFail
+		res.Evidence = fmt.Sprintf("Kubernetes version %s.%s is older than v1.32. DRAForge requires DRA beta or GA.", majorRaw, minorRaw)
+		res.Remediation = "Upgrade to Kubernetes v1.34+ which ships resource.k8s.io/v1 DRA API by default."
+	} else if major == 1 && minor < 34 {
 		res.Status = model.StatusWarn
-		res.Evidence = fmt.Sprintf("Kubernetes version %s.%s is less than v1.32. DRA v1beta1 features may not be supported.", major, minor)
-		res.Remediation = "Consider upgrading to Kubernetes 1.32 or newer."
+		res.Evidence = fmt.Sprintf("Kubernetes version %s.%s runs DRA in beta (v1.32–v1.33). The v1 API is available but consider upgrading to v1.34+ for GA stability.", majorRaw, minorRaw)
+		res.Remediation = "Upgrade to Kubernetes v1.34+ for GA DRA support."
 	}
 
 	return res

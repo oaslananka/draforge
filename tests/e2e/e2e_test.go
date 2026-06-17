@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 )
 
 func TestSmoke(t *testing.T) {
+	if v := os.Getenv("DRAFORGE_E2E"); v != "1" {
+		t.Skip("Skipping E2E smoke test: set DRAFORGE_E2E=1 to run")
+	}
+
 	// 1. Initialize cluster clients using default kubeconfig
 	clientset, _, _, err := cluster.NewClientset("")
 	if err != nil {

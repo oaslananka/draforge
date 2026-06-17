@@ -13,12 +13,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Explicit `snapshot` name template in `.goreleaser.yaml`.
 - Release documentation at `docs/release.md`.
 - `CHANGELOG.md` now tracks known limitations for v0.1.0.
+- Unit tests for `pkg/model` (16 tests covering Device, DevicePool, ResourceClaimInfo,
+  GraphNode, GraphEdge, ReasonNode, DoctorCheckStatus, ExplainResult, and JSON
+  round-trips).
+- Unit tests for `cmd/draforge-controller` (4 flag-contract tests).
+- Unit tests for `cmd/draforge-sim-driver` (7 tests covering flag parsing, CDI data
+  structures, and version vars).
+- E2E workflow cancellation handler — cleanup step deletes Helm release and scenarios
+  on workflow failure or cancellation to prevent DOKS resource leaks.
+- E2E workflow input validation — `workflow_dispatch` now requires explicit `"yes"`
+  confirmation before provisioning billable DigitalOcean resources.
+- Production-readiness documentation in `SECURITY.md` (GitHub security features
+  reference table, CI/CD security notes, secret scanning expectations).
+- Local validation checklist and production readiness reference in `CONTRIBUTING.md`.
+- Version injection documentation and snapshot CI reference in `docs/release.md`.
+- "Install from Source" section in `README.md` with `go install` and build instructions.
+- Testing and release command reference sections in `README.md`.
 
 ### Changed
 - `.goreleaser.yaml`: snapshot behavior is now explicit with a custom name template.
 - GoReleaser Dockerfiles audited — non-root user, Alpine base, minimal packages,
   correct binary paths, no local path assumptions. OCI labels handled via GoReleaser
   `build_flag_templates`.
+- `SECURITY.md`: expanded with GitHub security feature recommendations (branch
+  protection, required status checks, PR reviews, Dependabot, secret scanning).
+- `CONTRIBUTING.md`: added local validation checklist and production readiness
+  section referencing maintainer checklist.
+- `docs/release.md`: added version injection section with ldflags table.
+- `README.md`: restructured with Install, Testing, and Release sections.
 
 ### Fixed
 - _None in this release._

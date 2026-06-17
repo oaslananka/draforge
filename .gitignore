@@ -17,6 +17,7 @@ age.key
 
 # DRAForge exclusions
 coverage.out
+cover_tmp
 coverage
 web/dist/
 web/node_modules/

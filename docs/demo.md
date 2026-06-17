@@ -9,7 +9,7 @@ Before launching the showcase:
 2. Verify you have a valid DigitalOcean API token.
 3. Configure a `.env` file at the root of the repository containing:
    ```env
-   DIGITAL_OCEON_API_KEY="your-digitalocean-api-token"
+   DIGITAL_OCEAN_API_TOKEN="your-digitalocean-api-token"
    ```
 
 ---

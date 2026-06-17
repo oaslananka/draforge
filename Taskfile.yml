@@ -26,9 +26,13 @@ tasks:
       - '{{.GO_BIN}} build -o bin/draforge-sim-driver.exe ./cmd/draforge-sim-driver'
 
   fmt:
-    desc: Format all code (Go and Terraform)
+    desc: Format all Go code
     cmds:
       - '{{.GOFMT_BIN}} -w internal cmd pkg tests'
+
+  fmt:terraform:
+    desc: Format Terraform code
+    cmds:
       - cd infra/terraform/environments/showcase && terraform fmt
 
   lint:

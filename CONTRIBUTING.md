@@ -225,6 +225,46 @@ The following files and directories are generated and must not be committed:
 
 These are covered by `.gitignore` — please ensure they stay excluded.
 
+## Local Validation Checklist
+
+Before submitting a pull request, run the following locally:
+
+```bash
+# Format and lint
+task fmt && task lint
+
+# Static analysis
+task vet
+
+# All unit tests (fast)
+task test:unit
+
+# Race detection + coverage
+task test:race
+
+# Web dashboard (if changed)
+task web:lint && task web:build
+```
+
+All of the above must pass without errors. The CI pipeline (`.github/workflows/ci.yml`)
+runs these same checks on every push and pull request.
+
+## Production Readiness
+
+See the [Maintainer Checklist](docs/maintainer-checklist.md) for the full PR review
+and release readiness checklist. Key principles:
+
+- **Tests**: Every new or changed feature must include tests.
+- **Docs**: Every new or changed feature must update relevant documentation.
+- **No generated artifacts**: Never commit `dist/`, `bin/`, `*.sbom.json`,
+  `coverage.out`, `web/dist/`, or `web/node_modules/`.
+- **No secrets**: Never commit tokens, passwords, API keys, or kubeconfig contents.
+- **Security**: Review changes for injection vectors, secret exposure, and
+  unsafe `os/exec` usage.
+
+The `FINAL_REPORT.md` at the repository root contains the latest production-readiness
+audit with known gaps and GitHub-side configuration requirements.
+
 ## Getting Help
 
 - **Documentation**: See the `docs/` directory.

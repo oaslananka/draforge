@@ -310,7 +310,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	g, err := gb.BuildGraph(r.Context(), s.clientset, "", "")
 	if err == nil {
 		if data, err := json.Marshal(g); err == nil {
-			fmt.Fprintf(w, "data: %s\n\n", string(data))
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", string(data))
 			flusher.Flush()
 		}
 	}
@@ -321,7 +321,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		case <-notify:
 			return
 		case msg := <-messageChan:
-			fmt.Fprintf(w, "data: %s\n\n", msg)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", msg)
 			flusher.Flush()
 		}
 	}
@@ -400,7 +400,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	pools, devices, claims, err := discovery.DiscoverDRA(r.Context(), s.clientset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(fmt.Sprintf("# ERROR: %v\n", err)))
+		_, _ = fmt.Fprintf(w, "# ERROR: %v\n", err)
 		return
 	}
 
@@ -408,41 +408,41 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	// 1. Pools
-	fmt.Fprintf(w, "# HELP draforge_pools_total Total number of device pools\n")
-	fmt.Fprintf(w, "# TYPE draforge_pools_total gauge\n")
+	_, _ = fmt.Fprintf(w, "# HELP draforge_pools_total Total number of device pools\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_pools_total gauge\n")
 	for _, p := range pools {
-		fmt.Fprintf(w, "draforge_pools_total{pool=%q,driver=%q,node=%q,synthetic=%t,health=%q} 1\n",
+		_, _ = fmt.Fprintf(w, "draforge_pools_total{pool=%q,driver=%q,node=%q,synthetic=%t,health=%q} 1\n",
 			p.Name, p.DriverName, p.NodeName, p.IsSynthetic, p.Health)
 	}
 
 	// 2. Devices
-	fmt.Fprintf(w, "# HELP draforge_devices_total Total number of devices\n")
-	fmt.Fprintf(w, "# TYPE draforge_devices_total gauge\n")
+	_, _ = fmt.Fprintf(w, "# HELP draforge_devices_total Total number of devices\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_devices_total gauge\n")
 	for _, d := range devices {
-		fmt.Fprintf(w, "draforge_devices_total{device=%q,pool=%q,node=%q,type=%q,status=%q,synthetic=%t} 1\n",
+		_, _ = fmt.Fprintf(w, "draforge_devices_total{device=%q,pool=%q,node=%q,type=%q,status=%q,synthetic=%t} 1\n",
 			d.Name, d.PoolName, d.NodeName, d.Type, d.Status, d.IsSynthetic)
 	}
 
 	// 3. Claims
-	fmt.Fprintf(w, "# HELP draforge_claims_total Total number of ResourceClaims\n")
-	fmt.Fprintf(w, "# TYPE draforge_claims_total gauge\n")
+	_, _ = fmt.Fprintf(w, "# HELP draforge_claims_total Total number of ResourceClaims\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_claims_total gauge\n")
 	for _, c := range claims {
-		fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,status=%q} 1\n",
+		_, _ = fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,status=%q} 1\n",
 			c.Name, c.Namespace, c.DeviceClassName, c.Status)
 	}
 
 	// 4. Summary metrics (low cardinality)
-	fmt.Fprintf(w, "# HELP draforge_pools_count Total device pools\n")
-	fmt.Fprintf(w, "# TYPE draforge_pools_count gauge\n")
-	fmt.Fprintf(w, "draforge_pools_count %d\n", len(pools))
+	_, _ = fmt.Fprintf(w, "# HELP draforge_pools_count Total device pools\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_pools_count gauge\n")
+	_, _ = fmt.Fprintf(w, "draforge_pools_count %d\n", len(pools))
 
-	fmt.Fprintf(w, "# HELP draforge_devices_count Total devices across all pools\n")
-	fmt.Fprintf(w, "# TYPE draforge_devices_count gauge\n")
-	fmt.Fprintf(w, "draforge_devices_count %d\n", len(devices))
+	_, _ = fmt.Fprintf(w, "# HELP draforge_devices_count Total devices across all pools\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_devices_count gauge\n")
+	_, _ = fmt.Fprintf(w, "draforge_devices_count %d\n", len(devices))
 
-	fmt.Fprintf(w, "# HELP draforge_claims_count Total resource claims\n")
-	fmt.Fprintf(w, "# TYPE draforge_claims_count gauge\n")
-	fmt.Fprintf(w, "draforge_claims_count %d\n", len(claims))
+	_, _ = fmt.Fprintf(w, "# HELP draforge_claims_count Total resource claims\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_claims_count gauge\n")
+	_, _ = fmt.Fprintf(w, "draforge_claims_count %d\n", len(claims))
 
 	// Claims by status
 	statusCounts := make(map[string]int)
@@ -450,7 +450,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		statusCounts[c.Status]++
 	}
 	for status, count := range statusCounts {
-		fmt.Fprintf(w, "draforge_claims_by_status{status=%q} %d\n", status, count)
+		_, _ = fmt.Fprintf(w, "draforge_claims_by_status{status=%q} %d\n", status, count)
 	}
 
 	// 5. Faults count
@@ -460,7 +460,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 			faultCount++
 		}
 	}
-	fmt.Fprintf(w, "# HELP draforge_active_faults_total Total number of active faults\n")
-	fmt.Fprintf(w, "# TYPE draforge_active_faults_total gauge\n")
-	fmt.Fprintf(w, "draforge_active_faults_total %d\n", faultCount)
+	_, _ = fmt.Fprintf(w, "# HELP draforge_active_faults_total Total number of active faults\n")
+	_, _ = fmt.Fprintf(w, "# TYPE draforge_active_faults_total gauge\n")
+	_, _ = fmt.Fprintf(w, "draforge_active_faults_total %d\n", faultCount)
 }

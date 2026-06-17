@@ -104,9 +104,9 @@ func (m modelState) View() string {
 	tabs := []string{"[1] Summary", "[2] Pools", "[3] Devices", "[4] Claims", "[5] Doctor"}
 	for i, t := range tabs {
 		if activeView(i) == m.activeTab {
-			s.WriteString(fmt.Sprintf(" > \x1b[1;36m%s\x1b[0m < ", t))
+			fmt.Fprintf(&s, " > \x1b[1;36m%s\x1b[0m < ", t)
 		} else {
-			s.WriteString(fmt.Sprintf("   %s   ", t))
+			fmt.Fprintf(&s, "   %s   ", t)
 		}
 	}
 	s.WriteString("\n\n")
@@ -117,7 +117,7 @@ func (m modelState) View() string {
 	}
 
 	if m.err != nil {
-		s.WriteString(fmt.Sprintf(" \x1b[1;31mError connecting to cluster:\x1b[0m %v\n\n", m.err))
+		fmt.Fprintf(&s, " \x1b[1;31mError connecting to cluster:\x1b[0m %v\n\n", m.err)
 		s.WriteString(" Press 'r' to retry or 'q' to quit.\n")
 		return s.String()
 	}
@@ -126,20 +126,20 @@ func (m modelState) View() string {
 	switch m.activeTab {
 	case viewSummary:
 		s.WriteString("== Cluster Overview ==\n")
-		s.WriteString(fmt.Sprintf("  Active Device Pools: %d\n", len(m.pools)))
-		s.WriteString(fmt.Sprintf("  Discovered Devices:  %d\n", len(m.devices)))
-		s.WriteString(fmt.Sprintf("  Resource Claims:     %d\n", len(m.claims)))
-		s.WriteString(fmt.Sprintf("  Diagnostics Run:     %s\n", m.lastRefreshed.Format("15:04:05")))
+		fmt.Fprintf(&s, "  Active Device Pools: %d\n", len(m.pools))
+		fmt.Fprintf(&s, "  Discovered Devices:  %d\n", len(m.devices))
+		fmt.Fprintf(&s, "  Resource Claims:     %d\n", len(m.claims))
+		fmt.Fprintf(&s, "  Diagnostics Run:     %s\n", m.lastRefreshed.Format("15:04:05"))
 
 	case viewPools:
 		s.WriteString("== Simulated Resource Pools ==\n")
 		if len(m.pools) == 0 {
 			s.WriteString("  No active device pools found.\n")
 		} else {
-			s.WriteString(fmt.Sprintf("  %-25s %-15s %-15s %-10s\n", "NAME", "DRIVER", "NODE", "DEVICES"))
+			fmt.Fprintf(&s, "  %-25s %-15s %-15s %-10s\n", "NAME", "DRIVER", "NODE", "DEVICES")
 			s.WriteString(strings.Repeat("-", 70) + "\n")
 			for _, p := range m.pools {
-				s.WriteString(fmt.Sprintf("  %-25s %-15s %-15s %-10d\n", p.Name, p.DriverName, p.NodeName, p.DeviceCount))
+				fmt.Fprintf(&s, "  %-25s %-15s %-15s %-10d\n", p.Name, p.DriverName, p.NodeName, p.DeviceCount)
 			}
 		}
 
@@ -148,14 +148,14 @@ func (m modelState) View() string {
 		if len(m.devices) == 0 {
 			s.WriteString("  No devices published. Activate SimulatedDevicePools.\n")
 		} else {
-			s.WriteString(fmt.Sprintf("  %-25s %-12s %-15s %-10s\n", "DEVICE ID", "TYPE", "NODE", "STATUS"))
+			fmt.Fprintf(&s, "  %-25s %-12s %-15s %-10s\n", "DEVICE ID", "TYPE", "NODE", "STATUS")
 			s.WriteString(strings.Repeat("-", 70) + "\n")
 			for _, d := range m.devices {
 				idTrunc := d.Name
 				if len(idTrunc) > 25 {
 					idTrunc = idTrunc[:22] + "..."
 				}
-				s.WriteString(fmt.Sprintf("  %-25s %-12s %-15s %-10s\n", idTrunc, d.Type, d.NodeName, d.Status))
+				fmt.Fprintf(&s, "  %-25s %-12s %-15s %-10s\n", idTrunc, d.Type, d.NodeName, d.Status)
 			}
 		}
 
@@ -164,10 +164,10 @@ func (m modelState) View() string {
 		if len(m.claims) == 0 {
 			s.WriteString("  No active ResourceClaims found.\n")
 		} else {
-			s.WriteString(fmt.Sprintf("  %-25s %-15s %-15s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASS", "STATUS"))
+			fmt.Fprintf(&s, "  %-25s %-15s %-15s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASS", "STATUS")
 			s.WriteString(strings.Repeat("-", 75) + "\n")
 			for _, c := range m.claims {
-				s.WriteString(fmt.Sprintf("  %-25s %-15s %-15s %-15s\n", c.Name, c.Namespace, c.DeviceClassName, c.Status))
+				fmt.Fprintf(&s, "  %-25s %-15s %-15s %-15s\n", c.Name, c.Namespace, c.DeviceClassName, c.Status)
 			}
 		}
 
@@ -178,13 +178,14 @@ func (m modelState) View() string {
 		} else {
 			for _, res := range m.docReport.Results {
 				statusColor := "\x1b[32m" // Green
-				if res.Status == model.StatusFail {
+				switch res.Status {
+				case model.StatusFail:
 					statusColor = "\x1b[31m" // Red
-				} else if res.Status == model.StatusWarn {
+				case model.StatusWarn:
 					statusColor = "\x1b[33m" // Yellow
 				}
-				s.WriteString(fmt.Sprintf("  [%s%s\x1b[0m] %s: %s\n", statusColor, res.Status, res.ID, res.Name))
-				s.WriteString(fmt.Sprintf("        Evidence: %s\n\n", res.Evidence))
+				fmt.Fprintf(&s, "  [%s%s\x1b[0m] %s: %s\n", statusColor, res.Status, res.ID, res.Name)
+				fmt.Fprintf(&s, "        Evidence: %s\n\n", res.Evidence)
 			}
 		}
 	}

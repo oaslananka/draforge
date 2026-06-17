@@ -151,11 +151,12 @@ func sortEdges(gb *GraphBuilder) {
 		for j := i + 1; j < n; j++ {
 			a, b := gb.edges[i], gb.edges[j]
 			swap := false
-			if a.From > b.From {
+			switch {
+			case a.From > b.From:
 				swap = true
-			} else if a.From == b.From && a.To > b.To {
+			case a.From == b.From && a.To > b.To:
 				swap = true
-			} else if a.From == b.From && a.To == b.To && a.Type > b.Type {
+			case a.From == b.From && a.To == b.To && a.Type > b.Type:
 				swap = true
 			}
 			if swap {

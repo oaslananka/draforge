@@ -282,13 +282,13 @@ func ToDOT(g *model.ResourceGraph) string {
 		case "Driver":
 			color = "purple"
 		}
-		sb.WriteString(fmt.Sprintf("  \"%s\" [label=\"%s\\n(%s)\", fillcolor=%s];\n", n.ID, escapedLabel, n.Type, color))
+		fmt.Fprintf(&sb, "  \"%s\" [label=\"%s\\n(%s)\", fillcolor=%s];\n", n.ID, escapedLabel, n.Type, color)
 	}
 	sb.WriteString("\n")
 
 	// Print edges
 	for _, e := range g.Edges {
-		sb.WriteString(fmt.Sprintf("  \"%s\" -> \"%s\" [label=\"%s\"];\n", e.From, e.To, e.Type))
+		fmt.Fprintf(&sb, "  \"%s\" -> \"%s\" [label=\"%s\"];\n", e.From, e.To, e.Type)
 	}
 
 	sb.WriteString("}\n")
@@ -306,7 +306,7 @@ func ToMermaid(g *model.ResourceGraph) string {
 		cleanID = strings.ReplaceAll(cleanID, "-", "_")
 		cleanID = strings.ReplaceAll(cleanID, ".", "_")
 		escapedLabel := strings.ReplaceAll(n.Label, "\"", "")
-		sb.WriteString(fmt.Sprintf("  %s[\"%s<br/>(%s)\"]\n", cleanID, escapedLabel, n.Type))
+		fmt.Fprintf(&sb, "  %s[\"%s<br/>(%s)\"]\n", cleanID, escapedLabel, n.Type)
 	}
 	sb.WriteString("\n")
 
@@ -318,7 +318,7 @@ func ToMermaid(g *model.ResourceGraph) string {
 		cleanTo := strings.ReplaceAll(e.To, "/", "_")
 		cleanTo = strings.ReplaceAll(cleanTo, "-", "_")
 		cleanTo = strings.ReplaceAll(cleanTo, ".", "_")
-		sb.WriteString(fmt.Sprintf("  %s -->|%s| %s\n", cleanFrom, e.Type, cleanTo))
+		fmt.Fprintf(&sb, "  %s -->|%s| %s\n", cleanFrom, e.Type, cleanTo)
 	}
 
 	return sb.String()

@@ -520,7 +520,5 @@ func TestReconcileNoDriver(t *testing.T) {
 	}
 	// A slice with empty driver is still created (controller doesn't validate driver)
 	slices, _ := reconciler.clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
-	if len(slices.Items) != 0 {
-		// Driver empty but we may still get a slice — just verify no panic
-	}
+	_ = slices // Driver empty but we may still get a slice — just verify no panic
 }

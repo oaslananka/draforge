@@ -48,11 +48,12 @@ func evaluateCEL(expression string, attributes map[string]string, capacities map
 				return false
 			}
 
-			if op == "==" {
+			switch op {
+			case "==":
 				if deviceVal != val {
 					return false
 				}
-			} else if op == "!=" {
+			case "!=":
 				if deviceVal == val {
 					return false
 				}

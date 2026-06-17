@@ -59,7 +59,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Starting DRAForge Synthetic Node Plugin (CDI dir: %s, nodeName: %s)...\n", cdiDir, nodeName)
+	fmt.Printf("DRAForge Synthetic Node Plugin %s (commit: %s) starting (CDI dir: %s, nodeName: %s)...\n", versionVal, commitSHA, cdiDir, nodeName)
 
 	if err := os.MkdirAll(cdiDir, 0755); err != nil {
 		fmt.Printf("Warning: Failed to create CDI directory %s: %v. Using temporary simulation path.\n", cdiDir, err)

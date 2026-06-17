@@ -27,7 +27,7 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
-      - name: Install golangci-lint
+      - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2

@@ -16,18 +16,20 @@ linters:
     - gocritic
     - revive
     - misspell
-    - gofmt
-    - goimports
     - bodyclose
     - nilerr
     - errorlint
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    revive:
+      rules:
+        - name: exported
+          disabled: true
 
-linters-settings:
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-  revive:
-    rules:
-      - name: exported
-        disabled: true
+formatters:
+  enable:
+    - gofmt
+    - goimports

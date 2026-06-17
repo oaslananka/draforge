@@ -78,7 +78,7 @@ signs:
     cmd: cosign
     args:
       - "sign-blob"
-      - "--output=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
     artifacts: checksum

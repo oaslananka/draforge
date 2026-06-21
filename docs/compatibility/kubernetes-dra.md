@@ -98,6 +98,20 @@ Sources:
 
 ---
 
+## Detailed Compatibility Matrix: Claims, Slices and Allocation Flows
+
+The table below breaks down support for specific DRA objects and scheduling flows:
+
+| Flow / Resource Concept | Details & Configuration | DRAForge Support | Implementation / Validation Notes |
+|:---|:---|:---|:---|
+| **ResourceClaim Allocation Mode: Immediate** | Claim allocated immediately upon creation by control plane. | **Fully Supported** | Handled by simulation engine, mapped in graph visualizer and TUI. |
+| **ResourceClaim Allocation Mode: WaitForFirstConsumer** | Allocation deferred until Pod using the claim is scheduled on a Node. | **Fully Supported** | Handled natively. The explain engine diagnoses pending status during the scheduling cycle. |
+| **ResourceSlice: Structured Parameters** | Standard GA (`resource.k8s.io/v1`) layout containing device pools and parameters. | **Fully Supported** | Primary driver representation in DRAForge. |
+| **ResourceSlice: Named Resources** | Classic K8s v1.32/v1.33 style with named resource parameters. | **Compatible** | Supported if the API endpoint is `v1`. |
+| **Direct Controller-based Allocation** | Driver-specific control loops allocating device claims. | **Supported** | Simulates and monitors events via standard event log diagnostics. |
+
+---
+
 ## Known Limitations
 
 1. **DeviceClass discovery**: DRAForge lists DeviceClasses via the API but does
@@ -129,6 +143,36 @@ Sources:
 7. **Version assumptions**: DRAForge assumes `resource.k8s.io/v1` is served.
    Clusters that only serve v1beta1/v1beta2 (K8s < v1.34 with legacy API groups)
    require explicit API group configuration.
+
+---
+
+## Quick-Start Troubleshooting
+
+### Missing DRA APIs (e.g. `resource.k8s.io` not found)
+
+If you see errors like:
+> `Failed to list *v1.ResourceClaim: the server could not find the requested resource`
+or
+> `resource.k8s.io/v1 API group is not registered`
+
+**Solution:**
+1. **Verify Kubernetes Version**: DRA structured parameters graduated to GA in **v1.34**. Ensure your cluster version is at least v1.32.
+2. **Enable Feature Gate**: For Kubernetes v1.32 or v1.33, verify that the `DynamicResourceAllocation` feature gate is explicitly enabled on your API Server, Controller Manager, Scheduler, and Kubelets:
+   ```bash
+   --feature-gates=DynamicResourceAllocation=true
+   ```
+3. **Legacy API Versions**: Older clusters that only serve `v1beta1` or `v1beta2` (K8s < v1.34) are not supported by the default `v1` client. You must upgrade the API group version.
+
+### Missing SimulatedDevicePool CRD
+
+If you see errors like:
+> `failed to list SimulatedDevicePools: the server could not find the requested resource`
+
+**Solution:**
+Register the CRD in your cluster before applying scenarios or starting the simulator:
+```bash
+kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
+```
 
 ---
 

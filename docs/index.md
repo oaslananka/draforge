@@ -27,6 +27,16 @@ It helps Kubernetes platform engineers model DRA resources, simulate virtual dev
 - [Kubernetes DRA compatibility](compatibility/kubernetes-dra.md)
 - [Release process](release.md)
 
+## Showcase Demo Notes
+
+When running the DRAForge showcase demo, the dashboard provides a real-time view of the cluster allocation state.
+
+### Demo Walkthrough Steps
+1. **Interactive Graph**: Navigate to the **GRAPH** tab to visualize the two worker nodes, resource slices, and claims.
+2. **Cluster Health**: Open the **DOCTOR** tab to see running status diagnostics (such as DRA API availability and version compatibility).
+3. **Simulation Diagnostics**: Go to the **EXPLAIN** tab and select any claim from the dropdown list to see the reason tree and suggested remediation steps.
+4. **Relationship Scanning**: Click on any node in the graph, and use the **Relationships** panel in the bottom-right corner to jump directly between pods, resource claims, and devices.
+
 ## Repository
 
 - [GitHub repository](https://github.com/oaslananka/draforge)

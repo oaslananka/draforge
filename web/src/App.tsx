@@ -232,8 +232,30 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
 
   if (graphEmpty) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
-        <p>No resource relationships to display. Deploy a SimulatedDevicePool scenario to populate the graph.</p>
+      <div style={{ 
+        textAlign: 'center', 
+        padding: '60px 20px', 
+        color: 'var(--text-secondary)',
+        background: 'var(--bg-secondary)',
+        borderRadius: '16px',
+        border: '1px dashed var(--border-light)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '15px'
+      }}>
+        <span className="badge badge-warning" style={{ fontSize: '0.85rem', padding: '4px 12px' }}>No Active Scenario</span>
+        <p style={{ maxWidth: '480px', margin: '0 auto', fontSize: '0.95rem' }}>
+          No dynamic resource relationships discovered in this cluster. Deploy a SimulatedDevicePool scenario or run a workload pod to populate the interactive graph.
+        </p>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+            task demo:up
+          </code>
+          <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+            kubectl apply -f examples/scenarios/basic-gpu.yaml
+          </code>
+        </div>
       </div>
     );
   }
@@ -369,7 +391,7 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
             {selectedNode ? (
               <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div>
-                  <span className="badge badge-success">{selectedNode.type}</span>
+                  <span className="badge badge-success" style={{ background: getNodeColor(selectedNode.type, selectedNode.id), color: 'white', borderColor: 'transparent' }}>{selectedNode.type}</span>
                   <h4 style={{ fontSize: '1.2rem', marginTop: '6px' }}>{selectedNode.label}</h4>
                 </div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -384,6 +406,72 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
                     Diagnose Allocation
                   </button>
                 )}
+                {(() => {
+                  const getRelatedNodes = (nodeId: string) => {
+                    if (!graphData) return [];
+                    const related = [];
+                    const edges = graphData.edges ?? [];
+                    const graphNodes = graphData.nodes ?? [];
+
+                    for (const edge of edges) {
+                      if (edge.from === nodeId) {
+                        const targetNode = graphNodes.find(n => n.id === edge.to);
+                        if (targetNode) {
+                          related.push({ node: targetNode, type: 'outgoing', relType: edge.type });
+                        }
+                      } else if (edge.to === nodeId) {
+                        const sourceNode = graphNodes.find(n => n.id === edge.from);
+                        if (sourceNode) {
+                          related.push({ node: sourceNode, type: 'incoming', relType: edge.type });
+                        }
+                      }
+                    }
+                    return related;
+                  };
+
+                  const related = getRelatedNodes(selectedNode.id);
+                  if (related.length === 0) return null;
+                  return (
+                    <div style={{ marginTop: '15px', borderTop: '1px solid var(--border-light)', paddingTop: '15px' }}>
+                      <h5 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Relationships</h5>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {related.map((rel, idx) => (
+                          <div 
+                            key={idx} 
+                            style={{ 
+                              fontSize: '0.8rem', 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center', 
+                              background: 'var(--bg-tertiary)', 
+                              padding: '6px 10px', 
+                              borderRadius: '6px' 
+                            }}
+                          >
+                            <span style={{ color: 'var(--text-muted)' }}>
+                              {rel.type === 'incoming' ? '← ' : '→ '}
+                              {rel.relType}
+                            </span>
+                            <span 
+                              style={{ 
+                                color: getNodeColor(rel.node.type, rel.node.id), 
+                                fontWeight: 'bold', 
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                              }}
+                              onClick={() => {
+                                const found = nodes.find(n => n.id === rel.node.id);
+                                if (found) setSelectedNode(found);
+                              }}
+                            >
+                              {rel.node.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <p style={{ color: 'var(--text-muted)', marginTop: '15px' }}>Click a node in the graph to inspect details.</p>
@@ -536,7 +624,7 @@ export default function App() {
           <strong style={{ fontSize: '0.95rem' }}>{node.message}</strong>
         </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '4px' }}>
-          {node.evidence} <span style={{ color: 'var(--text-muted)' }}>({node.sourceType})</span>
+        {node.evidence} <span style={{ color: 'var(--text-muted)' }}>({node.sourceType})</span>
         </p>
         {node.children && node.children.map(child => renderReasonNode(child, depth + 1))}
       </div>
@@ -544,6 +632,35 @@ export default function App() {
   };
 
   const initialLoading = loadingSummary && loadingPools && loadingDevices && loadingClaims && loadingDoctor;
+
+  const renderDoctorHeaderBadge = () => {
+    if (!doctorReport) return null;
+    const fails = doctorReport.summary['FAIL'] ?? 0;
+    const warns = doctorReport.summary['WARN'] ?? 0;
+    const passes = doctorReport.summary['PASS'] ?? 0;
+
+    let badgeClass = 'badge-success';
+    let label = `Doctor: Healthy (${passes} OK)`;
+
+    if (fails > 0) {
+      badgeClass = 'badge-danger';
+      label = `Doctor: ${fails} Failure${fails > 1 ? 's' : ''}`;
+    } else if (warns > 0) {
+      badgeClass = 'badge-warning';
+      label = `Doctor: ${warns} Warning${warns > 1 ? 's' : ''}`;
+    }
+
+    return (
+      <span
+        className={`badge ${badgeClass}`}
+        style={{ alignSelf: 'flex-start', marginTop: '4px', cursor: 'pointer' }}
+        onClick={() => setActiveTab('doctor')}
+        title="Click to view detailed Doctor diagnostics"
+      >
+        {label}
+      </span>
+    );
+  };
 
   if (initialLoading) {
     return (
@@ -567,6 +684,7 @@ export default function App() {
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Dynamic Resource Allocation Developer Platform</p>
           </div>
           <span className={`badge ${sseBadgeClass}`} style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{sseLabel}</span>
+          {renderDoctorHeaderBadge()}
         </div>
         <nav style={{ display: 'flex', gap: '15px' }}>
           {(['overview', 'pools', 'devices', 'claims', 'graph', 'explain', 'doctor'] as const).map(tab => (
@@ -652,8 +770,17 @@ export default function App() {
                 <p>Loading device pools...</p>
               </div>
             ) : pools.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                <p>No DRA resources discovered yet.</p>
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '60px 20px', 
+                background: 'var(--bg-secondary)', 
+                borderRadius: '12px', 
+                border: '1px dashed var(--border-light)' 
+              }}>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '12px' }}>No virtual device pools registered in this cluster.</p>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Deploy a simulator scenario to register a pool: <code style={{ background: 'var(--bg-tertiary)', padding: '4px 8px', borderRadius: '4px', color: 'var(--accent-secondary)' }}>kubectl apply -f examples/scenarios/basic-gpu.yaml</code>
+                </p>
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -694,8 +821,17 @@ export default function App() {
                 <p>Loading devices...</p>
               </div>
             ) : devices.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                <p>No DRA resources discovered yet.</p>
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '60px 20px', 
+                background: 'var(--bg-secondary)', 
+                borderRadius: '12px', 
+                border: '1px dashed var(--border-light)' 
+              }}>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '12px' }}>No discovered DRA devices detected.</p>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Simulated devices will automatically show up here as soon as the node plugin driver publishes ResourceSlice objects.
+                </p>
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -740,8 +876,17 @@ export default function App() {
                 <p>Loading claims...</p>
               </div>
             ) : claims.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                <p>No ResourceClaims found in the current cluster.</p>
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '60px 20px', 
+                background: 'var(--bg-secondary)', 
+                borderRadius: '12px', 
+                border: '1px dashed var(--border-light)' 
+              }}>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '12px' }}>No ResourceClaims found in the current cluster.</p>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Deploy a test workload pod requesting a simulated device allocation to trace claims.
+                </p>
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>

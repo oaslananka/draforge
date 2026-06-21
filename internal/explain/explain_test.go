@@ -350,14 +350,17 @@ func TestExplainClaim_SelectorMismatchAndCapacity(t *testing.T) {
 	for _, child := range result.ReasonTree.Children {
 		if strings.Contains(child.Message, "devices evaluated") {
 			foundSummary = true
-			if len(child.Children) != 2 {
-				t.Fatalf("expected 2 children for evaluation node, got %d", len(child.Children))
+			if len(child.Children) != 3 {
+				t.Fatalf("expected 3 children for evaluation node, got %d", len(child.Children))
 			}
 			if !strings.Contains(child.Children[0].Message, "1 rejected because selector evaluated to false") {
 				t.Errorf("unexpected selector mismatch child: %s", child.Children[0].Message)
 			}
-			if !strings.Contains(child.Children[1].Message, "1 rejected because requested capacity") {
-				t.Errorf("unexpected capacity mismatch child: %s", child.Children[1].Message)
+			if !strings.Contains(child.Children[1].Message, "0 rejected because device health status was unhealthy") {
+				t.Errorf("unexpected unhealthy check child: %s", child.Children[1].Message)
+			}
+			if !strings.Contains(child.Children[2].Message, "1 rejected because requested capacity") {
+				t.Errorf("unexpected capacity mismatch child: %s", child.Children[2].Message)
 			}
 		}
 	}
@@ -492,6 +495,119 @@ func TestExplainClaim_DelayedAllocation(t *testing.T) {
 	}
 	if !foundPodRemedy {
 		t.Errorf("expected remedy to deploy a pod, got: %v", result.Remedy)
+	}
+}
+
+func TestExplainClaim_UnhealthyDevices(t *testing.T) {
+	ctx := context.Background()
+	claimName := "unhealthy-device-claim"
+	namespace := "default"
+	nodeName := "node-1"
+
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              claimName,
+			Namespace:         namespace,
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "gpu-class",
+						},
+					},
+				},
+			},
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{
+				{
+					Name: "gpu-pod",
+				},
+			},
+		},
+	}
+
+	class := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gpu-class",
+		},
+		Spec: resourcev1.DeviceClassSpec{
+			Selectors: []resourcev1.DeviceSelector{
+				{
+					CEL: &resourcev1.CELDeviceSelector{
+						Expression: `device.attributes["family"] == "h100"`,
+					},
+				},
+			},
+		},
+	}
+
+	// 1 healthy device (mismatched family), 1 unhealthy device (matched family)
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unhealthy-slice",
+			Labels: map[string]string{
+				"draforge.oaslananka/health": "degraded",
+			},
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "gpu-driver",
+			NodeName: &nodeName,
+			Pool: resourcev1.ResourcePool{
+				Name: "gpu-pool",
+			},
+			Devices: []resourcev1.Device{
+				{
+					Name: "gpu-unhealthy",
+					Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+						"family": {
+							StringValue: ptr("h100"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, class, slice)
+	result, err := ExplainClaim(ctx, clientset, namespace, claimName)
+	if err != nil {
+		t.Fatalf("ExplainClaim failed: %v", err)
+	}
+
+	if result.Allocated {
+		t.Errorf("expected Allocated to be false, got true")
+	}
+
+	// Verify that unhealthy rejection was recorded
+	foundUnhealthyRejection := false
+	for _, child := range result.ReasonTree.Children {
+		if strings.Contains(child.Message, "devices evaluated") {
+			for _, subChild := range child.Children {
+				if strings.Contains(subChild.Message, "rejected because device health status was unhealthy") {
+					foundUnhealthyRejection = true
+				}
+			}
+		}
+	}
+
+	if !foundUnhealthyRejection {
+		t.Errorf("expected explanation to include unhealthy device rejection message")
+	}
+
+	foundUnhealthyRemedy := false
+	for _, remedy := range result.Remedy {
+		if strings.Contains(remedy, "resolve health/degradation states") {
+			foundUnhealthyRemedy = true
+		}
+	}
+
+	if !foundUnhealthyRemedy {
+		t.Errorf("expected remediation to mention resolving health states, got: %v", result.Remedy)
 	}
 }
 

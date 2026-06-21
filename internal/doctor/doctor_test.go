@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/oaslananka/draforge/pkg/model"
+	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
@@ -166,4 +167,115 @@ func TestStaleResourceSliceWithDriver(t *testing.T) {
 	if res.Status != model.StatusPass {
 		t.Errorf("expected PASS for valid slice, got %q (evidence: %q)", res.Status, res.Evidence)
 	}
+}
+
+func TestStaleResourceSliceStates(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Create a node that exists but is not Ready
+	notReadyNode := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "not-ready-node",
+		},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{
+					Type:   corev1.NodeReady,
+					Status: corev1.ConditionFalse,
+				},
+			},
+		},
+	}
+
+	// 2. Create a node that is Ready
+	readyNode := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "ready-node",
+		},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{
+					Type:   corev1.NodeReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+
+	// 3. Inconsistent slice (empty driver)
+	inconsistentSlice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{Name: "inconsistent-slice"},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver: "",
+			Pool:   resourcev1.ResourcePool{Name: "pool-1"},
+		},
+	}
+
+	// 4. Stale slice (non-existent node)
+	staleSlice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{Name: "stale-slice"},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "driver-1",
+			NodeName: ptr("non-existent-node"),
+			Pool:     resourcev1.ResourcePool{Name: "pool-1"},
+		},
+	}
+
+	// 5. Unavailable slice (not Ready node)
+	unavailableNodeSlice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{Name: "unavail-node-slice"},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "driver-1",
+			NodeName: ptr("not-ready-node"),
+			Pool:     resourcev1.ResourcePool{Name: "pool-1"},
+		},
+	}
+
+	// 6. Unavailable slice (unhealthy custom label)
+	unhealthyLabelSlice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unhealthy-label-slice",
+			Labels: map[string]string{
+				"draforge.oaslananka/health": "degraded",
+			},
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "driver-1",
+			NodeName: ptr("ready-node"),
+			Pool:     resourcev1.ResourcePool{Name: "pool-1"},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(
+		readyNode, notReadyNode,
+		inconsistentSlice, staleSlice, unavailableNodeSlice, unhealthyLabelSlice,
+	)
+
+	check := &StaleResourceSliceCheck{}
+	res := check.Run(ctx, clientset)
+
+	if res.Status != model.StatusFail {
+		t.Errorf("expected FAIL status, got %q", res.Status)
+	}
+
+	if !strings.Contains(res.Evidence, "inconsistent-slice") {
+		t.Errorf("expected evidence to mention inconsistent-slice, got %q", res.Evidence)
+	}
+	if !strings.Contains(res.Evidence, "stale-slice") {
+		t.Errorf("expected evidence to mention stale-slice, got %q", res.Evidence)
+	}
+	if !strings.Contains(res.Evidence, "unavail-node-slice") {
+		t.Errorf("expected evidence to mention unavail-node-slice, got %q", res.Evidence)
+	}
+	if !strings.Contains(res.Evidence, "unhealthy-label-slice") {
+		t.Errorf("expected evidence to mention unhealthy-label-slice, got %q", res.Evidence)
+	}
+
+	if !strings.Contains(res.Remediation, "orphaned/stale") {
+		t.Errorf("remediation should suggest cleaning up stale slices, got %q", res.Remediation)
+	}
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }

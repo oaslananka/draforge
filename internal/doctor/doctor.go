@@ -266,7 +266,7 @@ func (c *PodReferenceCheck) Run(ctx context.Context, clientset kubernetes.Interf
 	return res
 }
 
-// StaleResourceSliceCheck checks if any ResourceSlice objects are stale or mismatched.
+// StaleResourceSliceCheck checks if any ResourceSlice objects are stale, unavailable, or mismatched.
 type StaleResourceSliceCheck struct{}
 
 func (c *StaleResourceSliceCheck) ID() string       { return "DRA-005" }
@@ -279,7 +279,7 @@ func (c *StaleResourceSliceCheck) Run(ctx context.Context, clientset kubernetes.
 		Category:     c.Category(),
 		Status:       model.StatusPass,
 		Severity:     "medium",
-		Evidence:     "All ResourceSlices are consistent.",
+		Evidence:     "All ResourceSlices are consistent and active.",
 		Remediation:  "No action required.",
 		DocReference: "https://kubernetes.io/docs/concepts/extend-kubernetes/compute-resource-sharing/#resourceslice",
 	}
@@ -291,18 +291,79 @@ func (c *StaleResourceSliceCheck) Run(ctx context.Context, clientset kubernetes.
 		return res
 	}
 
-	inconsistentSlices := []string{}
-	for _, sl := range slices.Items {
-		// A slice must either have devices or specify a non-empty driver name
-		if sl.Spec.Driver == "" {
-			inconsistentSlices = append(inconsistentSlices, sl.Name+" (empty driver)")
+	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodeMap := make(map[string]bool)
+	nodeReadyMap := make(map[string]bool)
+	if err == nil {
+		for _, n := range nodes.Items {
+			nodeMap[n.Name] = true
+			isReady := false
+			for _, cond := range n.Status.Conditions {
+				if cond.Type == "Ready" && cond.Status == "True" {
+					isReady = true
+					break
+				}
+			}
+			nodeReadyMap[n.Name] = isReady
 		}
 	}
 
+	inconsistentSlices := []string{}
+	staleSlices := []string{}
+	unavailableSlices := []string{}
+
+	for _, sl := range slices.Items {
+		// Inconsistent: empty driver name
+		if sl.Spec.Driver == "" {
+			inconsistentSlices = append(inconsistentSlices, sl.Name+" (empty driver)")
+		}
+
+		// Stale / Mismatched node reference
+		if sl.Spec.NodeName != nil {
+			nodeName := *sl.Spec.NodeName
+			if len(nodeMap) > 0 { // listed nodes successfully
+				if !nodeMap[nodeName] {
+					staleSlices = append(staleSlices, fmt.Sprintf("%s (references non-existent node %q)", sl.Name, nodeName))
+				} else if !nodeReadyMap[nodeName] {
+					unavailableSlices = append(unavailableSlices, fmt.Sprintf("%s (node %q is not Ready)", sl.Name, nodeName))
+				}
+			}
+		}
+
+		// Custom health label check (e.g. draforge.oaslananka/health != healthy)
+		if healthVal, exists := sl.Labels["draforge.oaslananka/health"]; exists && healthVal != "healthy" && healthVal != "" {
+			unavailableSlices = append(unavailableSlices, fmt.Sprintf("%s (health is %q)", sl.Name, healthVal))
+		}
+	}
+
+	var evidence []string
+	var remediation []string
+	status := model.StatusPass
+
 	if len(inconsistentSlices) > 0 {
-		res.Status = model.StatusFail
-		res.Evidence = fmt.Sprintf("Found inconsistent ResourceSlices: %s", strings.Join(inconsistentSlices, ", "))
-		res.Remediation = "Check driver status and ensure the controller publishes valid ResourceSlices."
+		status = model.StatusFail
+		evidence = append(evidence, fmt.Sprintf("Found inconsistent ResourceSlices: %s", strings.Join(inconsistentSlices, ", ")))
+		remediation = append(remediation, "Check driver status and ensure the controller publishes valid ResourceSlices with non-empty driver names.")
+	}
+
+	if len(staleSlices) > 0 {
+		status = model.StatusFail
+		evidence = append(evidence, fmt.Sprintf("Found stale ResourceSlices referencing non-existent nodes: %s", strings.Join(staleSlices, ", ")))
+		remediation = append(remediation, "Delete the orphaned/stale ResourceSlices or ensure their respective nodes are properly re-joined to the cluster.")
+	}
+
+	if len(unavailableSlices) > 0 {
+		if status != model.StatusFail {
+			status = model.StatusWarn
+		}
+		evidence = append(evidence, fmt.Sprintf("Found unavailable ResourceSlices: %s", strings.Join(unavailableSlices, ", ")))
+		remediation = append(remediation, "Check physical/simulated device status, verify worker node health, and restart the driver daemonset if necessary.")
+	}
+
+	if len(evidence) > 0 {
+		res.Status = status
+		res.Evidence = strings.Join(evidence, "; ")
+		res.Remediation = strings.Join(remediation, " ")
 	}
 
 	return res

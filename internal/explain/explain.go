@@ -187,6 +187,7 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 	// Evaluate candidate devices & drivers matching selectors
 	selectorPassed := 0
 	capacityMatched := 0
+	unhealthyCount := 0
 
 	for _, d := range devices {
 		// Evaluated against selectors in DeviceClass
@@ -206,6 +207,12 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 			continue
 		}
 		selectorPassed++
+
+		// Health Check
+		if d.Status != "" && d.Status != "healthy" {
+			unhealthyCount++
+			continue
+		}
 
 		// Capacity / Availability check (check if already allocated)
 		isAllocated := false
@@ -244,14 +251,22 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 					SourceType: "DeviceClass",
 				},
 				{
-					Message:    fmt.Sprintf("%d rejected because requested capacity (already allocated) was unavailable", selectorPassed-capacityMatched),
+					Message:    fmt.Sprintf("%d rejected because device health status was unhealthy or degraded", unhealthyCount),
+					Confidence: "confirmed",
+					SourceType: "ResourceSlice",
+				},
+				{
+					Message:    fmt.Sprintf("%d rejected because requested capacity (already allocated) was unavailable", selectorPassed-unhealthyCount-capacityMatched),
 					Confidence: "inferred",
 					SourceType: "ResourceSlice",
 				},
 			},
 		})
 
-		if capacityMatched == 0 && totalDevices > 0 {
+		if unhealthyCount > 0 {
+			result.Remedy = append(result.Remedy, "Inspect and resolve health/degradation states for the unhealthy simulated devices.")
+		}
+		if capacityMatched == 0 && totalDevices > 0 && unhealthyCount == 0 {
 			result.Remedy = append(result.Remedy, "Release existing allocations or increase device counts in the pool.")
 		}
 	}

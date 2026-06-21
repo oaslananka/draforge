@@ -57,3 +57,43 @@ task demo:down
 ```
 
 This will uninstall the Helm release, delete all scenario custom resources, and execute `terraform destroy` to tear down the DOKS cluster, VPC, and registry.
+
+---
+
+## GitHub Actions E2E Testing (Remote)
+
+For continuous integration and release readiness, a manual-only remote E2E test workflow is provided under `.github/workflows/e2e.yml`. This workflow runs remote tests on a live DigitalOcean Kubernetes (DOKS) cluster.
+
+### E2E-DOKS Environment Approval Flow
+1. **GitHub Environment**: The workflow is gated by the `e2e-doks` GitHub Environment.
+2. **Required Approvals**: Direct repository maintainer approval is required to trigger execution in this environment.
+3. **Safety Phrase**: When triggering the workflow manually via `workflow_dispatch`, you must enter `run-e2e-doks` in the `confirm` input field.
+
+### Secret Configuration & Token Scope
+The workflow requires a GitHub repository secret named `DIGITALOCEAN_TOKEN`.
+- **Required Token Scope**: The token must have **Read & Write** access to:
+  - **Kubernetes**: To save kubeconfig and interact with the DOKS cluster.
+  - **Droplets / VPC**: If the E2E script provisions resources.
+- **Repository Visibility**: Only maintainers with access to secrets can run this workflow.
+
+### Manual E2E Run Checklist
+Before running the remote E2E workflow:
+1. [ ] Confirm that the target DOKS cluster (default: `draforge-cluster`) exists and is active on DigitalOcean.
+2. [ ] Verify that your `DIGITALOCEAN_TOKEN` secret is configured in the repository settings under **Secrets and variables -> Actions**.
+3. [ ] Go to the **Actions** tab, select the **E2E Tests** workflow, and click **Run workflow**.
+4. [ ] Enter `run-e2e-doks` as confirmation and specify the correct cluster name.
+
+### Cleanup Behavior after Failure/Cancellation
+- **Automatic Cleanup Job**: The workflow has a dedicated `cleanup` job that runs `always()` (even if the main test job fails or is cancelled).
+- **Resource Destruction**: This cleanup job deletes the Helm release (`draforge`) and any applied scenario files (e.g. `examples/scenarios/basic-gpu.yaml`) from the cluster to prevent dangling resources.
+
+### Common Failure Modes & Troubleshooting
+1. **Error: `DIGITALOCEAN_TOKEN secret is not configured`**
+   - *Cause*: The secret was not added or is named incorrectly.
+   - *Fix*: Check repository secrets and ensure `DIGITALOCEAN_TOKEN` is defined.
+2. **Error: `cluster ... not found`**
+   - *Cause*: The cluster name provided in the workflow input does not exist in the DigitalOcean account.
+   - *Fix*: Ensure the cluster is created first or double-check the spelling in the `cluster_name` input.
+3. **Error: `Unauthorized / Forbidden` API calls**
+   - *Cause*: The `DIGITALOCEAN_TOKEN` does not have write scope or has expired.
+   - *Fix*: Regenerate a token with write scope in the DigitalOcean control panel and update the GitHub secret.

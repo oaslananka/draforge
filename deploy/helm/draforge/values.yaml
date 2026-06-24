@@ -38,6 +38,12 @@ controller:
     repository: draforge
     tag: "controller-latest"
     pullPolicy: Always
+  metrics:
+    port: 8082
+    service:
+      enabled: true
+      type: ClusterIP
+      port: 8082
   resources:
     limits:
       cpu: 500m

@@ -4,12 +4,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -24,7 +24,9 @@ var (
 
 func main() {
 	var kubeconfig string
+	var metricsAddr string
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Absolute path to the kubeconfig file")
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8082", "Address for controller health and metrics endpoints")
 	flag.Parse()
 
 	// 1. Initialize cluster clients
@@ -42,25 +44,13 @@ func main() {
 	// 2. Initialize Reconciler
 	reconciler := simulator.NewReconciler(clientset, dynamicClient)
 
-	// Expose Prometheus metrics endpoint on port 8082
+	runtimeServer := newRuntimeServer(metricsAddr, reconciler)
 	go func() {
-		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprintf(w, "# HELP draforge_controller_reconcile_errors_total Total number of reconciliation errors\n")
-			_, _ = fmt.Fprintf(w, "# TYPE draforge_controller_reconcile_errors_total counter\n")
-			_, _ = fmt.Fprintf(w, "draforge_controller_reconcile_errors_total %d\n", atomic.LoadInt64(&reconciler.ReconcileErrorsCount))
-
-			_, _ = fmt.Fprintf(w, "# HELP draforge_controller_allocations_simulated_total Total number of simulated allocations\n")
-			_, _ = fmt.Fprintf(w, "# TYPE draforge_controller_allocations_simulated_total counter\n")
-			_, _ = fmt.Fprintf(w, "draforge_controller_allocations_simulated_total %d\n", atomic.LoadInt64(&reconciler.AllocationsSimulated))
-
-			_, _ = fmt.Fprintf(w, "# HELP draforge_controller_active_faults Total number of active faults\n")
-			_, _ = fmt.Fprintf(w, "# TYPE draforge_controller_active_faults gauge\n")
-			_, _ = fmt.Fprintf(w, "draforge_controller_active_faults %d\n", atomic.LoadInt64(&reconciler.ActiveFaultsCount))
-		})
-		fmt.Println("Controller metrics server listening on :8082...")
-		_ = http.ListenAndServe(":8082", nil)
+		fmt.Printf("Controller runtime server listening on %s...\n", metricsAddr)
+		if err := runtimeServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Printf("Controller runtime server error: %v\n", err)
+			stop()
+		}
 	}()
 
 	// 3. Start reconciliation loop (sync pools to ResourceSlices)
@@ -71,5 +61,11 @@ func main() {
 
 	// Keep running until signal received
 	<-ctx.Done()
+
+	ctx2, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := runtimeServer.Shutdown(ctx2); err != nil {
+		fmt.Printf("Controller runtime server stop error: %v\n", err)
+	}
 	fmt.Println("DRAForge Simulation Controller stopped.")
 }

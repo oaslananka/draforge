@@ -30,6 +30,22 @@ spec:
         - name: controller
           image: "{{ .Values.global.imageRegistry }}/{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}"
           imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+          ports:
+            - name: runtime
+              containerPort: {{ .Values.controller.metrics.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: runtime
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: runtime
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             {{- toYaml .Values.controller.resources | nindent 12 }}
           securityContext:

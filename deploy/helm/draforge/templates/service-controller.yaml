@@ -1,0 +1,19 @@
+{{- if .Values.controller.metrics.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "draforge.fullname" . }}-controller
+  labels:
+    {{- include "draforge.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  type: {{ .Values.controller.metrics.service.type }}
+  selector:
+    {{- include "draforge.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+  ports:
+    - name: runtime
+      port: {{ .Values.controller.metrics.service.port }}
+      targetPort: runtime
+      protocol: TCP
+{{- end }}

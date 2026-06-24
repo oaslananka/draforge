@@ -1,0 +1,33 @@
+# Artifact Gate Checklist
+
+Before publishing a version, confirm the target commit has green CI.
+
+Required checks:
+
+- Go Lint & Test
+- Web Lint & Build
+- Helm Chart Lint & Template
+- GoReleaser Dry-Run
+- Terraform Validate
+- CI Pass
+
+The CI gate verifies these outputs:
+
+- `dist/checksums.txt`
+- `dist/draforge_*`
+- `dist/draforge-controller_*`
+- `dist/draforge-sim-driver_*`
+- `charts/draforge-*.tgz`
+
+Manual commands:
+
+```bash
+pnpm --dir web install --frozen-lockfile
+pnpm --dir web build
+helm lint deploy/helm/draforge
+mkdir -p charts
+helm package deploy/helm/draforge --destination charts
+goreleaser release --snapshot --clean --skip=docker,sbom,sign
+```
+
+If a publishing job fails before assets are available, fix the issue and rerun from a clean commit. If assets are already available to users, publish a new patch version rather than replacing them silently.

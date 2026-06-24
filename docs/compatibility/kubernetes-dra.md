@@ -1,186 +1,200 @@
 # Kubernetes DRA Compatibility
 
-> **Last updated:** 2026-06-16  
-> **Kubernetes reference:** v1.34 / v1.35 / v1.36  
+> **Last updated:** 2026-06-24  
+> **Kubernetes reference:** v1.32 through v1.36  
 > **DRAForge version:** 0.1.0
 
 ---
 
-## Supported Kubernetes Versions
+## Compatibility Position
 
-DRAForge targets the Kubernetes **Dynamic Resource Allocation (DRA) structured-parameters**
-API (`resource.k8s.io/v1`), which is **General Availability (GA) since Kubernetes v1.34**.
+DRAForge targets Kubernetes **Dynamic Resource Allocation (DRA)** using the
+`resource.k8s.io/v1` structured-parameters API. As of the current upstream
+Kubernetes documentation, core DRA is **stable in Kubernetes v1.35** and is
+enabled by default.
 
-| K8s Version | DRA Status | DRAForge Support       |
-|-------------|------------|------------------------|
-| v1.32       | Beta       | Compatible (v1 API)    |
-| v1.33       | Beta       | Compatible (v1 API)    |
-| **v1.34**   | **GA**     | **Recommended**        |
-| v1.35       | GA         | Compatible             |
-| v1.36       | GA         | Compatible             |
-| < v1.32     | Classic    | Not compatible         |
+DRAForge therefore treats **Kubernetes v1.35+** as the recommended compatibility
+baseline. Kubernetes v1.32 through v1.34 may expose parts of the same API shape
+in earlier maturity states, but those versions should be treated as legacy or
+transition targets and must be validated per distribution.
 
-> **Assumption:** `resource.k8s.io/v1` API group is served by the cluster.
-> Older clusters with DRA classic (pre-v1.32) use a different API shape and are
-> **not supported** by DRAForge.
+| Kubernetes version | Upstream DRA status | DRAForge stance |
+| --- | --- | --- |
+| v1.36 | Stable core DRA plus additional alpha/beta extensions | Supported target, with extension gaps documented below |
+| v1.35 | Stable core DRA, enabled by default | Recommended baseline |
+| v1.34 | Transition-era DRA support | Best-effort only; validate API availability |
+| v1.32-v1.33 | Earlier DRA API maturity | Best-effort only; feature gates and API shape must be checked |
+| < v1.32 | Legacy / incompatible API shape | Not supported |
 
-### Tested Kubernetes Versions
-
-| Distribution | Version | DRAForge Tested |
-|-------------|---------|-----------------|
-| kind (local) | v1.32 (with DRA feature gate) | Manual |
-| DOKS | v1.34 (DRA GA) | CI + Manual |
-
----
-
-## API Surface
-
-DRAForge uses the following `resource.k8s.io/v1` API endpoints:
-
-| Resource       | API Group              | Verbs Used     | DRA Status |
-|----------------|------------------------|----------------|------------|
-| ResourceClaim  | `resource.k8s.io/v1`   | `get, list`    | GA         |
-| ResourceSlice  | `resource.k8s.io/v1`   | `get, list`    | GA         |
-| DeviceClass    | `resource.k8s.io/v1`   | `get, list`    | GA         |
-| Pod            | `v1`                   | `get, list`    | GA         |
-| Node           | `v1`                   | `get, list`    | GA         |
-
-DRAForge **does not use** the following legacy API groups:
-- `resource.k8s.io/v1beta1` (K8s ≤1.30, removed in v1.34)
-- `resource.k8s.io/v1beta2` (K8s ≤1.32, removed in v1.34)
-- `resource.k8s.io/v1alpha3` (alpha features)
+> DRAForge assumes that `resource.k8s.io/v1` is served by the cluster. If the
+> API group or version is not present, the doctor and discovery layers must
+> surface that as a partial or unavailable DRA state, not as an empty cluster.
 
 ---
 
-## DRA Feature Status
+## Tested Kubernetes Versions
 
-The table below shows the **upstream Kubernetes DRA feature status** as of K8s v1.36.
-This is informational; DRAForge may not implement all features.
+| Distribution | Version | Test status |
+| --- | --- | --- |
+| GitHub Actions / static CI | n/a | Helm template, web build, Go test through CI |
+| kind | v1.32+ | Manual / planned E2E matrix |
+| DOKS | v1.34+ | Manual showcase target |
+| v1.35+ conformant clusters | v1.35-v1.36 | Target for release-readiness E2E |
 
-| Feature                     | K8s v1.34 | K8s v1.35 | K8s v1.36 |
-|-----------------------------|-----------|-----------|-----------|
-| Core DRA (structured params)| **GA**    | **GA**    | **GA**    |
-| ResourceHealthStatus        | Alpha     | Beta      | Beta      |
-| Partitionable Devices       | Alpha     | Beta      | Beta      |
-| Device Taints               | Alpha     | Beta      | Beta      |
-| Device Taint Rules          | —         | Alpha     | Alpha     |
-| Admin Access                | Alpha     | Beta      | Beta      |
-| Extended Resource           | Alpha     | Beta      | **GA**    |
-| Prioritized List            | —         | Alpha     | Beta      |
-| DRAWorkloadResourceClaims   | Alpha     | Alpha     | Alpha     |
-| Device Binding Conditions   | Alpha     | Alpha     | Alpha     |
-| Node Allocatable Resources  | —         | —         | Alpha     |
+The repository currently does **not** contain a fully automated real-cluster DRA
+matrix for every supported Kubernetes version. That is tracked separately in the
+roadmap.
 
-Sources:
-- [Kubernetes DRA concept docs](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/)
-- [Kubernetes v1.34: DRA has graduated to GA](https://kubernetes.io/blog/2025/09/01/kubernetes-v1-34-dra-updates/)
-- [Kubernetes v1.36: DRA updates](https://kubernetes.io/blog/2026/05/07/kubernetes-v1-36-dra-136-updates/)
+---
+
+## Upstream DRA Feature Status
+
+The table below captures the compatibility model DRAForge should use as of
+2026-06-24. It is intentionally conservative: stable core APIs are considered
+baseline; alpha/beta extensions are discovered or explained only when the code
+explicitly supports them.
+
+| Capability | Upstream status as of v1.36 docs | DRAForge 0.1.0 support |
+| --- | --- | --- |
+| Core Dynamic Resource Allocation | Stable since v1.35 | Supported for discovery and visualization |
+| DeviceClass | Stable core DRA | Discovered; selector evaluation is partial |
+| ResourceClaim / ResourceClaimTemplate | Stable core DRA | Claims discovered; templates read-only / limited |
+| ResourceSlice | Stable core DRA | Discovered and used for graph/doctor views |
+| CEL device filtering | Stable core behavior | Partial; regex-like evaluator must be replaced |
+| ResourceClaim device status | Observability feature | Partial display only |
+| Device health monitoring | Observability feature | Partial; custom health label fallback remains |
+| Admin access | Beta extension | Not implemented |
+| Granular status authorization | Beta extension | Not implemented |
+| Extended resource allocation by DRA | Alpha extension | Not implemented |
+| Partitionable devices | Alpha extension | Not implemented |
+| Consumable capacity | Alpha extension | Partially displayed; no allocation scoring |
+| Device taints and tolerations | Alpha extension | Not implemented |
+| Resource pool status | Alpha extension | Not implemented |
+| Device binding conditions | Alpha extension | Not implemented |
+| Node allocatable resources | Alpha extension | Not implemented |
+| DRA device metadata in containers | Alpha extension | Not implemented |
+| List type attributes | Alpha extension | Not implemented |
 
 ---
 
 ## DRAForge Support Matrix
 
-| Feature                       | Kubernetes Status | DRAForge Status             | Notes |
-|-------------------------------|-------------------|-----------------------------|-------|
-| ResourceSlice discovery       | GA (v1.34+)       | supported                   | Full listing via `resource.k8s.io/v1` |
-| ResourceClaim discovery       | GA (v1.34+)       | supported                   | Status, allocation, owner pod mapping |
-| DeviceClass discovery         | GA (v1.34+)       | partial                     | Listed via discovery but not used in explain engine |
-| Claim allocation explain      | GA (v1.34+)       | supported                   | Explain engine uses K8s events + conditions |
-| Device health                 | Beta (v1.35+, default-on) | partial           | Reads `draforge.oaslananka/health` label from ResourceSlice; does **not** consume native `ResourceHealthStatus` |
-| Consumable capacity           | GA (v1.34+)       | partial                     | Capacity values read; no capacity-exhaustion scoring |
-| Device taints/tolerations     | Beta (v1.35+, default-on) | unsupported        | No taint reading or evaluation in DRAForge |
-| Granular status authorization | Beta (v1.35+, default-on) | unsupported        | Admin-access subresources not implemented |
-| CDI simulation                | GA (v1.34+)       | partial                     | CDI volume mounted in Helm chart; no CDI file generation |
-| Partitionable devices         | Beta (v1.35+, default-on) | unsupported        | Not implemented |
-| Prioritized device requests   | Beta (v1.35+, default-on) | unsupported        | Not implemented |
-| Extended resource integration | GA (v1.37+)       | unsupported                 | Not implemented |
-| DRAWorkloadResourceClaims     | Alpha (v1.34+)    | unsupported                 | Out of scope for 0.1.0 |
-
----
-
-## Detailed Compatibility Matrix: Claims, Slices and Allocation Flows
-
-The table below breaks down support for specific DRA objects and scheduling flows:
-
-| Flow / Resource Concept | Details & Configuration | DRAForge Support | Implementation / Validation Notes |
-|:---|:---|:---|:---|
-| **ResourceClaim Allocation Mode: Immediate** | Claim allocated immediately upon creation by control plane. | **Fully Supported** | Handled by simulation engine, mapped in graph visualizer and TUI. |
-| **ResourceClaim Allocation Mode: WaitForFirstConsumer** | Allocation deferred until Pod using the claim is scheduled on a Node. | **Fully Supported** | Handled natively. The explain engine diagnoses pending status during the scheduling cycle. |
-| **ResourceSlice: Structured Parameters** | Standard GA (`resource.k8s.io/v1`) layout containing device pools and parameters. | **Fully Supported** | Primary driver representation in DRAForge. |
-| **ResourceSlice: Named Resources** | Classic K8s v1.32/v1.33 style with named resource parameters. | **Compatible** | Supported if the API endpoint is `v1`. |
-| **Direct Controller-based Allocation** | Driver-specific control loops allocating device claims. | **Supported** | Simulates and monitors events via standard event log diagnostics. |
+| Feature | Status | Notes |
+| --- | --- | --- |
+| ResourceSlice discovery | Supported | Uses `resource.k8s.io/v1` and should expose API errors as partial state |
+| ResourceClaim discovery | Supported | Reads status/allocation data and maps claims to Pods where possible |
+| DeviceClass discovery | Partial | DeviceClasses are listed, but full CEL selector behavior is not implemented |
+| Claim allocation explain | Partial | Useful diagnostics exist, but modern DRA selector, taint and binding features are incomplete |
+| Simulator allocation | Partial | Demo allocation exists; full scheduler-compatible DRA semantics are roadmap work |
+| Device health | Partial | Custom label fallback exists; native health status support is incomplete |
+| Consumable capacity | Partial | Values can be displayed; capacity-aware allocation and exhaustion scoring are missing |
+| CDI output | Partial | The simulator can produce CDI-oriented output, but Helm deployment modes must clearly separate demo and host-integrated operation |
+| Helm CRD packaging | Supported | The SimulatedDevicePool CRD is packaged under chart `crds/` for Helm install |
+| RBAC least privilege | Partial | Current chart still needs narrower controller permissions |
+| Real-cluster E2E coverage | Partial | Automated matrix is planned but not complete |
 
 ---
 
 ## Known Limitations
 
-1. **DeviceClass discovery**: DRAForge lists DeviceClasses via the API but does
-   **not** use them in the explain engine or doctor checks. DeviceClass selectors
-   and CEL expressions are not evaluated.
+1. **DeviceClass selector evaluation is incomplete.** DRAForge can discover
+   DeviceClasses, but the explain and simulator paths do not yet implement the
+   full Kubernetes CEL matching behavior.
 
-2. **Device health**: DRAForge reads health from a custom label
-   (`draforge.oaslananka/health`) on ResourceSlices, not from the upstream
-   `ResourceHealthStatus` feature. Until DRAForge migrates to the standard
-   health reporting, device health visibility depends on the driver populating
-   this label.
+2. **Simulator allocation is not scheduler-equivalent.** It should not be used
+   as a conformance oracle until ResourceClaim request modes, DeviceClass
+   selectors, capacities, taints, binding conditions and reserved-for behavior
+   are fully modeled.
 
-3. **Device taints/tolerations**: Neither taints defined on ResourceSlice devices
-   nor tolerations on ResourceClaims are inspected. The explain engine does not
-   account for device-level taints.
+3. **Native health and status features are incomplete.** DRAForge still relies
+   on custom labels or simplified status interpretation in some paths.
 
-4. **Granular status authorization**: The upstream DRA Admin Access feature
-   allows per-device status visibility. DRAForge currently reads all
-   ResourceSlices/ResourceClaims cluster-wide via its read-only ClusterRole.
+4. **CDI mode must be explicit.** Demo-local output and host-integrated kubelet
+   CDI output are different operational modes and should not be presented as the
+   same production behavior.
 
-5. **CDI output**: The node plugin mounts the CDI staging directory but does not
-   generate CDI specification files. Real DRA drivers are expected to produce
-   their own CDI output.
+5. **Granular authorization is not implemented.** DRAForge currently assumes
+   broad enough read access to observe DRA objects. Per-device status visibility
+   and admin-access flows are future work.
 
-6. **Capacity scoring**: DRAForge reads and displays device capacity values but
-   does not implement capacity-exhaustion scoring or prioritization across
-   pools.
-
-7. **Version assumptions**: DRAForge assumes `resource.k8s.io/v1` is served.
-   Clusters that only serve v1beta1/v1beta2 (K8s < v1.34 with legacy API groups)
-   require explicit API group configuration.
+6. **Alpha/beta DRA extensions are not guaranteed.** v1.36-era alpha features
+   such as partitionable devices, consumable capacity, device taints, binding
+   conditions and node allocatable resources require explicit support before
+   DRAForge can diagnose them accurately.
 
 ---
 
-## Quick-Start Troubleshooting
+## API Surface
 
-### Missing DRA APIs (e.g. `resource.k8s.io` not found)
+DRAForge uses or plans around the following Kubernetes APIs.
 
-If you see errors like:
-> `Failed to list *v1.ResourceClaim: the server could not find the requested resource`
-or
-> `resource.k8s.io/v1 API group is not registered`
+| Resource | API group | Current use |
+| --- | --- | --- |
+| Pods | `core/v1` | Read-only discovery and owner mapping |
+| Nodes | `core/v1` | Read-only node and graph context |
+| Events | `core/v1` | Diagnostics and controller events |
+| ResourceClaims | `resource.k8s.io/v1` | Discovery, explain and simulator status paths |
+| ResourceClaimTemplates | `resource.k8s.io/v1` | Read-only discovery |
+| ResourceSlices | `resource.k8s.io/v1` | Discovery, graph, simulator output |
+| DeviceClasses | `resource.k8s.io/v1` | Discovery and future selector evaluation |
+| SimulatedDevicePools | `draforge.oaslananka/v1alpha1` | DRAForge simulator CRD |
 
-**Solution:**
-1. **Verify Kubernetes Version**: DRA structured parameters graduated to GA in **v1.34**. Ensure your cluster version is at least v1.32.
-2. **Enable Feature Gate**: For Kubernetes v1.32 or v1.33, verify that the `DynamicResourceAllocation` feature gate is explicitly enabled on your API Server, Controller Manager, Scheduler, and Kubelets:
-   ```bash
-   --feature-gates=DynamicResourceAllocation=true
-   ```
-3. **Legacy API Versions**: Older clusters that only serve `v1beta1` or `v1beta2` (K8s < v1.34) are not supported by the default `v1` client. You must upgrade the API group version.
+DRAForge does **not** aim to support legacy non-v1 DRA API groups by default.
+If a distribution serves only older APIs, users should upgrade the cluster or add
+an explicit compatibility adapter.
 
-### Missing SimulatedDevicePool CRD
+---
 
-If you see errors like:
-> `failed to list SimulatedDevicePools: the server could not find the requested resource`
+## Quick Troubleshooting
 
-**Solution:**
-Register the CRD in your cluster before applying scenarios or starting the simulator:
+### `resource.k8s.io/v1` is missing
+
+Symptoms include errors such as:
+
+```text
+the server could not find the requested resource
+resource.k8s.io/v1 API group is not registered
+```
+
+Check:
+
+```bash
+kubectl api-resources --api-group=resource.k8s.io
+kubectl version
+```
+
+Use Kubernetes v1.35+ for the default compatibility path. For older clusters,
+verify feature gates and served API versions before using DRAForge.
+
+### SimulatedDevicePool CRD is missing
+
+The Helm chart now packages the CRD under `deploy/helm/draforge/crds/`. For
+manual installs, the standalone CRD remains available:
+
 ```bash
 kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
 ```
 
+For Helm installs, use:
+
+```bash
+helm install draforge deploy/helm/draforge --namespace draforge-system --create-namespace
+```
+
+### Discovery shows no DRA objects
+
+An empty graph can mean either “no DRA objects exist” or “the DRA API is not
+available.” The discovery layer should preserve those as different states. If the
+current UI shows only an empty result, run the doctor command and inspect API
+availability warnings.
+
 ---
 
-## RBAC Requirements
+## RBAC Guidance
 
-### Server (Read-Only)
+### Server
 
-The DRAForge server requires **read-only** access to present the dashboard and API:
+The server should remain read-only:
 
 ```yaml
 apiGroups: [""]
@@ -188,7 +202,7 @@ resources: [pods, nodes, namespaces, events]
 verbs: [get, list, watch]
 
 apiGroups: [resource.k8s.io]
-resources: [resourceclaims, resourceslices, deviceclasses, resourceclaimtemplates]
+resources: [resourceclaims, resourceclaimtemplates, resourceslices, deviceclasses]
 verbs: [get, list, watch]
 
 apiGroups: [draforge.oaslananka]
@@ -196,10 +210,9 @@ resources: [simulateddevicepools]
 verbs: [get, list, watch]
 ```
 
-### Controller (Simulation Write)
+### Controller
 
-The DRAForge controller creates ResourceSlices and manages ResourceClaims
-for simulation scenarios:
+The controller should use the narrowest write access possible:
 
 ```yaml
 apiGroups: [""]
@@ -211,78 +224,55 @@ resources: [events]
 verbs: [create, patch]
 
 apiGroups: [resource.k8s.io]
-resources: [resourceclaims, resourceclaims/status, resourceslices]
-verbs: [*]
+resources: [resourceslices]
+verbs: [get, list, watch, create, update, patch, delete]
+
+apiGroups: [resource.k8s.io]
+resources: [resourceclaims]
+verbs: [get, list, watch, patch]
+
+apiGroups: [resource.k8s.io]
+resources: [resourceclaims/status]
+verbs: [get, update, patch]
 
 apiGroups: [resource.k8s.io]
 resources: [deviceclasses, resourceclaimtemplates]
 verbs: [get, list, watch]
 
 apiGroups: [draforge.oaslananka]
-resources: [simulateddevicepools, simulateddevicepools/status]
-verbs: [*]
-```
-
-### Node Plugin
-
-The node plugin daemon only needs to read claims for its node:
-
-```yaml
-apiGroups: [""]
-resources: [nodes, pods]
+resources: [simulateddevicepools]
 verbs: [get, list, watch]
 
-apiGroups: [resource.k8s.io]
-resources: [resourceclaims]
-verbs: [get, list, watch]
+apiGroups: [draforge.oaslananka]
+resources: [simulateddevicepools/status]
+verbs: [get, update, patch]
 ```
 
-### Separation Principle
-
-- **Server** → never writes to any K8s resource. All mutations are CLI-only and
-  use the operator's local `kubeconfig`.
-- **Controller** → minimal write access: only `resourceclaims/status`,
-  `resourceslices`, `events`, and its own CRD.
-- **Node plugin** → scoped to read-only for its own node.
+This is the target policy. The chart must be audited separately to remove any
+remaining wildcard verbs.
 
 ---
 
-## Operational Notes
+## Release Readiness Implications
 
-- **Feature gates**: DRAForge only requires the core `DynamicResourceAllocation`
-  feature gate (GA and enabled by default since v1.34). Optional beta/alpha
-  features (health, taints, etc.) are not required for basic functionality.
-- **API priority**: DRAForge uses `resource.k8s.io/v1` exclusively. For clusters
-  that only serve `v1beta2` (v1.32–v1.33), DRAForge will detect this and warn
-  via the doctor check but is functionally compatible.
-- **Kubelet plugin CDI path**: The Helm chart mounts
-  `/var/lib/kubelet/device-plugins/cdi` for the node plugin. This path must
-  exist on the host or be consistent with the kubelet CDI configuration.
-- **ResourceClaimTemplate**: Read but not used for allocation by DRAForge.
+Before DRAForge is called release-ready for Kubernetes DRA, the following must be
+true:
 
----
-
-## Future Work
-
-The following improvements are planned for future releases:
-
-- [ ] Migrate device health from custom label to `ResourceHealthStatus`
-- [ ] Add DeviceClass selector evaluation to explain engine
-- [ ] Add device taint/toleration awareness to explain engine
-- [ ] Implement capacity-exhaustion scoring for pools
-- [ ] Generate CDI spec files in the node plugin
-- [ ] Support granular status authorization (Admin Access)
-- [ ] Add E2E tests against real K8s v1.34+ clusters with a DRA driver
+- The compatibility matrix must be checked against current upstream Kubernetes
+  docs during every minor release.
+- CI must run Go, web, Helm, Terraform and GoReleaser checks.
+- Helm installs must include the simulator CRD.
+- The doctor command must distinguish missing APIs from empty clusters.
+- The simulator and explain engine must clearly mark unsupported DRA features as
+  unsupported rather than silently approximating them.
+- Real-cluster E2E tests must cover at least one v1.35+ cluster.
 
 ---
 
 ## References
 
-- [Kubernetes DRA Documentation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/)
+- [Kubernetes Dynamic Resource Allocation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/)
 - [Set Up DRA in a Cluster](https://kubernetes.io/docs/tasks/configure-pod-container/assign-resources/set-up-dra-cluster/)
 - [ResourceClaim v1 API](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/resource-claim-v1/)
 - [ResourceSlice v1 API](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/resource-slice-v1/)
 - [DeviceClass v1 API](https://kubernetes.io/docs/reference/kubernetes-api/resource/device-class-v1/)
-- [K8s v1.34: DRA GA blog post](https://kubernetes.io/blog/2025/09/01/kubernetes-v1-34-dra-updates/)
-- [K8s v1.36: DRA updates blog post](https://kubernetes.io/blog/2026/05/07/kubernetes-v1-36-dra-136-updates/)
-- [DRA promotion to GA tracking issue](https://github.com/kubernetes/kubernetes/issues/131903)

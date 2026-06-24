@@ -88,9 +88,32 @@ func TestServerEndpoints(t *testing.T) {
 	if !contains(bodyStr, "draforge_claims_by_status") {
 		t.Errorf("expected metrics to contain draforge_claims_by_status, got: %s", bodyStr)
 	}
-	// Legacy metric still present
-	if !contains(bodyStr, "draforge_claims_total") {
-		t.Errorf("expected metrics to contain draforge_claims_total, got: %s", bodyStr)
+	// High-cardinality detail metrics are disabled by default.
+	if contains(bodyStr, "draforge_claims_total{") {
+		t.Errorf("expected detailed claim metrics to be disabled by default, got: %s", bodyStr)
+	}
+}
+
+func TestDetailedMetricsEnabledConfig(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{"empty", "", false},
+		{"one", "1", true},
+		{"true", "true", true},
+		{"yes", "yes", true},
+		{"off", "off", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DRAFORGE_METRICS_DETAIL", tt.value)
+			if got := detailedMetricsEnabled(); got != tt.want {
+				t.Errorf("detailedMetricsEnabled() = %t, want %t", got, tt.want)
+			}
+		})
 	}
 }
 

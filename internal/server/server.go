@@ -440,6 +440,15 @@ func (s *Server) respondError(w http.ResponseWriter, err error, code int) {
 	})
 }
 
+func detailedMetricsEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("DRAFORGE_METRICS_DETAIL"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 // Metrics
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	pools, devices, claims, err := discovery.DiscoverDRA(r.Context(), s.clientset)
@@ -452,31 +461,33 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 
-	// 1. Pools
-	_, _ = fmt.Fprintf(w, "# HELP draforge_pools_total Total number of device pools\n")
-	_, _ = fmt.Fprintf(w, "# TYPE draforge_pools_total gauge\n")
-	for _, p := range pools {
-		_, _ = fmt.Fprintf(w, "draforge_pools_total{pool=%q,driver=%q,node=%q,synthetic=%t,health=%q} 1\n",
-			p.Name, p.DriverName, p.NodeName, p.IsSynthetic, p.Health)
+	if detailedMetricsEnabled() {
+		// 1. Pools
+		_, _ = fmt.Fprintf(w, "# HELP draforge_pools_total Total number of device pools\n")
+		_, _ = fmt.Fprintf(w, "# TYPE draforge_pools_total gauge\n")
+		for _, p := range pools {
+			_, _ = fmt.Fprintf(w, "draforge_pools_total{pool=%q,driver=%q,node=%q,synthetic=%t,health=%q} 1\n",
+				p.Name, p.DriverName, p.NodeName, p.IsSynthetic, p.Health)
+		}
+
+		// 2. Devices
+		_, _ = fmt.Fprintf(w, "# HELP draforge_devices_total Total number of devices\n")
+		_, _ = fmt.Fprintf(w, "# TYPE draforge_devices_total gauge\n")
+		for _, d := range devices {
+			_, _ = fmt.Fprintf(w, "draforge_devices_total{device=%q,pool=%q,node=%q,type=%q,status=%q,synthetic=%t} 1\n",
+				d.Name, d.PoolName, d.NodeName, d.Type, d.Status, d.IsSynthetic)
+		}
+
+		// 3. Claims
+		_, _ = fmt.Fprintf(w, "# HELP draforge_claims_total Total number of ResourceClaims\n")
+		_, _ = fmt.Fprintf(w, "# TYPE draforge_claims_total gauge\n")
+		for _, c := range claims {
+			_, _ = fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,status=%q} 1\n",
+				c.Name, c.Namespace, c.DeviceClassName, c.Status)
+		}
 	}
 
-	// 2. Devices
-	_, _ = fmt.Fprintf(w, "# HELP draforge_devices_total Total number of devices\n")
-	_, _ = fmt.Fprintf(w, "# TYPE draforge_devices_total gauge\n")
-	for _, d := range devices {
-		_, _ = fmt.Fprintf(w, "draforge_devices_total{device=%q,pool=%q,node=%q,type=%q,status=%q,synthetic=%t} 1\n",
-			d.Name, d.PoolName, d.NodeName, d.Type, d.Status, d.IsSynthetic)
-	}
-
-	// 3. Claims
-	_, _ = fmt.Fprintf(w, "# HELP draforge_claims_total Total number of ResourceClaims\n")
-	_, _ = fmt.Fprintf(w, "# TYPE draforge_claims_total gauge\n")
-	for _, c := range claims {
-		_, _ = fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,status=%q} 1\n",
-			c.Name, c.Namespace, c.DeviceClassName, c.Status)
-	}
-
-	// 4. Summary metrics (low cardinality)
+	// Summary metrics (low cardinality)
 	_, _ = fmt.Fprintf(w, "# HELP draforge_pools_count Total device pools\n")
 	_, _ = fmt.Fprintf(w, "# TYPE draforge_pools_count gauge\n")
 	_, _ = fmt.Fprintf(w, "draforge_pools_count %d\n", len(pools))

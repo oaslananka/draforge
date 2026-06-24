@@ -1,0 +1,35 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.0",
+  "resource_changes": [
+    {
+      "type": "digitalocean_vpc",
+      "name": "draforge_vpc",
+      "change": {
+        "actions": ["create"],
+        "after": {"name": "draforge-vpc-showcase", "region": "fra1"}
+      }
+    },
+    {
+      "type": "digitalocean_kubernetes_cluster",
+      "name": "draforge_cluster",
+      "change": {
+        "actions": ["create"],
+        "after": {
+          "ha": false,
+          "node_pool": [
+            {"name": "draforge-workers", "size": "s-4vcpu-8gb", "node_count": 2, "auto_scale": false}
+          ]
+        }
+      }
+    },
+    {
+      "type": "digitalocean_container_registry",
+      "name": "draforge_registry",
+      "change": {
+        "actions": ["create"],
+        "after": {"name": "draforge", "subscription_tier_slug": "starter"}
+      }
+    }
+  ]
+}

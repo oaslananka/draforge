@@ -56,3 +56,7 @@ make infra-destroy-plan
 cd infra/terraform/environments/showcase
 terraform destroy -auto-approve
 ```
+
+## Terraform Showcase Validation Workflow
+
+Run scripts/validate-terraform-showcase.sh before changing showcase infrastructure.

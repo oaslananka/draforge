@@ -86,16 +86,20 @@ tasks:
     cmds:
       - helm lint deploy/helm/draforge
 
+  infra:preflight:
+    desc: Validate Terraform showcase tools and static configuration
+    cmds:
+      - '{{.BASH_BIN}} scripts/validate-terraform-showcase.sh'
+
   infra:init:
     desc: Initialize Terraform
     cmds:
       - cd infra/terraform/environments/showcase && terraform init
 
   infra:plan:
-    desc: Generate Terraform plan
+    desc: Generate Terraform plan and run showcase policy validation
     cmds:
-      - cd infra/terraform/environments/showcase && terraform plan -out=tfplan
-      - cd infra/terraform/environments/showcase && terraform show -json tfplan > tfplan.json
+      - '{{.BASH_BIN}} scripts/validate-terraform-showcase.sh --plan'
 
   infra:validate:
     desc: Validate Terraform plan via validation policy
@@ -113,6 +117,11 @@ tasks:
     desc: Audit active DigitalOcean resources
     cmds:
       - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
+
+  infra:cost:
+    desc: Estimate active DigitalOcean resource cost
+    cmds:
+      - '{{.BASH_BIN}} scripts/cost-report.sh'
 
   sbom:
     desc: Generate CycloneDX SBOM

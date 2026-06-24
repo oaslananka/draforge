@@ -1,0 +1,27 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.0",
+  "resource_changes": [
+    {
+      "type": "digitalocean_droplet",
+      "name": "extra_gpu_node",
+      "change": {
+        "actions": ["create"],
+        "after": {"name": "extra", "size": "gpu-h100x1-80gb"}
+      }
+    },
+    {
+      "type": "digitalocean_kubernetes_cluster",
+      "name": "expensive_cluster",
+      "change": {
+        "actions": ["create"],
+        "after": {
+          "ha": true,
+          "node_pool": [
+            {"name": "workers", "size": "s-gpu-1", "node_count": 4, "auto_scale": true}
+          ]
+        }
+      }
+    }
+  ]
+}

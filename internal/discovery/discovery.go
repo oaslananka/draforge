@@ -154,6 +154,7 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 					Name:        devSpec.Name,
 					Type:        devType,
 					Status:      healthVal, // Propagated health status
+					DriverName:  driverName,
 					NodeName:    nodeNameStr,
 					PoolName:    poolName,
 					Attributes:  attrs,

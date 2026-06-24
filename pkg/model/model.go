@@ -12,6 +12,7 @@ type Device struct {
 	Name        string            `json:"name"`
 	Type        string            `json:"type"`        // gpu, camera, fpga, nic, etc.
 	Status      string            `json:"status"`      // healthy, unhealthy, allocated, pending
+	DriverName  string            `json:"driverName"`  // DRA driver that published the device
 	NodeName    string            `json:"nodeName"`    // Node where the device resides
 	PoolName    string            `json:"poolName"`    // Pool the device belongs to
 	Attributes  map[string]string `json:"attributes"`  // Model, vendor, driver-version, etc.

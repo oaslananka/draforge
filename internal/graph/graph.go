@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/oaslananka/draforge/internal/discovery"
 	"github.com/oaslananka/draforge/pkg/model"
@@ -36,6 +38,46 @@ func edgeKey(from, to, edgeType string) string {
 	return from + "\x00" + to + "\x00" + edgeType
 }
 
+func graphID(kind string, parts ...string) string {
+	encoded := make([]string, 0, len(parts)+1)
+	encoded = append(encoded, kind)
+	for _, part := range parts {
+		encoded = append(encoded, fmt.Sprintf("%d:%s", len(part), part))
+	}
+	return strings.Join(encoded, "/")
+}
+
+func poolLookupKey(nodeName, poolName string) string {
+	return nodeName + "\x00" + poolName
+}
+
+func poolGraphID(driverName, nodeName, poolName string) string {
+	return graphID("pool", driverName, nodeName, poolName)
+}
+
+func deviceGraphID(driverName, nodeName, poolName, deviceName string) string {
+	return graphID("device", driverName, nodeName, poolName, deviceName)
+}
+
+func missingDeviceGraphID(driverName, nodeName, deviceName string) string {
+	return graphID("device", "missing", driverName, nodeName, deviceName)
+}
+
+func mermaidID(raw string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(raw))
+
+	var sb strings.Builder
+	for _, r := range raw {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteByte('_')
+		}
+	}
+	return fmt.Sprintf("n%x_%s", h.Sum32(), sb.String())
+}
+
 // BuildGraph queries the cluster and builds nodes and edges representing the live relationships.
 func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Interface, namespaceFilter, driverFilter string) (*model.ResourceGraph, error) {
 	gb.nodes = []model.GraphNode{}
@@ -57,10 +99,13 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 		}
 	}
 
-	// Pre-compute pool→driver mapping for device filter.
-	poolToDriver := make(map[string]string, len(pools))
+	// Pre-compute pool lookup maps for driver filtering and stable graph IDs.
+	poolDriverByLookup := make(map[string]string, len(pools))
+	poolIDByLookup := make(map[string]string, len(pools))
 	for _, p := range pools {
-		poolToDriver[p.Name] = p.DriverName
+		key := poolLookupKey(p.NodeName, p.Name)
+		poolDriverByLookup[key] = p.DriverName
+		poolIDByLookup[key] = poolGraphID(p.DriverName, p.NodeName, p.Name)
 	}
 
 	// 2. Add Namespace nodes (deduplicated)
@@ -84,7 +129,7 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 		}
 		driverMap[p.DriverName] = true
 
-		poolID := "pool/" + p.Name
+		poolID := poolGraphID(p.DriverName, p.NodeName, p.Name)
 		gb.addNode(poolID, "ResourcePool", p.Name, map[string]interface{}{
 			"driver":    p.DriverName,
 			"node":      p.NodeName,
@@ -108,15 +153,18 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 
 	// 4. Add Device nodes
 	for _, d := range devices {
-		// Driver filter: use pool-driver relationship, not substring match.
-		if driverFilter != "" {
-			poolDriver := poolToDriver[d.PoolName]
-			if poolDriver != driverFilter {
-				continue
-			}
+		poolKey := poolLookupKey(d.NodeName, d.PoolName)
+		poolDriver := d.DriverName
+		if poolDriver == "" {
+			poolDriver = poolDriverByLookup[poolKey]
 		}
 
-		devID := "device/" + d.ID
+		// Driver filter: use pool-driver relationship, not substring match.
+		if driverFilter != "" && poolDriver != driverFilter {
+			continue
+		}
+
+		devID := deviceGraphID(poolDriver, d.NodeName, d.PoolName, d.Name)
 		gb.addNode(devID, "Device", d.Name, map[string]interface{}{
 			"type":      d.Type,
 			"node":      d.NodeName,
@@ -126,7 +174,13 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 
 		// Edge: Device -> Pool
 		if d.PoolName != "" {
-			gb.addEdge(devID, "pool/"+d.PoolName, "part-of-pool")
+			poolNodeID := poolGraphID(poolDriver, d.NodeName, d.PoolName)
+			if poolDriver == "" {
+				poolNodeID = poolIDByLookup[poolKey]
+			}
+			if poolNodeID != "" {
+				gb.addEdge(devID, poolNodeID, "part-of-pool")
+			}
 		}
 
 		// Edge: Device -> Node
@@ -166,15 +220,20 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 		if c.AllocatedDevice != "" {
 			foundDevice := false
 			for _, dev := range devices {
-				if dev.Name == c.AllocatedDevice && (c.AllocatedNode == "" || dev.NodeName == c.AllocatedNode) {
-					gb.addEdge(claimID, "device/"+dev.ID, "allocates")
+				poolKey := poolLookupKey(dev.NodeName, dev.PoolName)
+				poolDriver := dev.DriverName
+				if poolDriver == "" {
+					poolDriver = poolDriverByLookup[poolKey]
+				}
+				if dev.Name == c.AllocatedDevice && (c.AllocatedNode == "" || dev.NodeName == c.AllocatedNode) && (c.AllocatedDriver == "" || poolDriver == c.AllocatedDriver) {
+					gb.addEdge(claimID, deviceGraphID(poolDriver, dev.NodeName, dev.PoolName, dev.Name), "allocates")
 					foundDevice = true
 					break
 				}
 			}
 			// Missing edge check: if allocated device is missing, link to virtual ID
 			if !foundDevice {
-				missingDevID := "device/missing/" + c.AllocatedDevice
+				missingDevID := missingDeviceGraphID(c.AllocatedDriver, c.AllocatedNode, c.AllocatedDevice)
 				gb.addNode(missingDevID, "Device", c.AllocatedDevice+" (MISSING)", map[string]interface{}{
 					"status": "missing",
 				})
@@ -302,9 +361,7 @@ func ToMermaid(g *model.ResourceGraph) string {
 
 	// Mermaid nodes
 	for _, n := range g.Nodes {
-		cleanID := strings.ReplaceAll(n.ID, "/", "_")
-		cleanID = strings.ReplaceAll(cleanID, "-", "_")
-		cleanID = strings.ReplaceAll(cleanID, ".", "_")
+		cleanID := mermaidID(n.ID)
 		escapedLabel := strings.ReplaceAll(n.Label, "\"", "")
 		fmt.Fprintf(&sb, "  %s[\"%s<br/>(%s)\"]\n", cleanID, escapedLabel, n.Type)
 	}
@@ -312,12 +369,8 @@ func ToMermaid(g *model.ResourceGraph) string {
 
 	// Mermaid edges
 	for _, e := range g.Edges {
-		cleanFrom := strings.ReplaceAll(e.From, "/", "_")
-		cleanFrom = strings.ReplaceAll(cleanFrom, "-", "_")
-		cleanFrom = strings.ReplaceAll(cleanFrom, ".", "_")
-		cleanTo := strings.ReplaceAll(e.To, "/", "_")
-		cleanTo = strings.ReplaceAll(cleanTo, "-", "_")
-		cleanTo = strings.ReplaceAll(cleanTo, ".", "_")
+		cleanFrom := mermaidID(e.From)
+		cleanTo := mermaidID(e.To)
 		fmt.Fprintf(&sb, "  %s -->|%s| %s\n", cleanFrom, e.Type, cleanTo)
 	}
 

@@ -3,6 +3,7 @@ export interface Device {
   name: string;
   type: string;
   status: string;
+  driverName: string;
   nodeName: string;
   poolName: string;
   attributes: Record<string, string>;

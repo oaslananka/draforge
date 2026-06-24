@@ -22,7 +22,7 @@ func TestEdgeKeyDeterministic(t *testing.T) {
 		want            string
 	}{
 		{"a", "b", "x", "a\x00b\x00x"},
-		{"pool/gpu-pool", "driver/nvidia.com", "managed-by", "pool/gpu-pool\x00driver/nvidia.com\x00managed-by"},
+		{poolGraphID("nvidia.com", "node-1", "gpu-pool"), "driver/nvidia.com", "managed-by", poolGraphID("nvidia.com", "node-1", "gpu-pool") + "\x00driver/nvidia.com\x00managed-by"},
 	}
 	for _, tt := range tests {
 		got := edgeKey(tt.from, tt.to, tt.etype)
@@ -35,6 +35,24 @@ func TestEdgeKeyDeterministic(t *testing.T) {
 	k2 := edgeKey("x", "y", "z")
 	if k1 != k2 {
 		t.Error("edgeKey not deterministic for same input")
+	}
+}
+
+func TestGraphIDCollisionSafety(t *testing.T) {
+	poolA := poolGraphID("driver-a.example", "node-1", "shared-pool")
+	poolB := poolGraphID("driver-b.example", "node-1", "shared-pool")
+	if poolA == poolB {
+		t.Fatalf("pool IDs must include driver identity to avoid collisions: %q", poolA)
+	}
+
+	devA := deviceGraphID("driver-a.example", "node-1", "shared-pool", "gpu-0")
+	devB := deviceGraphID("driver-b.example", "node-1", "shared-pool", "gpu-0")
+	if devA == devB {
+		t.Fatalf("device IDs must include driver identity to avoid collisions: %q", devA)
+	}
+
+	if mermaidID("a/b-c") == mermaidID("a_b_c") {
+		t.Fatal("Mermaid IDs must remain collision-safe after sanitization")
 	}
 }
 
@@ -284,7 +302,7 @@ func newTestClaim(name, namespace, className, allocatedDevice, allocatedNode str
 				Results: []resourcev1.DeviceRequestAllocationResult{
 					{
 						Device: allocatedDevice,
-						Driver: "test-driver",
+						Driver: "nvidia.com",
 						Pool:   allocatedNode,
 					},
 				},
@@ -406,17 +424,17 @@ func TestBuildGraphDriverFilter(t *testing.T) {
 
 	for _, n := range rg.Nodes {
 		switch n.ID {
-		case "pool/gpu-pool":
+		case poolGraphID("nvidia.com", "node-1", "gpu-pool"):
 			hasNvidiaPool = true
-		case "device/nvidia-slice/gpu-0":
+		case deviceGraphID("nvidia.com", "node-1", "gpu-pool", "gpu-0"):
 			hasNvidiaDevice = true
-		case "pool/amd-pool":
+		case poolGraphID("amd.com", "node-2", "amd-pool"):
 			hasAmdPool = true
-		case "device/amd-slice/amd-device-0":
+		case deviceGraphID("amd.com", "node-2", "amd-pool", "amd-device-0"):
 			hasAmdDevice = true
-		case "pool/fake-pool":
+		case poolGraphID("nvidia-fake.io", "node-3", "fake-pool"):
 			hasFakePool = true
-		case "device/fake-slice/fake-device-0":
+		case deviceGraphID("nvidia-fake.io", "node-3", "fake-pool", "fake-device-0"):
 			hasFakeDevice = true
 		case "driver/nvidia.com":
 			hasNvidiaDriver = true
@@ -475,9 +493,9 @@ func TestBuildGraphNoSubstringFalsePositive(t *testing.T) {
 	hasRealDevice := false
 	for _, n := range rg.Nodes {
 		switch n.ID {
-		case "device/slice-1/nvidia-gpu-sim":
+		case deviceGraphID("amd.com", "node-1", "pool-1", "nvidia-gpu-sim"):
 			hasFakeDevice = true
-		case "device/slice-2/real-gpu":
+		case deviceGraphID("nvidia.com", "node-2", "pool-2", "real-gpu"):
 			hasRealDevice = true
 		}
 	}
@@ -685,13 +703,15 @@ func TestBuildGraphExistingBehaviorPreserved(t *testing.T) {
 	}
 
 	// Must-have edges for a basic allocated scenario
+	poolID := poolGraphID("nvidia.com", "node-1", "gpu-pool")
+	deviceID := deviceGraphID("nvidia.com", "node-1", "gpu-pool", "gpu-0")
 	requiredEdges := []string{
-		"pool/gpu-pool -> node/node-1 [located-on]",
-		"pool/gpu-pool -> driver/nvidia.com [managed-by]",
-		"device/slice-1/gpu-0 -> pool/gpu-pool [part-of-pool]",
-		"device/slice-1/gpu-0 -> node/node-1 [located-on]",
+		poolID + " -> node/node-1 [located-on]",
+		poolID + " -> driver/nvidia.com [managed-by]",
+		deviceID + " -> " + poolID + " [part-of-pool]",
+		deviceID + " -> node/node-1 [located-on]",
 		"claim/default/claim-1 -> ns/default [belongs-to]",
-		"claim/default/claim-1 -> device/slice-1/gpu-0 [allocates]",
+		"claim/default/claim-1 -> " + deviceID + " [allocates]",
 		"pod/default/app-pod -> claim/default/claim-1 [claims]",
 		"pod/default/app-pod -> ns/default [belongs-to]",
 	}

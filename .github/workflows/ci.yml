@@ -100,6 +100,12 @@ jobs:
       - name: Helm template smoke test
         run: helm template draforge deploy/helm/draforge
 
+      - name: Package Helm Chart
+        run: |
+          mkdir -p charts
+          helm package deploy/helm/draforge --destination charts
+          ls charts/draforge-*.tgz
+
   goreleaser:
     name: GoReleaser Dry-Run
     runs-on: ubuntu-latest
@@ -120,6 +126,13 @@ jobs:
 
       - name: Dry-run snapshot
         run: goreleaser release --snapshot --clean --skip=docker,sbom,sign
+
+      - name: Verify snapshot artifacts
+        run: |
+          test -f dist/checksums.txt
+          ls dist/draforge_*
+          ls dist/draforge-controller_*
+          ls dist/draforge-sim-driver_*
 
   infra:
     name: Terraform Validate

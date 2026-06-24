@@ -142,6 +142,9 @@ jobs:
       - name: Terraform Validate
         run: terraform -chdir=infra/terraform/environments/showcase validate
 
+      - name: Terraform Plan Policy Validation
+        run: scripts/test-validate-plan-fixtures.sh
+
   ci-pass:
     name: CI Pass
     needs: [go, web, helm, goreleaser, infra]

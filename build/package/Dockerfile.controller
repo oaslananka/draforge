@@ -1,6 +1,6 @@
 # Dockerfile for draforge-controller
 # Stage 1: Build Go Controller
-FROM golang:1.26.0 AS builder
+FROM golang:1.26.4 AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download

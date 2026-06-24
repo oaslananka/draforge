@@ -94,6 +94,11 @@ export interface Summary {
   timestamp: string;
 }
 
+export interface VersionInfo {
+  version: string;
+  commit: string;
+}
+
 export type TabId = 'overview' | 'pools' | 'devices' | 'claims' | 'graph' | 'explain' | 'doctor';
 
 export type SSEStatus = 'connected' | 'disconnected' | 'reconnecting';

@@ -94,6 +94,32 @@ func TestServerEndpoints(t *testing.T) {
 	}
 }
 
+func TestVersionEndpoint(t *testing.T) {
+	srv := NewServer(nil, 8081)
+	srv.SetBuildInfo("v9.9.9", "abc123")
+
+	req := httptest.NewRequest("GET", "/api/version", nil)
+	rr := httptest.NewRecorder()
+
+	srv.cors(http.HandlerFunc(srv.handleVersion)).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+
+	var version map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &version); err != nil {
+		t.Fatalf("failed to parse version JSON: %v", err)
+	}
+
+	if version["version"] != "v9.9.9" {
+		t.Errorf("expected version v9.9.9, got %q", version["version"])
+	}
+	if version["commit"] != "abc123" {
+		t.Errorf("expected commit abc123, got %q", version["commit"])
+	}
+}
+
 func TestCORSConfigurableOrigins(t *testing.T) {
 	srv := NewServer(nil, 8081)
 

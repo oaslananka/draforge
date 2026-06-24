@@ -242,6 +242,7 @@ func NewRootCommand() *cobra.Command {
 				return err
 			}
 			srv := server.NewServer(cs, serverPort)
+			srv.SetBuildInfo(versionVal, commitSHA)
 			return srv.Start(context.Background())
 		},
 	}

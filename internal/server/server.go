@@ -23,6 +23,8 @@ import (
 type Server struct {
 	clientset            kubernetes.Interface
 	port                 int
+	version              string
+	commit               string
 	allowedOrigins       string
 	allowedOriginsParsed []string // pre-parsed from allowedOrigins, avoids split/trim per request
 	mu                   sync.Mutex
@@ -48,9 +50,21 @@ func NewServer(clientset kubernetes.Interface, port int) *Server {
 	return &Server{
 		clientset:            clientset,
 		port:                 port,
+		version:              "dev",
+		commit:               "dev",
 		allowedOrigins:       allowedOrigins,
 		allowedOriginsParsed: parsed,
 		clients:              make(map[chan string]bool),
+	}
+}
+
+// SetBuildInfo updates runtime build metadata exposed by /api/version.
+func (s *Server) SetBuildInfo(version, commit string) {
+	if version != "" {
+		s.version = version
+	}
+	if commit != "" {
+		s.commit = commit
 	}
 }
 
@@ -64,6 +78,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// 2. API Endpoints (Read-Only)
 	mux.Handle("/api/summary", s.cors(s.requestLogging(http.HandlerFunc(s.handleSummary))))
+	mux.Handle("/api/version", s.cors(s.requestLogging(http.HandlerFunc(s.handleVersion))))
 	mux.Handle("/api/pools", s.cors(s.requestLogging(http.HandlerFunc(s.handlePools))))
 	mux.Handle("/api/devices", s.cors(s.requestLogging(http.HandlerFunc(s.handleDevices))))
 	mux.Handle("/api/claims", s.cors(s.requestLogging(http.HandlerFunc(s.handleClaims))))
@@ -234,6 +249,14 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = json.NewEncoder(w).Encode(summary)
+}
+
+// Version
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"version": s.version,
+		"commit":  s.commit,
+	})
 }
 
 // Pools

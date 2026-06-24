@@ -45,3 +45,29 @@ Selector labels
 app.kubernetes.io/name: {{ include "draforge.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Restricted egress rules shared by DRAForge workloads.
+By default, workloads may resolve DNS and reach Kubernetes-style API server
+ports without allowing every protocol and port to every destination.
+*/}}
+{{- define "draforge.restrictedEgress" -}}
+{{- if .Values.networkPolicies.allowAllEgress }}
+- {}
+{{- else }}
+- to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+  ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+- ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+{{- end }}
+{{- end }}

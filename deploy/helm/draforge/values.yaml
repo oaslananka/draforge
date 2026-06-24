@@ -94,3 +94,5 @@ gateway:
 
 networkPolicies:
   enabled: true
+  # Set to true only for local/demo clusters that do not support restricted egress policies.
+  allowAllEgress: false

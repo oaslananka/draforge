@@ -6,6 +6,7 @@ import type {
   ResourceGraph,
   ExplainResult,
   DoctorReport,
+  VersionInfo,
 } from './types';
 
 interface ApiError {
@@ -52,6 +53,10 @@ async function typedFetch<T>(url: string): Promise<T> {
 
 export function fetchSummary(): Promise<Summary> {
   return typedFetch<Summary>('/api/summary');
+}
+
+export function fetchVersion(): Promise<VersionInfo> {
+  return typedFetch<VersionInfo>('/api/version');
 }
 
 export function fetchPools(): Promise<DevicePool[]> {

@@ -17,10 +17,10 @@ import {
   fetchClaims,
   fetchDoctor,
   fetchExplain,
+  fetchVersion,
 } from './api/api';
-import type { Summary } from './api/types';
+import type { Summary, VersionInfo } from './api/types';
 
-const versionVal = 'v0.1.0-rc.1';
 
 interface NodePosition {
   id: string;
@@ -545,6 +545,7 @@ export default function App() {
 
   // Data states per section
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [pools, setPools] = useState<DevicePool[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [claims, setClaims] = useState<ResourceClaimInfo[]>([]);
@@ -574,6 +575,7 @@ export default function App() {
 
     await Promise.allSettled([
       fetchSummary().then(setSummary).catch(e => setGlobalError(e.message || 'Failed to load summary')).finally(() => setLoadingSummary(false)),
+      fetchVersion().then(setVersionInfo).catch(() => {}),
       fetchPools().then(setPools).catch(() => {}).finally(() => setLoadingPools(false)),
       fetchDevices().then(setDevices).catch(() => {}).finally(() => setLoadingDevices(false)),
       fetchClaims().then(data => {
@@ -752,7 +754,10 @@ export default function App() {
                 <div className="glass-panel">
                   <h2 style={{ marginBottom: '15px' }}>Dynamic Resource Allocation Status</h2>
                   <p style={{ color: 'var(--text-secondary)' }}>
-                    DRAForge is running on DOKS in region <strong>fra1</strong>. Both worker nodes are healthy. All devices below are simulated synthetic devices, clearly labeled as mock hardware.
+                    DRAForge is reporting live data from the connected Kubernetes API: <strong>{summary?.poolsCount ?? 0}</strong> simulated pools, <strong>{summary?.devicesCount ?? 0}</strong> discovered devices, and <strong>{summary?.claimsCount ?? 0}</strong> active claims.
+                  </p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '10px' }}>
+                    Last refreshed: {summary?.timestamp ? new Date(summary.timestamp).toLocaleString() : 'unknown'}
                   </p>
                 </div>
               </>
@@ -1054,7 +1059,7 @@ export default function App() {
 
       {/* Footer */}
       <footer style={{ padding: '20px 40px', background: 'rgba(12, 15, 23, 0.8)', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-        <span>DRAForge Version {versionVal}</span>
+        <span>DRAForge Version {versionInfo?.version ?? 'dev'} ({versionInfo?.commit ?? 'dev'})</span>
         <a href="https://github.com/oaslananka/draforge" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-secondary)', textDecoration: 'none' }}>GitHub Repository</a>
       </footer>
     </div>

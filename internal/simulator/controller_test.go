@@ -375,11 +375,11 @@ func TestSimulateAllocationFirstAvailable(t *testing.T) {
 						Name: "req-1",
 						FirstAvailable: []resourcev1.DeviceSubRequest{
 							{
-								Name: "sub-1",
+								Name:            "sub-1",
 								DeviceClassName: "fpga-class",
 							},
 							{
-								Name: "sub-2",
+								Name:            "sub-2",
 								DeviceClassName: "gpu-class",
 							},
 						},

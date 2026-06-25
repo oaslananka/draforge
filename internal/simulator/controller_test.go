@@ -522,3 +522,36 @@ func TestReconcileNoDriver(t *testing.T) {
 	slices, _ := reconciler.clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 	_ = slices // Driver empty but we may still get a slice — just verify no panic
 }
+
+func TestReconcileOrphanCleanup(t *testing.T) {
+	sdp := sdpObj("orphan-pool", "default", "sim.draforge.oaslananka", "orphan-pool", "gpu", 1, "healthy", []string{"node-0"})
+	reconciler, ctx := newReconciler(sdp)
+
+	// Inject an orphan ResourceSlice
+	orphanSlice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "sim-slice-orphan",
+			Labels: map[string]string{
+				"draforge.oaslananka/managed-by": "simulator",
+			},
+		},
+	}
+	reconciler.clientset.ResourceV1().ResourceSlices().Create(ctx, orphanSlice, metav1.CreateOptions{})
+
+	if err := reconciler.Reconcile(ctx); err != nil {
+		t.Fatalf("Reconcile failed: %v", err)
+	}
+
+	slices, _ := reconciler.clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
+
+	foundOrphan := false
+	for _, s := range slices.Items {
+		if s.Name == "sim-slice-orphan" {
+			foundOrphan = true
+		}
+	}
+
+	if foundOrphan {
+		t.Errorf("expected orphan ResourceSlice to be deleted, but it still exists")
+	}
+}

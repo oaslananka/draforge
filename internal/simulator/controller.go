@@ -9,13 +9,19 @@ import (
 	"sync/atomic"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	clientcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -28,6 +34,7 @@ var (
 
 // Reconciler watches SimulatedDevicePools and creates/updates Kubernetes ResourceSlices.
 type Reconciler struct {
+	eventRecorder        record.EventRecorder
 	clientset            kubernetes.Interface
 	dynamicClient        dynamic.Interface
 	ReconcileErrorsCount int64
@@ -37,9 +44,19 @@ type Reconciler struct {
 
 // NewReconciler creates a Reconciler instance.
 func NewReconciler(clientset kubernetes.Interface, dyn dynamic.Interface) *Reconciler {
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartStructuredLogging(0)
+	var eventRecorder record.EventRecorder
+	if clientset != nil {
+		eventBroadcaster.StartRecordingToSink(&clientcorev1.EventSinkImpl{Interface: clientset.CoreV1().Events("")})
+		eventRecorder = eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "draforge-controller"})
+	} else {
+		eventRecorder = record.NewFakeRecorder(100)
+	}
 	return &Reconciler{
 		clientset:     clientset,
 		dynamicClient: dyn,
+		eventRecorder: eventRecorder,
 	}
 }
 
@@ -48,14 +65,14 @@ func (r *Reconciler) StartReconciliationLoop(ctx context.Context, interval time.
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	fmt.Println("Starting SimulatedDevicePool reconciliation loop...")
+	klog.Infof("Starting SimulatedDevicePool reconciliation loop...")
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			if err := r.Reconcile(ctx); err != nil {
-				fmt.Printf("Reconciliation error: %v\n", err)
+				klog.Errorf("Reconciliation error: %v", err)
 				atomic.AddInt64(&r.ReconcileErrorsCount, 1)
 			}
 		}
@@ -147,6 +164,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 			if health == "disappear" {
 				// disappear fault -> delete the slice if it exists
 				_ = r.clientset.ResourceV1().ResourceSlices().Delete(ctx, sliceName, metav1.DeleteOptions{})
+				r.eventRecorder.Eventf(&sdp, corev1.EventTypeNormal, "ResourceSliceDeleted", "Deleted ResourceSlice %s due to disappear fault", sliceName)
 				continue
 			}
 
@@ -156,10 +174,12 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 			runDevCount := int(deviceCount)
 			if health == "capacity-exhausted" {
 				runDevCount = 0
+				r.eventRecorder.Eventf(&sdp, corev1.EventTypeWarning, "CapacityExhausted", "Capacity exhausted for pool %s", poolName)
 			}
 
 			if ensureErr := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, runDevCount, attrs, caps, len(targetNodes)); ensureErr != nil {
-				fmt.Printf("Failed to ensure ResourceSlice %s: %v\n", sliceName, ensureErr)
+				klog.Errorf("Failed to ensure ResourceSlice %s: %v", sliceName, ensureErr)
+				r.eventRecorder.Eventf(&sdp, corev1.EventTypeWarning, "ResourceSliceEnsureFailed", "Failed to ensure ResourceSlice %s: %v", sliceName, ensureErr)
 			}
 		}
 
@@ -177,7 +197,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 			// Slices managed by simulator have the label: draforge.oaslananka/managed-by: simulator
 			if s.Labels["draforge.oaslananka/managed-by"] == "simulator" {
 				if !activeSliceNames[s.Name] {
-					fmt.Printf("Deleting orphaned ResourceSlice: %s\n", s.Name)
+					klog.Infof("Deleting orphaned ResourceSlice: %s", s.Name)
 					_ = r.clientset.ResourceV1().ResourceSlices().Delete(ctx, s.Name, metav1.DeleteOptions{})
 				}
 			}
@@ -248,6 +268,11 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 	if err == nil {
 		// Update existing
 		slice.ResourceVersion = existing.ResourceVersion
+
+		if equality.Semantic.DeepEqual(existing.Spec, slice.Spec) && equality.Semantic.DeepEqual(existing.Labels, slice.Labels) {
+			return nil
+		}
+
 		_, err = slicesClient.Update(ctx, slice, metav1.UpdateOptions{})
 		return err
 	}
@@ -273,6 +298,11 @@ func (r *Reconciler) updateSDPStatus(ctx context.Context, sdp *unstructured.Unst
 	status := map[string]interface{}{
 		"publishedSlices": slicesSlice,
 		"activeFaults":    faultsSlice,
+	}
+
+	existingStatus, _, _ := unstructured.NestedMap(sdp.Object, "status")
+	if equality.Semantic.DeepEqual(existingStatus, status) {
+		return nil
 	}
 
 	err := unstructured.SetNestedMap(sdpCopy.Object, status, "status")

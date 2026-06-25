@@ -133,6 +133,11 @@ tasks:
     cmds:
       - '{{.GORELEASER_BIN}} release --snapshot --clean --skip=docker,sbom,sign'
 
+  release:verify:
+    desc: Verify release artifacts (checksums, provenance, binaries, charts)
+    cmds:
+      - '{{.BASH_BIN}} scripts/verify-release.sh'
+
   demo:up:
     desc: Deploy the live showcase demo to DOKS
     cmds:

@@ -16,11 +16,12 @@ import (
 
 func TestEvaluateCEL(t *testing.T) {
 	tests := []struct {
-		name       string
-		expression string
-		attributes map[string]string
-		capacities map[string]int64
-		expected   bool
+		name        string
+		expression  string
+		attributes  map[string]string
+		capacities  map[string]int64
+		expected    bool
+		expectError bool
 	}{
 		{
 			name:       "empty expression",
@@ -51,11 +52,11 @@ func TestEvaluateCEL(t *testing.T) {
 			expected:   true,
 		},
 		{
-			name:       "attribute missing and inequality",
-			expression: `device.attributes["family"] != "h100"`,
-			attributes: map[string]string{},
-			capacities: map[string]int64{},
-			expected:   true,
+			name:        "attribute missing and inequality",
+			expression:  `device.attributes["family"] != "h100"`,
+			attributes:  map[string]string{},
+			capacities:  map[string]int64{},
+			expectError: true, // CEL evaluating missing map key is an error
 		},
 		{
 			name:       "capacity comparison match",
@@ -78,13 +79,50 @@ func TestEvaluateCEL(t *testing.T) {
 			capacities: map[string]int64{"memory": 80000000000},
 			expected:   true,
 		},
+		{
+			name:       "list membership match",
+			expression: `device.attributes["family"] in ["a100", "h100"]`,
+			attributes: map[string]string{"family": "h100"},
+			capacities: map[string]int64{},
+			expected:   true,
+		},
+		{
+			name:       "list membership mismatch",
+			expression: `device.attributes["family"] in ["a100", "h100"]`,
+			attributes: map[string]string{"family": "t4"},
+			capacities: map[string]int64{},
+			expected:   false,
+		},
+		{
+			name:        "invalid expression syntax",
+			expression:  `device.attributes["family"] =? "h100"`,
+			attributes:  map[string]string{"family": "h100"},
+			capacities:  map[string]int64{},
+			expectError: true,
+		},
+		{
+			name:        "non-boolean return type",
+			expression:  `device.attributes["family"]`,
+			attributes:  map[string]string{"family": "h100"},
+			capacities:  map[string]int64{},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := evaluateCEL(tt.expression, tt.attributes, tt.capacities)
-			if result != tt.expected {
-				t.Errorf("evaluateCEL(%q) = %v, expected %v", tt.expression, result, tt.expected)
+			result, err := evaluateCEL(tt.expression, tt.attributes, tt.capacities)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("evaluateCEL(%q) expected error but got none", tt.expression)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("evaluateCEL(%q) unexpected error: %v", tt.expression, err)
+				}
+				if result != tt.expected {
+					t.Errorf("evaluateCEL(%q) = %v, expected %v", tt.expression, result, tt.expected)
+				}
 			}
 		})
 	}
@@ -608,6 +646,103 @@ func TestExplainClaim_UnhealthyDevices(t *testing.T) {
 
 	if !foundUnhealthyRemedy {
 		t.Errorf("expected remediation to mention resolving health states, got: %v", result.Remedy)
+	}
+}
+
+func TestExplainClaim_InvalidCEL(t *testing.T) {
+	ctx := context.Background()
+	claimName := "invalid-cel-claim"
+	namespace := "default"
+	nodeName := "node-1"
+
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              claimName,
+			Namespace:         namespace,
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "gpu-class",
+						},
+					},
+				},
+			},
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{
+				{
+					Name: "gpu-pod",
+				},
+			},
+		},
+	}
+
+	class := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gpu-class",
+		},
+		Spec: resourcev1.DeviceClassSpec{
+			Selectors: []resourcev1.DeviceSelector{
+				{
+					CEL: &resourcev1.CELDeviceSelector{
+						Expression: `device.attributes["family"] =? "h100"`, // Invalid syntax
+					},
+				},
+			},
+		},
+	}
+
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "unhealthy-slice",
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "gpu-driver",
+			NodeName: &nodeName,
+			Pool: resourcev1.ResourcePool{
+				Name: "gpu-pool",
+			},
+			Devices: []resourcev1.Device{
+				{
+					Name: "gpu-1",
+					Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+						"family": {
+							StringValue: ptr("h100"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, class, slice)
+	result, err := ExplainClaim(ctx, clientset, namespace, claimName)
+	if err != nil {
+		t.Fatalf("ExplainClaim failed: %v", err)
+	}
+
+	if result.Allocated {
+		t.Errorf("expected Allocated to be false, got true")
+	}
+
+	foundInvalidCELRejection := false
+	for _, child := range result.ReasonTree.Children {
+		if strings.Contains(child.Message, "devices evaluated") {
+			for _, subChild := range child.Children {
+				if strings.Contains(subChild.Message, "rejected because selector expression failed or was unsupported") {
+					foundInvalidCELRejection = true
+				}
+			}
+		}
+	}
+
+	if !foundInvalidCELRejection {
+		t.Errorf("expected explanation to include invalid CEL rejection message")
 	}
 }
 

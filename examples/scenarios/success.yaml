@@ -1,0 +1,15 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: success-gpu-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: success-gpu
+  deviceCount: 2
+  deviceType: gpu
+  attributes:
+    model: NVIDIA-H100-Virtual
+    vendor: NVIDIA
+  capacities:
+    memory: 80Gi

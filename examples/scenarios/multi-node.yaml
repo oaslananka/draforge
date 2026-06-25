@@ -1,0 +1,18 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: multi-node-gpu-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: multi-node-gpu
+  deviceCount: 4
+  deviceType: gpu
+  targetNodes:
+    - worker-a
+    - worker-b
+  attributes:
+    model: NVIDIA-L40S-Virtual
+    vendor: NVIDIA
+  capacities:
+    memory: 48Gi

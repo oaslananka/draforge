@@ -5,10 +5,9 @@ package explain
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 
+	"github.com/google/cel-go/cel"
 	"github.com/oaslananka/draforge/internal/discovery"
 	"github.com/oaslananka/draforge/internal/redaction"
 	"github.com/oaslananka/draforge/pkg/model"
@@ -17,92 +16,73 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-var (
-	attrRegex = regexp.MustCompile(`device\.attributes\[['"]([^'"]+)['"]\]\s*(==|!=)\s*['"]([^'"]*)['"]`)
-	capRegex  = regexp.MustCompile(`device\.capacity\[['"]([^'"]+)['"]\]\s*(==|!=|>=|<=|>|<)\s*([0-9]+)`)
-)
-
-// evaluateCEL parses and evaluates simple CEL expressions against device attributes and capacities.
-func evaluateCEL(expression string, attributes map[string]string, capacities map[string]int64) bool {
+// compileCEL parses and compiles a CEL expression into a program.
+func compileCEL(expression string) (cel.Program, error) {
 	if strings.TrimSpace(expression) == "" {
-		return true
+		return nil, nil // empty expression means true
 	}
 
-	parts := strings.Split(expression, "&&")
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-
-		if matches := attrRegex.FindStringSubmatch(part); len(matches) == 4 {
-			key := matches[1]
-			op := matches[2]
-			val := matches[3]
-
-			deviceVal, exists := attributes[key]
-			if !exists {
-				if op == "!=" {
-					continue
-				}
-				return false
-			}
-
-			switch op {
-			case "==":
-				if deviceVal != val {
-					return false
-				}
-			case "!=":
-				if deviceVal == val {
-					return false
-				}
-			}
-			continue
-		}
-
-		if matches := capRegex.FindStringSubmatch(part); len(matches) == 4 {
-			key := matches[1]
-			op := matches[2]
-			valStr := matches[3]
-			val, _ := strconv.ParseInt(valStr, 10, 64)
-
-			deviceVal, exists := capacities[key]
-			if !exists {
-				return false
-			}
-
-			switch op {
-			case "==":
-				if deviceVal != val {
-					return false
-				}
-			case "!=":
-				if deviceVal == val {
-					return false
-				}
-			case ">=":
-				if deviceVal < val {
-					return false
-				}
-			case "<=":
-				if deviceVal > val {
-					return false
-				}
-			case ">":
-				if deviceVal <= val {
-					return false
-				}
-			case "<":
-				if deviceVal >= val {
-					return false
-				}
-			}
-			continue
-		}
+	env, err := cel.NewEnv(
+		cel.Variable("device", cel.MapType(cel.StringType, cel.DynType)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
 
-	return true
+	ast, issues := env.Compile(expression)
+	if issues != nil && issues.Err() != nil {
+		return nil, fmt.Errorf("CEL compilation error: %w", issues.Err())
+	}
+
+	prg, err := env.Program(ast)
+	if err != nil {
+		return nil, fmt.Errorf("CEL program creation error: %w", err)
+	}
+
+	return prg, nil
+}
+
+// evaluateCELProgram evaluates a pre-compiled CEL program against device attributes and capacities.
+func evaluateCELProgram(prg cel.Program, attributes map[string]string, capacities map[string]int64) (bool, error) {
+	if prg == nil {
+		return true, nil
+	}
+
+	attrMap := make(map[string]interface{})
+	for k, v := range attributes {
+		attrMap[k] = v
+	}
+
+	capMap := make(map[string]interface{})
+	for k, v := range capacities {
+		capMap[k] = v
+	}
+
+	out, _, err := prg.Eval(map[string]interface{}{
+		"device": map[string]interface{}{
+			"attributes": attrMap,
+			"capacity":   capMap,
+		},
+	})
+	if err != nil {
+		return false, fmt.Errorf("CEL evaluation error: %w", err)
+	}
+
+	result, ok := out.Value().(bool)
+	if !ok {
+		return false, fmt.Errorf("CEL expression did not evaluate to a boolean")
+	}
+
+	return result, nil
+}
+
+// evaluateCEL parses and evaluates CEL expressions against device attributes and capacities.
+func evaluateCEL(expression string, attributes map[string]string, capacities map[string]int64) (bool, error) {
+	prg, err := compileCEL(expression)
+	if err != nil {
+		return false, err
+	}
+	return evaluateCELProgram(prg, attributes, capacities)
 }
 
 // ExplainClaim analyzes a ResourceClaim and returns an explanation tree.
@@ -184,22 +164,48 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 		result.Remedy = append(result.Remedy, fmt.Sprintf("Create the missing DeviceClass '%s' in the cluster.", target.DeviceClassName))
 	}
 
+	// Compile CEL programs once
+	var compiledSelectors []cel.Program
+	var originalExpressions []string
+	var lastCELErr error
+
+	if deviceClass != nil {
+		for _, sel := range deviceClass.Spec.Selectors {
+			if sel.CEL != nil {
+				prg, err := compileCEL(sel.CEL.Expression)
+				if err != nil {
+					lastCELErr = err
+				} else {
+					compiledSelectors = append(compiledSelectors, prg)
+					originalExpressions = append(originalExpressions, sel.CEL.Expression)
+				}
+			}
+		}
+	}
+
 	// Evaluate candidate devices & drivers matching selectors
 	selectorPassed := 0
 	capacityMatched := 0
 	unhealthyCount := 0
 
+	failedSelectors := make(map[string]int)
+
 	for _, d := range devices {
 		// Evaluated against selectors in DeviceClass
 		passedSelector := true
-		if deviceClass != nil {
-			for _, sel := range deviceClass.Spec.Selectors {
-				if sel.CEL != nil {
-					if !evaluateCEL(sel.CEL.Expression, d.Attributes, d.Capacities) {
-						passedSelector = false
-						break
-					}
-				}
+
+		for i, prg := range compiledSelectors {
+			match, err := evaluateCELProgram(prg, d.Attributes, d.Capacities)
+			if err != nil {
+				lastCELErr = err
+				passedSelector = false
+				failedSelectors[originalExpressions[i]]++
+				break
+			}
+			if !match {
+				passedSelector = false
+				failedSelectors[originalExpressions[i]]++
+				break
 			}
 		}
 
@@ -239,17 +245,27 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 		})
 		result.Remedy = append(result.Remedy, "Register a DRA driver or deploy a SimulatedDevicePool scenario.")
 	} else {
-		rootNode.Children = append(rootNode.Children, model.ReasonNode{
+		selectorNode := model.ReasonNode{
+			Message:    fmt.Sprintf("%d rejected because selector evaluated to false", totalDevices-selectorPassed),
+			Confidence: "confirmed",
+			SourceType: "DeviceClass",
+		}
+
+		for expr, count := range failedSelectors {
+			selectorNode.Children = append(selectorNode.Children, model.ReasonNode{
+				Message:    fmt.Sprintf("%d rejected by selector: %s", count, expr),
+				Confidence: "confirmed",
+				SourceType: "DeviceClass",
+			})
+		}
+
+		evalNode := model.ReasonNode{
 			Message:    fmt.Sprintf("%d candidate devices evaluated", totalDevices),
 			Confidence: "inferred",
 			Evidence:   fmt.Sprintf("Evaluated %d devices: %d rejected due to selector mismatch.", totalDevices, totalDevices-selectorPassed),
 			SourceType: "ResourceSlice",
 			Children: []model.ReasonNode{
-				{
-					Message:    fmt.Sprintf("%d rejected because selector evaluated to false", totalDevices-selectorPassed),
-					Confidence: "confirmed",
-					SourceType: "DeviceClass",
-				},
+				selectorNode,
 				{
 					Message:    fmt.Sprintf("%d rejected because device health status was unhealthy or degraded", unhealthyCount),
 					Confidence: "confirmed",
@@ -261,7 +277,19 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 					SourceType: "ResourceSlice",
 				},
 			},
-		})
+		}
+
+		if lastCELErr != nil {
+			evalNode.Children = append(evalNode.Children, model.ReasonNode{
+				Message:    "Warning: unsupported or invalid CEL expressions encountered",
+				Confidence: "confirmed",
+				Evidence:   lastCELErr.Error(),
+				SourceType: "DeviceClass",
+			})
+			result.Remedy = append(result.Remedy, "Review DeviceClass selectors for invalid or unsupported CEL expressions.")
+		}
+
+		rootNode.Children = append(rootNode.Children, evalNode)
 
 		if unhealthyCount > 0 {
 			result.Remedy = append(result.Remedy, "Inspect and resolve health/degradation states for the unhealthy simulated devices.")

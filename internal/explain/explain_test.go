@@ -52,7 +52,7 @@ func TestEvaluateCEL(t *testing.T) {
 		},
 		{
 			name:       "attribute missing and inequality",
-			expression: `device.attributes["family"] != "h100"`,
+			expression: `!("family" in device.attributes) || device.attributes["family"] != "h100"`,
 			attributes: map[string]string{},
 			capacities: map[string]int64{},
 			expected:   true,
@@ -78,13 +78,38 @@ func TestEvaluateCEL(t *testing.T) {
 			capacities: map[string]int64{"memory": 80000000000},
 			expected:   true,
 		},
+		{
+			name:       "boolean and list evaluation",
+			expression: `device.attributes["family"] in ["h100", "a100"] && device.capacity["memory"] > 1000`,
+			attributes: map[string]string{"family": "a100"},
+			capacities: map[string]int64{"memory": 2000},
+			expected:   true,
+		},
+		{
+			name:       "missing field no fallback",
+			expression: `device.attributes["missing_field"] == "foo"`,
+			attributes: map[string]string{},
+			capacities: map[string]int64{},
+			expected:   false,
+		},
+		{
+			name:       "invalid expression",
+			expression: `device.attributes["family"] == `,
+			attributes: map[string]string{},
+			capacities: map[string]int64{},
+			expected:   false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := evaluateCEL(tt.expression, tt.attributes, tt.capacities)
+			result, err := evaluateCEL(tt.expression, tt.attributes, tt.capacities)
+			if err != nil && tt.expected == false {
+				// expected error for these cases
+				return
+			}
 			if result != tt.expected {
-				t.Errorf("evaluateCEL(%q) = %v, expected %v", tt.expression, result, tt.expected)
+				t.Errorf("evaluateCEL(%q) = %v, expected %v (err: %v)", tt.expression, result, tt.expected, err)
 			}
 		})
 	}
@@ -613,4 +638,215 @@ func TestExplainClaim_UnhealthyDevices(t *testing.T) {
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+func TestExplainClaim_InvalidCEL(t *testing.T) {
+	ctx := context.Background()
+	claimName := "invalid-cel-claim"
+	namespace := "default"
+	nodeName := "node-1"
+
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              claimName,
+			Namespace:         namespace,
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "gpu-class",
+						},
+					},
+				},
+			},
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{
+				{
+					Name: "gpu-pod",
+				},
+			},
+		},
+	}
+
+	class := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gpu-class",
+		},
+		Spec: resourcev1.DeviceClassSpec{
+			Selectors: []resourcev1.DeviceSelector{
+				{
+					CEL: &resourcev1.CELDeviceSelector{
+						Expression: `device.attributes["family"] == `, // Invalid CEL
+					},
+				},
+			},
+		},
+	}
+
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gpu-slice",
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "gpu-driver",
+			NodeName: &nodeName,
+			Pool: resourcev1.ResourcePool{
+				Name: "gpu-pool",
+			},
+			Devices: []resourcev1.Device{
+				{
+					Name: "gpu-1",
+					Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+						"family": {
+							StringValue: ptr("h100"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, class, slice)
+	result, err := ExplainClaim(ctx, clientset, namespace, claimName)
+	if err != nil {
+		t.Fatalf("ExplainClaim failed: %v", err)
+	}
+
+	foundCELWarning := false
+	for _, child := range result.ReasonTree.Children {
+		if strings.Contains(child.Message, "candidate devices evaluated") {
+			for _, subChild := range child.Children {
+				if strings.Contains(subChild.Message, "unsupported or invalid CEL expressions") {
+					foundCELWarning = true
+					break
+				}
+			}
+		}
+	}
+
+	if !foundCELWarning {
+		t.Errorf("expected warning about invalid CEL expression in reason tree")
+	}
+
+	foundRemedy := false
+	for _, remedy := range result.Remedy {
+		if strings.Contains(remedy, "Review DeviceClass selectors for invalid or unsupported CEL expressions") {
+			foundRemedy = true
+			break
+		}
+	}
+	if !foundRemedy {
+		t.Errorf("expected remedy to review DeviceClass selectors")
+	}
+}
+
+func TestExplainClaim_FailedSelectorsTracking(t *testing.T) {
+	ctx := context.Background()
+	claimName := "track-selector-claim"
+	namespace := "default"
+	nodeName := "node-1"
+
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              claimName,
+			Namespace:         namespace,
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "gpu-class",
+						},
+					},
+				},
+			},
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{
+				{
+					Name: "gpu-pod",
+				},
+			},
+		},
+	}
+
+	class := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gpu-class",
+		},
+		Spec: resourcev1.DeviceClassSpec{
+			Selectors: []resourcev1.DeviceSelector{
+				{
+					CEL: &resourcev1.CELDeviceSelector{
+						Expression: `device.attributes["family"] == "h100"`,
+					},
+				},
+			},
+		},
+	}
+
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gpu-slice",
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "gpu-driver",
+			NodeName: &nodeName,
+			Pool: resourcev1.ResourcePool{
+				Name: "gpu-pool",
+			},
+			Devices: []resourcev1.Device{
+				{
+					Name: "gpu-1", // mismatch
+					Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+						"family": {
+							StringValue: ptr("a100"),
+						},
+					},
+				},
+				{
+					Name: "gpu-2", // mismatch
+					Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+						"family": {
+							StringValue: ptr("t4"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, class, slice)
+	result, err := ExplainClaim(ctx, clientset, namespace, claimName)
+	if err != nil {
+		t.Fatalf("ExplainClaim failed: %v", err)
+	}
+
+	foundSelectorTracking := false
+	for _, child := range result.ReasonTree.Children {
+		if strings.Contains(child.Message, "candidate devices evaluated") {
+			for _, subChild := range child.Children {
+				if strings.Contains(subChild.Message, "rejected because selector evaluated to false") {
+					for _, selChild := range subChild.Children {
+						if strings.Contains(selChild.Message, "2 rejected by selector: device.attributes[\"family\"] == \"h100\"") {
+							foundSelectorTracking = true
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if !foundSelectorTracking {
+		t.Errorf("expected reason tree to contain tracking for failed selector 'device.attributes[\"family\"] == \"h100\"' with count 2")
+	}
 }

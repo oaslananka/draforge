@@ -56,6 +56,9 @@ sbom:
 release-local:
 	task release:local
 
+release-verify:
+	task release:verify
+
 # --- Infrastructure ---
 
 infra-init:

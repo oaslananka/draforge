@@ -128,11 +128,7 @@ jobs:
         run: goreleaser release --snapshot --clean --skip=docker,sbom,sign
 
       - name: Verify snapshot artifacts
-        run: |
-          test -f dist/checksums.txt
-          ls dist/draforge_*
-          ls dist/draforge-controller_*
-          ls dist/draforge-sim-driver_*
+        run: bash scripts/verify-release.sh
 
   infra:
     name: Terraform Validate

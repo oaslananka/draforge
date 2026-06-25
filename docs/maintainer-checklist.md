@@ -21,6 +21,7 @@
 - [ ] `CHANGELOG.md` updated with all changes since last release
 - [ ] Version tag created and pushed
 - [ ] GoReleaser run: `goreleaser release --clean`
+- [ ] Release artifacts verified locally: `task release:verify`
 - [ ] GitHub release assets verified (archives, checksums, SBOMs)
 - [ ] Docker images pushed to `ghcr.io/oaslananka/` and multi-arch manifests created
 - [ ] Release smoke-tested:

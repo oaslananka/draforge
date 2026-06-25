@@ -28,6 +28,7 @@ helm lint deploy/helm/draforge
 mkdir -p charts
 helm package deploy/helm/draforge --destination charts
 goreleaser release --snapshot --clean --skip=docker,sbom,sign
+task release:verify
 ```
 
 If a publishing job fails before assets are available, fix the issue and rerun from a clean commit. If assets are already available to users, publish a new patch version rather than replacing them silently.

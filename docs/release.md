@@ -56,8 +56,7 @@ goreleaser release --snapshot --clean --skip=publish
 To verify the output:
 
 ```bash
-ls -la dist/
-cat dist/checksums.txt
+task release:verify
 ```
 
 ---

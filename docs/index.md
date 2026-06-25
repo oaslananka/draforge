@@ -22,6 +22,7 @@ It helps Kubernetes platform engineers model DRA resources, simulate virtual dev
 
 - [Architecture](architecture.md)
 - [Dashboard guide](dashboard.md)
+- [Public API and CLI Surface](api.md)
 - [Demo guide](demo.md)
 - [Simulator scenarios](simulator-scenarios.md)
 - [Kubernetes DRA compatibility](compatibility/kubernetes-dra.md)

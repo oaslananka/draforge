@@ -262,3 +262,26 @@ func TestDiscoverNoNullByte(t *testing.T) {
 		t.Error("discover output contains null byte")
 	}
 }
+
+// --- Explain command tests ---
+
+func TestExplainMissingClaim(t *testing.T) {
+	root := NewRootCommand()
+	_, err := executeCommand(root, "explain")
+	if err == nil {
+		t.Fatal("expected error for explain without claim argument, got nil")
+	}
+	if !strings.Contains(err.Error(), "accepts 1 arg(s), received 0") {
+		t.Errorf("unexpected error message: %q", err.Error())
+	}
+}
+
+func TestExplainOutputJSON(t *testing.T) {
+	root := NewRootCommand()
+	out, err := executeCommand(root, "explain", "dummy-claim", "-o", "json")
+	if err == nil {
+		if !json.Valid([]byte(out)) {
+			t.Errorf("explain -o json output is not valid JSON: %q", out)
+		}
+	}
+}

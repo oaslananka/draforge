@@ -207,23 +207,33 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 			Confidence: "inferred",
 			Evidence:   fmt.Sprintf("Evaluated %d devices: %d rejected due to selector mismatch.", totalDevices, totalDevices-selectorPassed),
 			SourceType: "ResourceSlice",
-			Children: []model.ReasonNode{
-				{
-					Message:    fmt.Sprintf("%d rejected because selector evaluated to false", totalDevices-selectorPassed-selectorFailedErrorCount),
-					Confidence: "confirmed",
-					SourceType: "DeviceClass",
-				},
-				{
-					Message:    fmt.Sprintf("%d rejected because device health status was unhealthy or degraded", unhealthyCount),
-					Confidence: "confirmed",
-					SourceType: "ResourceSlice",
-				},
-				{
-					Message:    fmt.Sprintf("%d rejected because requested capacity (already allocated) was unavailable", selectorPassed-unhealthyCount-capacityMatched),
-					Confidence: "inferred",
-					SourceType: "ResourceSlice",
-				},
-			},
+			Children:   []model.ReasonNode{},
+		}
+
+		falseSelectorCount := totalDevices - selectorPassed - selectorFailedErrorCount
+		if falseSelectorCount > 0 {
+			summaryNode.Children = append(summaryNode.Children, model.ReasonNode{
+				Message:    fmt.Sprintf("%d rejected because selector evaluated to false", falseSelectorCount),
+				Confidence: "confirmed",
+				SourceType: "DeviceClass",
+			})
+		}
+
+		if unhealthyCount > 0 {
+			summaryNode.Children = append(summaryNode.Children, model.ReasonNode{
+				Message:    fmt.Sprintf("%d rejected because device health status was unhealthy or degraded", unhealthyCount),
+				Confidence: "confirmed",
+				SourceType: "ResourceSlice",
+			})
+		}
+
+		unavailableCapacityCount := selectorPassed - unhealthyCount - capacityMatched
+		if unavailableCapacityCount > 0 {
+			summaryNode.Children = append(summaryNode.Children, model.ReasonNode{
+				Message:    fmt.Sprintf("%d rejected because requested capacity (already allocated) was unavailable", unavailableCapacityCount),
+				Confidence: "inferred",
+				SourceType: "ResourceSlice",
+			})
 		}
 
 		if selectorFailedErrorCount > 0 {

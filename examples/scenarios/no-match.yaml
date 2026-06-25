@@ -1,0 +1,16 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: no-match-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: no-match-pool
+  deviceCount: 1
+  deviceType: unknown
+  targetNodes: ["node-0"]
+  attributes:
+    model: "Unknown-Virtual"
+    vendor: "Unknown"
+  capacities:
+    memory: "8Gi"

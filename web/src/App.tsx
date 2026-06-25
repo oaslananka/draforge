@@ -252,9 +252,29 @@ function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGra
           <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
             task demo:up
           </code>
-          <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
-            kubectl apply -f examples/scenarios/basic-gpu.yaml
-          </code>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Available Scenarios:</span>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+                kubectl apply -f examples/scenarios/basic-gpu.yaml
+              </code>
+              <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+                kubectl apply -f examples/scenarios/success.yaml
+              </code>
+              <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+                kubectl apply -f examples/scenarios/delayed-binding.yaml
+              </code>
+              <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+                kubectl apply -f examples/scenarios/no-match.yaml
+              </code>
+              <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+                kubectl apply -f examples/scenarios/capacity.yaml
+              </code>
+              <code style={{ background: 'var(--bg-tertiary)', padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+                kubectl apply -f examples/scenarios/multi-node.yaml
+              </code>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -783,9 +803,20 @@ export default function App() {
                 border: '1px dashed var(--border-light)' 
               }}>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: '12px' }}>No virtual device pools registered in this cluster.</p>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                  Deploy a simulator scenario to register a pool: <code style={{ background: 'var(--bg-tertiary)', padding: '4px 8px', borderRadius: '4px', color: 'var(--accent-secondary)' }}>kubectl apply -f examples/scenarios/basic-gpu.yaml</code>
-                </p>
+
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span>Deploy a simulator scenario to register a pool:</span>
+                    <ul style={{ margin: '0', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <li><code style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-secondary)' }}>kubectl apply -f examples/scenarios/success.yaml</code></li>
+                      <li><code style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-secondary)' }}>kubectl apply -f examples/scenarios/basic-gpu.yaml</code></li>
+                      <li><code style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-secondary)' }}>kubectl apply -f examples/scenarios/delayed-binding.yaml</code></li>
+                      <li><code style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-secondary)' }}>kubectl apply -f examples/scenarios/no-match.yaml</code></li>
+                      <li><code style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-secondary)' }}>kubectl apply -f examples/scenarios/capacity.yaml</code></li>
+                      <li><code style={{ background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-secondary)' }}>kubectl apply -f examples/scenarios/multi-node.yaml</code></li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>

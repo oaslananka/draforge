@@ -13,6 +13,15 @@ Each `SimulatedDevicePool` supports one of four health modes via the `spec.healt
 | `capacity-exhausted`| Slice is published with **zero** devices. Tests out-of-capacity paths.   |
 | `disappear`         | No slice is created or existing slices are **deleted**. Node vanishes.   |
 
+
+## Adding New Scenarios
+
+To add a new scenario to the catalog:
+1. Create a new YAML file under `examples/scenarios/` with a descriptive name (e.g. `my-new-scenario.yaml`).
+2. Define a `SimulatedDevicePool` resource within the file. Include the desired `deviceCount`, `deviceType`, `targetNodes`, and any specific `health` modes.
+3. Add a section to the `Scenario Examples` in this document explaining the purpose of the new scenario.
+4. If testing specific faults, ensure the `health` field matches one of the supported simulator health modes (`healthy`, `unhealthy`, `capacity-exhausted`, `disappear`).
+
 ## Scenario Examples
 
 ### Basic GPU Pool (single node, 4 devices)
@@ -122,6 +131,134 @@ spec:
 ```
 
 Reconcile deletes all ResourceSlices owned by this pool.
+
+### Success
+
+`examples/scenarios/success.yaml`:
+
+```yaml
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: success-pool
+  namespace: default
+spec:
+  driverName: "sim.draforge.oaslananka"
+  poolName: "gpu-pool"
+  deviceCount: 2
+  deviceType: "gpu"
+  targetNodes: ["node-0"]
+  attributes:
+    model: "NVIDIA-H100-Virtual"
+    vendor: "NVIDIA"
+  capacities:
+    memory: "80Gi"
+```
+
+A simple successful allocation scenario for standard functionality testing.
+
+### Delayed Binding
+
+`examples/scenarios/delayed-binding.yaml`:
+
+```yaml
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: delayed-binding-pool
+  namespace: default
+spec:
+  driverName: "sim.draforge.oaslananka"
+  poolName: "gpu-pool"
+  deviceCount: 2
+  deviceType: "gpu"
+  targetNodes: ["node-0"]
+  attributes:
+    model: "NVIDIA-H100-Virtual"
+    vendor: "NVIDIA"
+  capacities:
+    memory: "80Gi"
+```
+
+Used to simulate a delayed binding where pod scheduling depends on the claim's binding status.
+
+### No Match
+
+`examples/scenarios/no-match.yaml`:
+
+```yaml
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: no-match-pool
+  namespace: default
+spec:
+  driverName: "sim.draforge.oaslananka"
+  poolName: "no-match-pool"
+  deviceCount: 1
+  deviceType: "unknown"
+  targetNodes: ["node-0"]
+  attributes:
+    model: "Unknown-Virtual"
+    vendor: "Unknown"
+  capacities:
+    memory: "8Gi"
+```
+
+Simulates a device pool where claims will find no matching device available based on capabilities or classes.
+
+### Capacity
+
+`examples/scenarios/capacity.yaml`:
+
+```yaml
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: capacity-pool
+  namespace: default
+spec:
+  driverName: "sim.draforge.oaslananka"
+  poolName: "gpu-pool"
+  deviceCount: 2
+  deviceType: "gpu"
+  targetNodes: ["node-0"]
+  health: capacity-exhausted
+  attributes:
+    model: "NVIDIA-H100-Virtual"
+    vendor: "NVIDIA"
+  capacities:
+    memory: "80Gi"
+```
+
+Publishes zero devices to simulate capacity exhaustion.
+
+### Multi-Node
+
+`examples/scenarios/multi-node.yaml`:
+
+```yaml
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: multi-node-pool
+  namespace: default
+spec:
+  driverName: "sim.draforge.oaslananka"
+  poolName: "gpu-pool"
+  deviceCount: 2
+  deviceType: "gpu"
+  targetNodes:
+    - node-0
+    - node-1
+  attributes:
+    model: "NVIDIA-A100-Virtual"
+    vendor: "NVIDIA"
+  capacities:
+    memory: "80Gi"
+```
+
+Simulates a device pool distributed across multiple nodes.
 
 ## Dry-Run Validation
 

@@ -2,19 +2,6 @@ name: E2E Matrix Tests
 
 on:
   workflow_dispatch:
-    inputs:
-      kubernetes_version:
-        description: Kubernetes version to test, or all for the full matrix
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - v1.32.11
-          - v1.33.12
-          - v1.34.8
-          - v1.35.5
-          - v1.36.1
 
 jobs:
   local-e2e:
@@ -24,7 +11,6 @@ jobs:
       fail-fast: false
       matrix:
         k8s_version: [v1.32.11, v1.33.12, v1.34.8, v1.35.5, v1.36.1]
-    if: ${{ github.event.inputs.kubernetes_version == 'all' || github.event.inputs.kubernetes_version == matrix.k8s_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6

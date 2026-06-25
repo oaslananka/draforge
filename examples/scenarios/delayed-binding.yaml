@@ -1,0 +1,18 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: delayed-binding-gpu-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: delayed-binding-gpu
+  deviceCount: 2
+  deviceType: gpu
+  targetNodes:
+    - worker-a
+    - worker-b
+  attributes:
+    model: NVIDIA-H100-Virtual
+    vendor: NVIDIA
+  capacities:
+    memory: 80Gi

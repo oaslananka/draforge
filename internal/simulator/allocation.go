@@ -5,6 +5,7 @@ package simulator
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -50,72 +51,185 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 			continue
 		}
 
-		// Find a matching slice/pool with available capacity
-		var targetSlice *resourcev1.ResourceSlice
-		var targetDeviceName string
-		found := false
+		if len(claim.Spec.Devices.Requests) == 0 {
+			continue
+		}
 
-		for _, slice := range slices.Items {
-			// Ensure it is a simulator slice
-			if slice.Labels["draforge.oaslananka/managed-by"] != "simulator" {
-				continue
-			}
+		var finalResults []resourcev1.DeviceRequestAllocationResult
+		var allocatedNodeName string
+		allocationSuccess := true
+		chosenDevices := make(map[string]bool)
 
-			// Do not allocate from unhealthy slices (fault injection)
-			if slice.Labels["draforge.oaslananka/health"] == "unhealthy" {
-				continue
-			}
+		for _, req := range claim.Spec.Devices.Requests {
+			reqName := req.Name
 
-			// Simple model/class matching: in simulator, if DeviceClassName matches or defaults
-			// We find the first available device in the slice
-			for _, dev := range slice.Spec.Devices {
-				// Check if device is already allocated
-				if r.isDeviceAllocated(claims.Items, slice.Spec.Pool.Name, dev.Name) {
-					continue
+			var subReqNames []string
+			var reqCounts []int
+			var reqClasses []string
+			var reqSelectors [][]resourcev1.DeviceSelector
+
+			if req.Exactly != nil {
+				subReqNames = append(subReqNames, reqName)
+				c := int(req.Exactly.Count)
+				if c <= 0 {
+					c = 1
 				}
-				targetSlice = &slice
-				targetDeviceName = dev.Name
-				found = true
-				break
+				reqCounts = append(reqCounts, c)
+				reqClasses = append(reqClasses, req.Exactly.DeviceClassName)
+				reqSelectors = append(reqSelectors, req.Exactly.Selectors)
+			} else if len(req.FirstAvailable) > 0 {
+				for _, sub := range req.FirstAvailable {
+					subReqNames = append(subReqNames, fmt.Sprintf("%s/%s", reqName, sub.Name))
+					c := int(sub.Count)
+					if c <= 0 {
+						c = 1
+					}
+					reqCounts = append(reqCounts, c)
+					reqClasses = append(reqClasses, sub.DeviceClassName)
+					reqSelectors = append(reqSelectors, sub.Selectors)
+				}
 			}
-			if found {
+
+			reqSatisfied := false
+
+			for i, subReqName := range subReqNames {
+				count := reqCounts[i]
+				devClass := reqClasses[i]
+				selectors := reqSelectors[i]
+
+				var tempResults []resourcev1.DeviceRequestAllocationResult
+				var tempNodeName string
+
+				for _, slice := range slices.Items {
+					if slice.Labels["draforge.oaslananka/managed-by"] != "simulator" {
+						continue
+					}
+
+					if slice.Labels["draforge.oaslananka/health"] == "unhealthy" {
+						continue
+					}
+
+					nodeName := ""
+					if slice.Spec.NodeName != nil {
+						nodeName = *slice.Spec.NodeName
+					}
+
+					// Ensure devices for a subrequest come from the same node if node is specified
+					if allocatedNodeName != "" && nodeName != "" && nodeName != allocatedNodeName {
+						continue
+					}
+					if tempNodeName != "" && nodeName != "" && nodeName != tempNodeName {
+						continue
+					}
+
+					// Incorporate DeviceClass/claim selectors if available heuristically
+					if devClass != "" {
+						reqCls := strings.ToLower(devClass)
+						poolName := strings.ToLower(slice.Spec.Pool.Name)
+						// E.g., if asking for fpga but pool doesn't match, skip
+						if strings.Contains(reqCls, "fpga") && !strings.Contains(poolName, "fpga") {
+							continue
+						}
+						if strings.Contains(reqCls, "gpu") && !strings.Contains(poolName, "gpu") && !strings.Contains(poolName, "nvidia") {
+							continue
+						}
+					}
+
+					if len(selectors) > 0 {
+						// Simple heuristic: if CEL requires an attribute we can check, do it.
+						// Otherwise, let it pass in simulator.
+						celMatched := true
+						for _, sel := range selectors {
+							if sel.CEL != nil && sel.CEL.Expression != "" {
+								expr := strings.ToLower(sel.CEL.Expression)
+								if strings.Contains(expr, "fpga") && !strings.Contains(strings.ToLower(slice.Spec.Pool.Name), "fpga") {
+									celMatched = false
+								}
+							}
+						}
+						if !celMatched {
+							continue
+						}
+					}
+
+					for _, dev := range slice.Spec.Devices {
+						devKey := fmt.Sprintf("%s/%s/%s", slice.Spec.Driver, slice.Spec.Pool.Name, dev.Name)
+						if chosenDevices[devKey] {
+							continue
+						}
+						if r.isDeviceAllocated(claims.Items, slice.Spec.Pool.Name, dev.Name) {
+							continue
+						}
+
+						tempResults = append(tempResults, resourcev1.DeviceRequestAllocationResult{
+							Request: subReqName,
+							Driver:  slice.Spec.Driver,
+							Pool:    slice.Spec.Pool.Name,
+							Device:  dev.Name,
+						})
+
+						if tempNodeName == "" {
+							tempNodeName = nodeName
+						}
+
+						if len(tempResults) == count {
+							break
+						}
+					}
+
+					if len(tempResults) == count {
+						break
+					}
+				}
+
+				if len(tempResults) == count {
+					// Mark as chosen
+					for _, res := range tempResults {
+						devKey := fmt.Sprintf("%s/%s/%s", res.Driver, res.Pool, res.Device)
+						chosenDevices[devKey] = true
+					}
+					finalResults = append(finalResults, tempResults...)
+					if allocatedNodeName == "" {
+						allocatedNodeName = tempNodeName
+					}
+					reqSatisfied = true
+					break
+				}
+			}
+
+			if !reqSatisfied {
+				allocationSuccess = false
+				fmt.Printf("Simulating allocation for claim %s/%s failed: insufficient capacity, unavailability, or no match for request %s\n",
+					claim.Namespace, claim.Name, reqName)
 				break
 			}
 		}
 
-		if found {
-			nodeName := ""
-			if targetSlice.Spec.NodeName != nil {
-				nodeName = *targetSlice.Spec.NodeName
-			}
-			fmt.Printf("Simulating allocation for claim %s/%s -> device %s on node %s\n",
-				claim.Namespace, claim.Name, targetDeviceName, nodeName)
+		if allocationSuccess && len(finalResults) > 0 {
+			fmt.Printf("Simulating allocation for claim %s/%s -> %d devices on node %s\n",
+				claim.Namespace, claim.Name, len(finalResults), allocatedNodeName)
 
-			// Update claim status with allocation result
 			allocatedClaim := claim.DeepCopy()
 			allocatedClaim.Status.Allocation = &resourcev1.AllocationResult{
 				Devices: resourcev1.DeviceAllocationResult{
-					Results: []resourcev1.DeviceRequestAllocationResult{
-						{
-							Device: targetDeviceName,
-							Driver: targetSlice.Spec.Driver,
-							Pool:   targetSlice.Spec.Pool.Name,
-						},
-					},
+					Results: finalResults,
 				},
-				NodeSelector: &corev1.NodeSelector{
+			}
+
+			if allocatedNodeName != "" {
+				allocatedClaim.Status.Allocation.NodeSelector = &corev1.NodeSelector{
 					NodeSelectorTerms: []corev1.NodeSelectorTerm{
 						{
 							MatchFields: []corev1.NodeSelectorRequirement{
 								{
 									Key:      "metadata.name",
 									Operator: corev1.NodeSelectorOpIn,
-									Values:   []string{nodeName},
+									Values:   []string{allocatedNodeName},
 								},
 							},
 						},
 					},
-				},
+				}
 			}
 
 			_, err = r.clientset.ResourceV1().ResourceClaims(claim.Namespace).UpdateStatus(ctx, allocatedClaim, metav1.UpdateOptions{})

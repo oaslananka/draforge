@@ -1,21 +1,74 @@
-# Simulator Scenarios
+# DRAForge Simulator Scenarios
 
-DRAForge includes reusable simulator scenarios under examples/scenarios.
+The DRAForge simulator reads `SimulatedDevicePool` CRDs and translates them into real Kubernetes `ResourceSlice` objects. Scenarios are YAML files that define virtual device pools with configurable health modes, capacities, and topologies.
 
-Catalog:
+## Scenario Catalog
 
-- success.yaml: healthy pool with enough GPU capacity.
-- no-match.yaml: attributes differ from common high-end GPU selectors.
-- capacity.yaml: zero-device pool for capacity diagnostics.
-- delayed-binding.yaml: multi-node target list for delayed binding checks.
-- multi-node.yaml: four simulated devices across two target nodes.
+Reusable scenario files live under `examples/scenarios/`.
 
-Apply a scenario:
+| Scenario | File | Purpose |
+|---|---|---|
+| Success | `examples/scenarios/success.yaml` | Healthy pool with enough GPU capacity for a normal allocation path. |
+| No match | `examples/scenarios/no-match.yaml` | Pool attributes differ from common high-end GPU selectors. |
+| Capacity | `examples/scenarios/capacity.yaml` | Zero-device pool for capacity diagnostics. |
+| Delayed binding | `examples/scenarios/delayed-binding.yaml` | Multi-node target list for delayed binding checks. |
+| Multi-node | `examples/scenarios/multi-node.yaml` | Four simulated devices across two target nodes. |
+
+## Health Modes
+
+Each `SimulatedDevicePool` supports one of four health modes via the `spec.health` field:
+
+| Health | Behavior |
+|---|---|
+| `healthy` | All devices are published and available for allocation. Default. |
+| `unhealthy` | Devices appear in the slice but are skipped by the allocation simulator. |
+| `capacity-exhausted` | Slice is published with zero devices. Tests out-of-capacity paths. |
+| `disappear` | No slice is created or existing slices are deleted. Node vanishes. |
+
+## Applying Scenarios
 
 ```bash
+kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
 kubectl apply -f examples/scenarios/success.yaml
+kubectl get simpool
+kubectl get resourceslices -o wide
 ```
 
-Inspect pools, devices, claims, graph, and doctor output with the CLI or dashboard.
+Validate all example scenarios before using them:
 
-To add a scenario, create a YAML file in examples/scenarios using the SimulatedDevicePool CRD. Keep it focused on one diagnostic intent and update this catalog.
+```bash
+for f in examples/scenarios/*.yaml; do
+  echo "=== $f ==="
+  kubectl apply --dry-run=client -f "$f" || exit 1
+done
+```
+
+## Adding a Scenario
+
+Create a focused YAML file in `examples/scenarios/` using the `SimulatedDevicePool` CRD. Give the resource and file a clear diagnostic intent, keep the scope small, and update the catalog table above.
+
+## E2E Tests
+
+End-to-end tests require a live cluster and the `DRAFORGE_E2E=1` environment variable:
+
+```bash
+DRAFORGE_E2E=1 go test -tags=e2e ./tests/e2e/ -v
+```
+
+The env guard prevents accidental execution against production clusters.
+
+## Running Unit Tests
+
+All tests use fake Kubernetes clients — no cluster required.
+
+```bash
+go test ./internal/simulator/ -v
+```
+
+The simulator test suite covers:
+- All four health modes (healthy, unhealthy, capacity-exhausted, disappear)
+- Idempotent reconciliation
+- Deterministic output
+- Empty targetNodes
+- Multi-node pool distribution
+- Allocation success and failure paths

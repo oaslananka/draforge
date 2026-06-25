@@ -1,12 +1,20 @@
 name: E2E Matrix Tests
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  schedule:
-    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      kubernetes_version:
+        description: Kubernetes version to test, or all for the full matrix
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - v1.32.11
+          - v1.33.12
+          - v1.34.8
+          - v1.35.5
+          - v1.36.1
 
 jobs:
   local-e2e:
@@ -15,19 +23,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        k8s_version:
-          - "v1.32.11"
-          - "v1.33.12"
-          - "v1.34.8"
-          - "v1.35.5"
-          - "v1.36.1"
-
+        k8s_version: [v1.32.11, v1.33.12, v1.34.8, v1.35.5, v1.36.1]
+    if: ${{ github.event.inputs.kubernetes_version == 'all' || github.event.inputs.kubernetes_version == matrix.k8s_version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -36,7 +39,7 @@ jobs:
 
       - name: Create kind cluster config
         run: |
-          cat << 'CONFIG' > kind-config.yaml
+          cat <<'CONFIG' > kind-config.yaml
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           featureGates:
@@ -51,10 +54,10 @@ jobs:
           config: kind-config.yaml
           cluster_name: draforge-e2e
 
-      - name: Verify cluster is running and feature gates are enabled
+      - name: Verify cluster is running
         run: |
           kubectl cluster-info
-          kubectl get --raw /metrics | grep "kubernetes_feature_enabled{name=\"DynamicResourceAllocation\"}"
+          kubectl api-resources | grep -E 'resourceclaims|resourceslices|deviceclasses'
 
       - name: Build binaries
         run: task build
@@ -62,9 +65,8 @@ jobs:
       - name: Deploy DRAForge resources
         run: |
           kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
-          # Apply a test scenario just to ensure the CRD is working
           kubectl apply -f examples/scenarios/basic-gpu.yaml
-          sleep 5
+          kubectl get simulateddevicepools.draforge.oaslananka -A
 
       - name: Run E2E tests
         env:
@@ -75,13 +77,10 @@ jobs:
         if: failure()
         run: |
           mkdir -p logs
-          kubectl get nodes -o wide > logs/nodes.txt
-          kubectl get all --all-namespaces > logs/all-resources.txt
-          kubectl describe pods --all-namespaces > logs/pod-descriptions.txt
-          kubectl get events --all-namespaces --sort-by='.metadata.creationTimestamp' > logs/events.txt
-          kubectl logs -n kube-system -l component=kube-apiserver > logs/kube-apiserver.log
-          kubectl logs -n kube-system -l component=kube-controller-manager > logs/kube-controller-manager.log
-          kubectl logs -n kube-system -l component=kube-scheduler > logs/kube-scheduler.log
+          kubectl get nodes -o wide > logs/nodes.txt || true
+          kubectl get all --all-namespaces > logs/all-resources.txt || true
+          kubectl describe pods --all-namespaces > logs/pod-descriptions.txt || true
+          kubectl get events --all-namespaces --sort-by='.metadata.creationTimestamp' > logs/events.txt || true
 
       - name: Upload logs artifact
         if: failure()

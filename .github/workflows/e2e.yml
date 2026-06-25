@@ -56,7 +56,7 @@ jobs:
     environment: e2e-doks
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate manual inputs and required secret
         env:
@@ -114,7 +114,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         if: always()
 
       - name: Install doctl

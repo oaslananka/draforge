@@ -1,0 +1,15 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: capacity-gpu-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: capacity-gpu
+  deviceCount: 0
+  deviceType: gpu
+  attributes:
+    model: NVIDIA-A100-Virtual
+    vendor: NVIDIA
+  capacities:
+    memory: 40Gi

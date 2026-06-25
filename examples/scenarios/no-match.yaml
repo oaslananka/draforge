@@ -1,0 +1,15 @@
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: no-match-gpu-pool
+  namespace: default
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: no-match-gpu
+  deviceCount: 1
+  deviceType: gpu
+  attributes:
+    model: NVIDIA-L4-Virtual
+    vendor: NVIDIA
+  capacities:
+    memory: 24Gi

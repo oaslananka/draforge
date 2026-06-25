@@ -115,3 +115,12 @@ type DoctorReport struct {
 	Summary   map[string]int      `json:"summary"` // PASS: X, WARN: Y, FAIL: Z, etc.
 	Results   []DoctorCheckResult `json:"results"`
 }
+
+// DiscoveryStatus represents the health and availability of Kubernetes APIs queried during discovery.
+type DiscoveryStatus struct {
+	ResourceClaimsAvailable bool     `json:"resourceClaimsAvailable"`
+	ResourceSlicesAvailable bool     `json:"resourceSlicesAvailable"`
+	PodsAvailable           bool     `json:"podsAvailable"`
+	IsPartial               bool     `json:"isPartial"`
+	Warnings                []string `json:"warnings,omitempty"`
+}

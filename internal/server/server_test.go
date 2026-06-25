@@ -64,6 +64,40 @@ func TestServerEndpoints(t *testing.T) {
 		t.Errorf("expected 1 claim in response, got %d", len(claims))
 	}
 
+	// Test handleSummary endpoint for discoveryStatus fields
+	reqSummary := httptest.NewRequest("GET", "/api/summary", nil)
+	rrSummary := httptest.NewRecorder()
+
+	srv.cors(http.HandlerFunc(srv.handleSummary)).ServeHTTP(rrSummary, reqSummary)
+	if rrSummary.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rrSummary.Code)
+	}
+
+	var summaryResp map[string]interface{}
+	if err := json.Unmarshal(rrSummary.Body.Bytes(), &summaryResp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	// Validate presence of discoveryStatus
+	statusField, ok := summaryResp["discoveryStatus"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected discoveryStatus field in summary response")
+	}
+
+	// As everything is successful, they should be true
+	if statusField["resourceClaimsAvailable"] != true {
+		t.Errorf("expected resourceClaimsAvailable true")
+	}
+	if statusField["resourceSlicesAvailable"] != true {
+		t.Errorf("expected resourceSlicesAvailable true")
+	}
+	if statusField["podsAvailable"] != true {
+		t.Errorf("expected podsAvailable true")
+	}
+	if statusField["isPartial"] != false {
+		t.Errorf("expected isPartial false")
+	}
+
 	// 3. Test handleMetrics endpoint
 	reqMetrics := httptest.NewRequest("GET", "/metrics", nil)
 	rrMetrics := httptest.NewRecorder()

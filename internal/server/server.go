@@ -231,7 +231,7 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 
 // Summary
 func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
-	pools, devices, claims, err := discovery.DiscoverDRA(r.Context(), s.clientset)
+	pools, devices, claims, status, err := discovery.DiscoverDRAWithStatus(r.Context(), s.clientset)
 	if err != nil {
 		s.respondError(w, err, http.StatusInternalServerError)
 		return
@@ -241,11 +241,12 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	docReport := docRegistry.RunDiagnostics(r.Context(), s.clientset)
 
 	summary := map[string]interface{}{
-		"poolsCount":   len(pools),
-		"devicesCount": len(devices),
-		"claimsCount":  len(claims),
-		"doctorStatus": docReport.Summary,
-		"timestamp":    time.Now(),
+		"poolsCount":      len(pools),
+		"devicesCount":    len(devices),
+		"claimsCount":     len(claims),
+		"doctorStatus":    docReport.Summary,
+		"timestamp":       time.Now(),
+		"discoveryStatus": status,
 	}
 
 	_ = json.NewEncoder(w).Encode(summary)

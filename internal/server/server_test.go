@@ -295,3 +295,70 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+// Test remaining endpoints
+func TestPoolsEndpoint(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	srv := NewServer(clientset, 8081)
+
+	req := httptest.NewRequest("GET", "/api/pools", nil)
+	rr := httptest.NewRecorder()
+
+	srv.cors(http.HandlerFunc(srv.handlePools)).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+
+	var pools []interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &pools); err != nil {
+		t.Fatalf("failed to parse JSON response: %v", err)
+	}
+}
+
+func TestDevicesEndpoint(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	srv := NewServer(clientset, 8081)
+
+	req := httptest.NewRequest("GET", "/api/devices", nil)
+	rr := httptest.NewRecorder()
+
+	srv.cors(http.HandlerFunc(srv.handleDevices)).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+
+	var devices []interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &devices); err != nil {
+		t.Fatalf("failed to parse JSON response: %v", err)
+	}
+}
+
+func TestGraphEndpoint(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	srv := NewServer(clientset, 8081)
+
+	req := httptest.NewRequest("GET", "/api/graph", nil)
+	rr := httptest.NewRecorder()
+
+	srv.cors(http.HandlerFunc(srv.handleGraph)).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestDoctorEndpoint(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	srv := NewServer(clientset, 8081)
+
+	req := httptest.NewRequest("GET", "/api/doctor", nil)
+	rr := httptest.NewRecorder()
+
+	srv.cors(http.HandlerFunc(srv.handleDoctor)).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+}

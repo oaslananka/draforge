@@ -1,3 +1,6 @@
+{{- if not (has .Values.nodePlugin.outputMode (list "demo" "node")) }}
+{{- fail "nodePlugin.outputMode must be either 'demo' or 'node'" }}
+{{- end }}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -49,4 +52,10 @@ spec:
               mountPath: /var/lib/kubelet/device-plugins/cdi
       volumes:
         - name: cdi-dir
+          {{- if eq .Values.nodePlugin.outputMode "demo" }}
           emptyDir: {}
+          {{- else }}
+          hostPath:
+            path: /var/lib/kubelet/device-plugins/cdi
+            type: DirectoryOrCreate
+          {{- end }}

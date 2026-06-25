@@ -63,6 +63,7 @@ controller:
       type: RuntimeDefault
 
 nodePlugin:
+  outputMode: "demo" # Must be either "demo" or "node"
   image:
     repository: draforge
     tag: "sim-driver-latest"

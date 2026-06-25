@@ -10,6 +10,16 @@
         }
       }
     },
+    "nodePlugin": {
+      "type": "object",
+      "properties": {
+        "outputMode": {
+          "type": "string",
+          "enum": ["demo", "node"],
+          "default": "demo"
+        }
+      }
+    },
     "server": {
       "type": "object",
       "properties": {

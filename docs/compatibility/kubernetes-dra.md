@@ -111,7 +111,10 @@ explicitly supports them.
 
 4. **CDI mode must be explicit.** Demo-local output and host-integrated kubelet
    CDI output are different operational modes and should not be presented as the
-   same production behavior.
+   same production behavior. This is configured via the `nodePlugin.outputMode`
+   Helm chart value:
+   - `demo` (default): Uses an `emptyDir` for testing without modifying the host.
+   - `node`: Mounts a `hostPath` (`/var/lib/kubelet/device-plugins/cdi`) to provide output to the node's kubelet.
 
 5. **Granular authorization is not implemented.** DRAForge currently assumes
    broad enough read access to observe DRA objects. Per-device status visibility

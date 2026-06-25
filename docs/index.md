@@ -21,6 +21,9 @@ It helps Kubernetes platform engineers model DRA resources, simulate virtual dev
 ## Documentation
 
 - [Architecture](architecture.md)
+- [Installation Guide](operations/install.md)
+- [Operations Guide](operations/guide.md)
+- [Troubleshooting Guide](operations/troubleshooting.md)
 - [Dashboard guide](dashboard.md)
 - [Public API and CLI Surface](api.md)
 - [Demo guide](demo.md)

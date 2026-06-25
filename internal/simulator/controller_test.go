@@ -251,8 +251,10 @@ func TestSimulateAllocationHealthy(t *testing.T) {
 			Devices: resourcev1.DeviceClaim{
 				Requests: []resourcev1.DeviceRequest{
 					{
+						Name: "req-1",
 						Exactly: &resourcev1.ExactDeviceRequest{
 							DeviceClassName: "gpu-class",
+							Count:           1,
 						},
 					},
 				},
@@ -307,6 +309,179 @@ func TestSimulateAllocationHealthy(t *testing.T) {
 	}
 }
 
+func TestSimulateAllocationExactCount(t *testing.T) {
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "multi-claim", Namespace: "default"},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req-1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "gpu-class",
+							Count:           2,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	nodeName := "node-0"
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "sim-slice-multi",
+			Labels: map[string]string{
+				"draforge.oaslananka/managed-by": "simulator",
+				"draforge.oaslananka/health":     "healthy",
+			},
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "sim.draforge.oaslananka",
+			NodeName: &nodeName,
+			Pool:     resourcev1.ResourcePool{Name: "gpu-pool"},
+			Devices: []resourcev1.Device{
+				{Name: "dev-0"},
+				{Name: "dev-1"},
+				{Name: "dev-2"},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, slice)
+	reconciler := NewReconciler(clientset, dynfake.NewSimpleDynamicClient(runtime.NewScheme()))
+
+	err := reconciler.SimulateAllocation(context.Background())
+	if err != nil {
+		t.Fatalf("SimulateAllocation failed: %v", err)
+	}
+
+	allocatedClaim, _ := clientset.ResourceV1().ResourceClaims("default").Get(context.Background(), "multi-claim", metav1.GetOptions{})
+	if allocatedClaim.Status.Allocation == nil {
+		t.Fatal("expected claim to be allocated")
+	}
+	if len(allocatedClaim.Status.Allocation.Devices.Results) != 2 {
+		t.Fatalf("expected 2 allocation results, got %d", len(allocatedClaim.Status.Allocation.Devices.Results))
+	}
+}
+
+func TestSimulateAllocationFirstAvailable(t *testing.T) {
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "fa-claim", Namespace: "default"},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req-1",
+						FirstAvailable: []resourcev1.DeviceSubRequest{
+							{
+								Name: "sub-1",
+								DeviceClassName: "fpga-class",
+							},
+							{
+								Name: "sub-2",
+								DeviceClassName: "gpu-class",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	nodeName := "node-0"
+	// We only provide a gpu-pool slice, so sub-1 (fpga) should fail matching and sub-2 should succeed.
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "sim-slice-gpu",
+			Labels: map[string]string{
+				"draforge.oaslananka/managed-by": "simulator",
+				"draforge.oaslananka/health":     "healthy",
+			},
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "sim.draforge.oaslananka",
+			NodeName: &nodeName,
+			Pool:     resourcev1.ResourcePool{Name: "gpu-pool"},
+			Devices: []resourcev1.Device{
+				{Name: "dev-0"},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, slice)
+	reconciler := NewReconciler(clientset, dynfake.NewSimpleDynamicClient(runtime.NewScheme()))
+
+	err := reconciler.SimulateAllocation(context.Background())
+	if err != nil {
+		t.Fatalf("SimulateAllocation failed: %v", err)
+	}
+
+	allocatedClaim, _ := clientset.ResourceV1().ResourceClaims("default").Get(context.Background(), "fa-claim", metav1.GetOptions{})
+	if allocatedClaim.Status.Allocation == nil {
+		t.Fatal("expected claim to be allocated via FirstAvailable fallback")
+	}
+	res := allocatedClaim.Status.Allocation.Devices.Results
+	if len(res) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(res))
+	}
+	if res[0].Request != "req-1/sub-2" {
+		t.Errorf("expected request 'req-1/sub-2' to be fulfilled, got %q", res[0].Request)
+	}
+}
+
+func TestSimulateAllocationInsufficientCapacity(t *testing.T) {
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "huge-claim", Namespace: "default"},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req-1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "gpu-class",
+							Count:           5,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	nodeName := "node-0"
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "sim-slice-small",
+			Labels: map[string]string{
+				"draforge.oaslananka/managed-by": "simulator",
+				"draforge.oaslananka/health":     "healthy",
+			},
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "sim.draforge.oaslananka",
+			NodeName: &nodeName,
+			Pool:     resourcev1.ResourcePool{Name: "gpu-pool"},
+			Devices: []resourcev1.Device{
+				{Name: "dev-0"},
+				{Name: "dev-1"},
+			}, // Only 2 devices
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, slice)
+	reconciler := NewReconciler(clientset, dynfake.NewSimpleDynamicClient(runtime.NewScheme()))
+
+	err := reconciler.SimulateAllocation(context.Background())
+	if err != nil {
+		t.Fatalf("SimulateAllocation failed: %v", err)
+	}
+
+	allocatedClaim, _ := clientset.ResourceV1().ResourceClaims("default").Get(context.Background(), "huge-claim", metav1.GetOptions{})
+	if allocatedClaim.Status.Allocation != nil {
+		t.Fatal("expected claim NOT to be allocated due to insufficient capacity")
+	}
+}
+
 func TestSimulateAllocationUnhealthySkip(t *testing.T) {
 	claim := &resourcev1.ResourceClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -317,8 +492,10 @@ func TestSimulateAllocationUnhealthySkip(t *testing.T) {
 			Devices: resourcev1.DeviceClaim{
 				Requests: []resourcev1.DeviceRequest{
 					{
+						Name: "req-1",
 						Exactly: &resourcev1.ExactDeviceRequest{
 							DeviceClassName: "gpu-class",
+							Count:           1,
 						},
 					},
 				},
@@ -391,13 +568,13 @@ func TestSimulateAllocationNoDuplicate(t *testing.T) {
 	claim1 := &resourcev1.ResourceClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "claim-1", Namespace: "default"},
 		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{
-			Requests: []resourcev1.DeviceRequest{{Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class"}}},
+			Requests: []resourcev1.DeviceRequest{{Name: "r1", Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class", Count: 1}}},
 		}},
 	}
 	claim2 := &resourcev1.ResourceClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "claim-2", Namespace: "default"},
 		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{
-			Requests: []resourcev1.DeviceRequest{{Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class"}}},
+			Requests: []resourcev1.DeviceRequest{{Name: "r2", Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class", Count: 1}}},
 		}},
 	}
 
@@ -439,7 +616,7 @@ func TestSimulateAllocationNoDevice(t *testing.T) {
 	claim := &resourcev1.ResourceClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "pending", Namespace: "default"},
 		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{
-			Requests: []resourcev1.DeviceRequest{{Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class"}}},
+			Requests: []resourcev1.DeviceRequest{{Name: "r1", Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class", Count: 1}}},
 		}},
 	}
 	// No ResourceSlices at all
@@ -464,7 +641,7 @@ func TestSimulateAllocationAlreadyAllocated(t *testing.T) {
 	claim := &resourcev1.ResourceClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "already-allocated", Namespace: "default"},
 		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{
-			Requests: []resourcev1.DeviceRequest{{Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class"}}},
+			Requests: []resourcev1.DeviceRequest{{Name: "r1", Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class", Count: 1}}},
 		}},
 		Status: resourcev1.ResourceClaimStatus{
 			Allocation: &resourcev1.AllocationResult{

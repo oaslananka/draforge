@@ -6,8 +6,9 @@ metadata:
 spec:
   driverName: sim.draforge.oaslananka
   poolName: capacity-gpu
-  deviceCount: 0
+  deviceCount: 1
   deviceType: gpu
+  health: capacity-exhausted
   attributes:
     model: NVIDIA-A100-Virtual
     vendor: NVIDIA

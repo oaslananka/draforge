@@ -197,6 +197,9 @@ func TestExplainClaim_Success(t *testing.T) {
 	if !strings.Contains(result.ReasonTree.Message, "successfully allocated") {
 		t.Errorf("unexpected reason message: %s", result.ReasonTree.Message)
 	}
+	if !strings.Contains(result.ReasonTree.Evidence, "Reserved for consumers: gpu-pod") {
+		t.Errorf("expected Evidence to contain 'Reserved for consumers: gpu-pod', got: %s", result.ReasonTree.Evidence)
+	}
 }
 
 func TestExplainClaim_MissingDeviceClass(t *testing.T) {
@@ -875,5 +878,78 @@ func TestExplainClaim_OmitZeroCountNodes(t *testing.T) {
 
 	if !foundSummary {
 		t.Errorf("expected explanation to include evaluation summary")
+	}
+}
+
+func TestExplainClaim_PendingNodeSelector(t *testing.T) {
+	ctx := context.Background()
+	claimName := "pending-selector-claim"
+	namespace := "default"
+
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              claimName,
+			Namespace:         namespace,
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "test-class",
+						},
+					},
+				},
+			},
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{
+				{Name: "test-consumer-pod"},
+			},
+			Allocation: &resourcev1.AllocationResult{
+				NodeSelector: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "kubernetes.io/hostname",
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"node-0"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	class := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-class",
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, class)
+	result, err := ExplainClaim(ctx, clientset, namespace, claimName)
+	if err != nil {
+		t.Fatalf("ExplainClaim failed: %v", err)
+	}
+
+	if result.Allocated {
+		t.Errorf("expected Allocated to be false, got true")
+	}
+
+	foundNodeSelectorReason := false
+	for _, child := range result.ReasonTree.Children {
+		if strings.Contains(child.Message, "Node selector computed") {
+			foundNodeSelectorReason = true
+			break
+		}
+	}
+	if !foundNodeSelectorReason {
+		t.Errorf("expected to find node selector reason node in children")
 	}
 }

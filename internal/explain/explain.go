@@ -93,10 +93,19 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 	}
 
 	if result.Allocated {
+		var consumers []string
+		for _, ref := range liveClaim.Status.ReservedFor {
+			consumers = append(consumers, ref.Name)
+		}
+		consumerList := "none"
+		if len(consumers) > 0 {
+			consumerList = strings.Join(consumers, ", ")
+		}
+
 		result.ReasonTree = model.ReasonNode{
 			Message:    "ResourceClaim successfully allocated.",
 			Confidence: "confirmed",
-			Evidence:   fmt.Sprintf("Claim status is Allocated. Bound to device %s on node %s.", target.AllocatedDevice, target.AllocatedNode),
+			Evidence:   fmt.Sprintf("Claim status is Allocated. Bound to device %s on node %s. Reserved for consumers: %s", target.AllocatedDevice, target.AllocatedNode, consumerList),
 			SourceType: "ResourceClaim",
 			FieldPath:  ".status.allocation",
 		}
@@ -110,6 +119,16 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 		Evidence:   "Claim status is Pending.",
 		SourceType: "ResourceClaim",
 		FieldPath:  ".status.allocation",
+	}
+
+	if liveClaim.Status.Allocation != nil && liveClaim.Status.Allocation.NodeSelector != nil {
+		rootNode.Children = append(rootNode.Children, model.ReasonNode{
+			Message:    "Node selector computed, pending final allocation",
+			Confidence: "confirmed",
+			Evidence:   "Claim has an active node selector indicating preliminary scheduling.",
+			SourceType: "ResourceClaim",
+			FieldPath:  ".status.allocation.nodeSelector",
+		})
 	}
 
 	// Check DeviceClass existence
@@ -281,6 +300,18 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 			FieldPath:  ".status.reservedFor",
 		})
 		result.Remedy = append(result.Remedy, "Deploy a Pod referencing this ResourceClaim to trigger allocation.")
+	} else {
+		var consumers []string
+		for _, ref := range liveClaim.Status.ReservedFor {
+			consumers = append(consumers, ref.Name)
+		}
+		rootNode.Children = append(rootNode.Children, model.ReasonNode{
+			Message:    "Claim has active consumers but allocation is pending.",
+			Confidence: "confirmed",
+			Evidence:   fmt.Sprintf("Reserved for consumers: %s", strings.Join(consumers, ", ")),
+			SourceType: "ResourceClaim",
+			FieldPath:  ".status.reservedFor",
+		})
 	}
 
 	result.ReasonTree = rootNode

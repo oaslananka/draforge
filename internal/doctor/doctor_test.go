@@ -279,3 +279,51 @@ func TestStaleResourceSliceStates(t *testing.T) {
 func ptr[T any](v T) *T {
 	return &v
 }
+
+func TestPodReferenceCheck_MissingReservedFor(t *testing.T) {
+	ctx := context.Background()
+	namespace := "default"
+	podName := "test-pod"
+	claimName := "test-claim"
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			ResourceClaims: []corev1.PodResourceClaim{
+				{
+					Name:              "my-claim-ref",
+					ResourceClaimName: &claimName,
+				},
+			},
+		},
+	}
+
+	// Claim exists but does not list the pod in ReservedFor
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      claimName,
+			Namespace: namespace,
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{
+				{Name: "some-other-pod"},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(pod, claim)
+
+	check := &PodReferenceCheck{}
+	res := check.Run(ctx, clientset)
+
+	if res.Status != model.StatusFail {
+		t.Errorf("expected FAIL, got %v", res.Status)
+	}
+
+	if !strings.Contains(res.Evidence, "pod not in claim ReservedFor list") {
+		t.Errorf("expected Evidence to contain 'pod not in claim ReservedFor list', got %s", res.Evidence)
+	}
+}

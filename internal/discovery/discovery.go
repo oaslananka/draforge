@@ -36,7 +36,9 @@ func DiscoverDRAWithStatus(ctx context.Context, clientset kubernetes.Interface) 
 			allocatedDriver := ""
 
 			if rc.Status.Allocation != nil {
-				status = "Allocated"
+				if len(rc.Status.Allocation.Devices.Results) > 0 {
+					status = "Allocated"
+				}
 				if rc.Status.Allocation.NodeSelector != nil {
 					for _, term := range rc.Status.Allocation.NodeSelector.NodeSelectorTerms {
 						for _, req := range term.MatchFields {

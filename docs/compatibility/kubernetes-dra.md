@@ -37,13 +37,13 @@ transition targets and must be validated per distribution.
 | Distribution | Version | Test status |
 | --- | --- | --- |
 | GitHub Actions / static CI | n/a | Helm template, web build, Go test through CI |
-| kind | v1.32+ | Manual / planned E2E matrix |
+| kind | v1.32+ | Automated CI matrix |
 | DOKS | v1.34+ | Manual showcase target |
 | v1.35+ conformant clusters | v1.35-v1.36 | Target for release-readiness E2E |
 
-The repository currently does **not** contain a fully automated real-cluster DRA
-matrix for every supported Kubernetes version. That is tracked separately in the
-roadmap.
+The repository now runs an automated CI E2E matrix testing core paths
+for supported Kubernetes versions via kind.
+
 
 ---
 
@@ -85,13 +85,13 @@ explicitly supports them.
 | ResourceClaim discovery | Supported | Reads status/allocation data and maps claims to Pods where possible |
 | DeviceClass discovery | Partial | DeviceClasses are listed, but full CEL selector behavior is not implemented |
 | Claim allocation explain | Partial | Useful diagnostics exist, but modern DRA selector, taint and binding features are incomplete |
-| Simulator allocation | Partial | Demo allocation exists; full scheduler-compatible DRA semantics are roadmap work |
+| Simulator allocation | Partial | Demo allocation exists; full scheduler-compatible DRA semantics are work |
 | Device health | Partial | Custom label fallback exists; native health status support is incomplete |
 | Consumable capacity | Partial | Values can be displayed; capacity-aware allocation and exhaustion scoring are missing |
 | CDI output | Partial | The simulator can produce CDI-oriented output, but Helm deployment modes must clearly separate demo and host-integrated operation |
 | Helm CRD packaging | Supported | The SimulatedDevicePool CRD is packaged under chart `crds/` for Helm install |
 | RBAC least privilege | Partial | Current chart still needs narrower controller permissions |
-| Real-cluster E2E coverage | Partial | Automated matrix is planned but not complete |
+| Real-cluster E2E coverage | Partial | Automated matrix tests run across v1.32-v1.36 in CI using kind |
 
 ---
 
@@ -268,7 +268,7 @@ true:
 - The doctor command must distinguish missing APIs from empty clusters.
 - The simulator and explain engine must clearly mark unsupported DRA features as
   unsupported rather than silently approximating them.
-- Real-cluster E2E tests must cover at least one v1.35+ cluster.
+- Real-cluster E2E tests cover v1.32+ clusters using kind in CI.
 
 ---
 

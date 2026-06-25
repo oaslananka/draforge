@@ -1,0 +1,77 @@
+name: E2E Matrix Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  local-e2e:
+    name: Local E2E Matrix (kind)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s_version: [v1.32.11, v1.33.12, v1.34.8, v1.35.5, v1.36.1]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+
+      - name: Create kind cluster config
+        run: |
+          cat <<'CONFIG' > kind-config.yaml
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          featureGates:
+            DynamicResourceAllocation: true
+          CONFIG
+
+      - name: Setup kind cluster
+        uses: helm/kind-action@v1
+        with:
+          version: v0.24.0
+          node_image: kindest/node:${{ matrix.k8s_version }}
+          config: kind-config.yaml
+          cluster_name: draforge-e2e
+
+      - name: Verify cluster is running
+        run: |
+          kubectl cluster-info
+          kubectl api-resources | grep -E 'resourceclaims|resourceslices|deviceclasses'
+
+      - name: Build binaries
+        run: task build
+
+      - name: Deploy DRAForge resources
+        run: |
+          kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
+          kubectl apply -f examples/scenarios/basic-gpu.yaml
+          kubectl get simulateddevicepools.draforge.oaslananka -A
+
+      - name: Run E2E tests
+        env:
+          DRAFORGE_E2E: '1'
+        run: go test -tags=e2e ./tests/e2e/... -v
+
+      - name: Collect cluster logs on failure
+        if: failure()
+        run: |
+          mkdir -p logs
+          kubectl get nodes -o wide > logs/nodes.txt || true
+          kubectl get all --all-namespaces > logs/all-resources.txt || true
+          kubectl describe pods --all-namespaces > logs/pod-descriptions.txt || true
+          kubectl get events --all-namespaces --sort-by='.metadata.creationTimestamp' > logs/events.txt || true
+
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ matrix.k8s_version }}
+          path: logs/
+          retention-days: 5

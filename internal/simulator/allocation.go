@@ -8,10 +8,68 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/cel-go/cel"
 	corev1 "k8s.io/api/core/v1"
+
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func matchDevice(dev resourcev1.Device, classSelectors []resourcev1.DeviceSelector, reqSelectors []resourcev1.DeviceSelector, reqCap *resourcev1.CapacityRequirements) bool {
+	if reqCap != nil {
+		for reqKey, reqVal := range reqCap.Requests {
+			devVal, ok := dev.Capacity[reqKey]
+			if !ok || devVal.Value.Cmp(reqVal) < 0 {
+				return false
+			}
+		}
+	}
+
+	env, _ := cel.NewEnv(
+		cel.Variable("device", cel.MapType(cel.StringType, cel.AnyType)),
+	)
+
+	deviceMap := map[string]interface{}{
+		"attributes": map[string]interface{}{},
+		"capacity":   map[string]interface{}{},
+	}
+
+	for k, v := range dev.Attributes {
+		if v.StringValue != nil {
+			deviceMap["attributes"].(map[string]interface{})[string(k)] = *v.StringValue
+		} else if v.IntValue != nil {
+			deviceMap["attributes"].(map[string]interface{})[string(k)] = *v.IntValue
+		} else if v.BoolValue != nil {
+			deviceMap["attributes"].(map[string]interface{})[string(k)] = *v.BoolValue
+		}
+	}
+	for k, v := range dev.Capacity {
+		deviceMap["capacity"].(map[string]interface{})[string(k)] = v.Value.Value()
+	}
+
+	matchSelectors := func(selectors []resourcev1.DeviceSelector) bool {
+		for _, sel := range selectors {
+			if sel.CEL != nil {
+				ast, iss := env.Compile(sel.CEL.Expression)
+				if iss.Err() == nil {
+					if prg, err := env.Program(ast); err == nil {
+						if out, _, err := prg.Eval(map[string]interface{}{"device": deviceMap}); err == nil {
+							if b, ok := out.Value().(bool); ok {
+								if !b {
+									return false
+								}
+								continue
+							}
+						}
+					}
+				}
+				return false
+			}
+		}
+		return true
+	}
+	return matchSelectors(classSelectors) && matchSelectors(reqSelectors)
+}
 
 // StartAllocationSimulator watches for pending claims and simulates allocation.
 func (r *Reconciler) StartAllocationSimulator(ctx context.Context, interval time.Duration) {
@@ -44,83 +102,150 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 		return err
 	}
 
+	classes, err := r.clientset.ResourceV1().DeviceClasses().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	classMap := make(map[string]*resourcev1.DeviceClass)
+	for i := range classes.Items {
+		classMap[classes.Items[i].Name] = &classes.Items[i]
+	}
+
 	for _, claim := range claims.Items {
 		// Only allocate pending claims
 		if claim.Status.Allocation != nil {
 			continue
 		}
 
-		// Find a matching slice/pool with available capacity
-		var targetSlice *resourcev1.ResourceSlice
-		var targetDeviceName string
-		found := false
+		var claimResults []resourcev1.DeviceRequestAllocationResult
+		nodeSelectors := make(map[string]bool)
+		claimFullySatisfied := true
 
-		for _, slice := range slices.Items {
-			// Ensure it is a simulator slice
-			if slice.Labels["draforge.oaslananka/managed-by"] != "simulator" {
-				continue
+		// Create a transient view of already allocated devices, including those allocated in previous requests of this claim
+		allocatedDevices := make(map[string]bool)
+		for _, c := range claims.Items {
+			if c.Status.Allocation != nil {
+				for _, res := range c.Status.Allocation.Devices.Results {
+					allocatedDevices[res.Pool+"/"+res.Device] = true
+				}
+			}
+		}
+
+		for _, req := range claim.Spec.Devices.Requests {
+			var subReqs []resourcev1.DeviceSubRequest
+			if req.Exactly != nil {
+				subReqs = append(subReqs, resourcev1.DeviceSubRequest{
+					Name:            req.Name,
+					DeviceClassName: req.Exactly.DeviceClassName,
+					Selectors:       req.Exactly.Selectors,
+					AllocationMode:  req.Exactly.AllocationMode,
+					Count:           req.Exactly.Count,
+					Capacity:        req.Exactly.Capacity,
+				})
+			} else if len(req.FirstAvailable) > 0 {
+				subReqs = req.FirstAvailable
 			}
 
-			// Do not allocate from unhealthy slices (fault injection)
-			if slice.Labels["draforge.oaslananka/health"] == "unhealthy" {
-				continue
-			}
+			reqSatisfied := false
 
-			// Simple model/class matching: in simulator, if DeviceClassName matches or defaults
-			// We find the first available device in the slice
-			for _, dev := range slice.Spec.Devices {
-				// Check if device is already allocated
-				if r.isDeviceAllocated(claims.Items, slice.Spec.Pool.Name, dev.Name) {
+			for _, subReq := range subReqs {
+				targetCount := subReq.Count
+				if targetCount == 0 {
+					targetCount = 1
+				}
+
+				var classSelectors []resourcev1.DeviceSelector
+				if dc, ok := classMap[subReq.DeviceClassName]; ok {
+					classSelectors = dc.Spec.Selectors
+				} else if subReq.DeviceClassName != "" {
 					continue
 				}
-				targetSlice = &slice
-				targetDeviceName = dev.Name
-				found = true
-				break
+
+				var reqResults []resourcev1.DeviceRequestAllocationResult
+
+				for _, slice := range slices.Items {
+					if len(reqResults) >= int(targetCount) {
+						break
+					}
+					if slice.Labels["draforge.oaslananka/managed-by"] != "simulator" {
+						continue
+					}
+					if slice.Labels["draforge.oaslananka/health"] == "unhealthy" {
+						continue
+					}
+
+					for _, dev := range slice.Spec.Devices {
+						if len(reqResults) >= int(targetCount) {
+							break
+						}
+						devID := slice.Spec.Pool.Name + "/" + dev.Name
+						if allocatedDevices[devID] {
+							continue
+						}
+
+						if matchDevice(dev, classSelectors, subReq.Selectors, subReq.Capacity) {
+							allocatedDevices[devID] = true
+							reqResults = append(reqResults, resourcev1.DeviceRequestAllocationResult{
+								Request: req.Name,
+								Device:  dev.Name,
+								Driver:  slice.Spec.Driver,
+								Pool:    slice.Spec.Pool.Name,
+							})
+							if slice.Spec.NodeName != nil {
+								nodeSelectors[*slice.Spec.NodeName] = true
+							}
+						}
+					}
+				}
+
+				if len(reqResults) == int(targetCount) {
+					claimResults = append(claimResults, reqResults...)
+					reqSatisfied = true
+					break // Break out of subReqs loop since FirstAvailable condition met
+				} else {
+					// Subreq failed, rollback allocated devices for this subreq
+					for _, res := range reqResults {
+						devID := res.Pool + "/" + res.Device
+						delete(allocatedDevices, devID)
+					}
+				}
 			}
-			if found {
+
+			if !reqSatisfied {
+				claimFullySatisfied = false
 				break
 			}
 		}
 
-		if found {
-			nodeName := ""
-			if targetSlice.Spec.NodeName != nil {
-				nodeName = *targetSlice.Spec.NodeName
+		if claimFullySatisfied && len(claimResults) > 0 {
+			var nodeSelectorTerms []corev1.NodeSelectorTerm
+			for nodeName := range nodeSelectors {
+				nodeSelectorTerms = append(nodeSelectorTerms, corev1.NodeSelectorTerm{
+					MatchFields: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "metadata.name",
+							Operator: corev1.NodeSelectorOpIn,
+							Values:   []string{nodeName},
+						},
+					},
+				})
 			}
-			fmt.Printf("Simulating allocation for claim %s/%s -> device %s on node %s\n",
-				claim.Namespace, claim.Name, targetDeviceName, nodeName)
 
-			// Update claim status with allocation result
 			allocatedClaim := claim.DeepCopy()
 			allocatedClaim.Status.Allocation = &resourcev1.AllocationResult{
 				Devices: resourcev1.DeviceAllocationResult{
-					Results: []resourcev1.DeviceRequestAllocationResult{
-						{
-							Device: targetDeviceName,
-							Driver: targetSlice.Spec.Driver,
-							Pool:   targetSlice.Spec.Pool.Name,
-						},
-					},
-				},
-				NodeSelector: &corev1.NodeSelector{
-					NodeSelectorTerms: []corev1.NodeSelectorTerm{
-						{
-							MatchFields: []corev1.NodeSelectorRequirement{
-								{
-									Key:      "metadata.name",
-									Operator: corev1.NodeSelectorOpIn,
-									Values:   []string{nodeName},
-								},
-							},
-						},
-					},
+					Results: claimResults,
 				},
 			}
+			if len(nodeSelectorTerms) > 0 {
+				allocatedClaim.Status.Allocation.NodeSelector = &corev1.NodeSelector{
+					NodeSelectorTerms: nodeSelectorTerms,
+				}
+			}
 
-			_, err = r.clientset.ResourceV1().ResourceClaims(claim.Namespace).UpdateStatus(ctx, allocatedClaim, metav1.UpdateOptions{})
-			if err != nil {
-				fmt.Printf("Failed to update status for claim %s: %v\n", claim.Name, err)
+			_, updateErr := r.clientset.ResourceV1().ResourceClaims(claim.Namespace).UpdateStatus(ctx, allocatedClaim, metav1.UpdateOptions{})
+			if updateErr != nil {
+				fmt.Printf("Failed to update status for claim %s: %v\n", claim.Name, updateErr)
 			} else {
 				atomic.AddInt64(&r.AllocationsSimulated, 1)
 				for i := range claims.Items {
@@ -129,6 +254,7 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 						break
 					}
 				}
+				fmt.Printf("Simulating allocation for claim %s/%s -> %d devices\n", claim.Namespace, claim.Name, len(claimResults))
 			}
 		}
 	}

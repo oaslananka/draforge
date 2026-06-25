@@ -4,13 +4,17 @@ package discovery
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	clienttesting "k8s.io/client-go/testing"
 )
 
 func TestDiscoverDRA(t *testing.T) {
@@ -129,6 +133,39 @@ func TestDiscoverDRAEmptyCluster(t *testing.T) {
 	}
 	if len(claims) != 0 {
 		t.Errorf("expected 0 claims, got %d", len(claims))
+	}
+}
+
+func TestDiscoverDRAWithStatus_Partial(t *testing.T) {
+	ctx := context.Background()
+	clientset := fake.NewSimpleClientset()
+
+	// Prepend a reactor that returns an error for ResourceClaims
+	clientset.PrependReactor("list", "resourceclaims", func(action clienttesting.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("synthetic error listing resourceclaims")
+	})
+
+	_, _, _, status, err := DiscoverDRAWithStatus(ctx, clientset)
+	if err != nil {
+		t.Fatalf("DiscoverDRAWithStatus should not bubble up partial list errors: %v", err)
+	}
+
+	if status.ResourceClaimsAvailable {
+		t.Errorf("expected ResourceClaimsAvailable to be false")
+	}
+	if !status.ResourceSlicesAvailable {
+		t.Errorf("expected ResourceSlicesAvailable to be true")
+	}
+	if !status.PodsAvailable {
+		t.Errorf("expected PodsAvailable to be true")
+	}
+	if !status.IsPartial {
+		t.Errorf("expected IsPartial to be true")
+	}
+	if len(status.Warnings) != 1 {
+		t.Errorf("expected 1 warning, got %d", len(status.Warnings))
+	} else if !strings.Contains(status.Warnings[0], "synthetic error") {
+		t.Errorf("expected warning to contain 'synthetic error', got %q", status.Warnings[0])
 	}
 }
 

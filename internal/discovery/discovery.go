@@ -14,13 +14,21 @@ import (
 
 // DiscoverDRA queries the Kubernetes cluster for all DRA-related objects and maps them to our model.
 func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.DevicePool, []model.Device, []model.ResourceClaimInfo, error) {
+	pools, devices, claims, _, err := DiscoverDRAWithStatus(ctx, clientset)
+	return pools, devices, claims, err
+}
+
+// DiscoverDRAWithStatus queries the Kubernetes cluster for all DRA-related objects and maps them to our model, returning discovery status.
+func DiscoverDRAWithStatus(ctx context.Context, clientset kubernetes.Interface) ([]model.DevicePool, []model.Device, []model.ResourceClaimInfo, model.DiscoveryStatus, error) {
 	var pools []model.DevicePool
 	var devices []model.Device
 	var claims []model.ResourceClaimInfo
+	var status model.DiscoveryStatus
 
 	// 1. Discover ResourceClaims
 	claimList, err := clientset.ResourceV1().ResourceClaims("").List(ctx, metav1.ListOptions{})
 	if err == nil {
+		status.ResourceClaimsAvailable = true
 		for _, rc := range claimList.Items {
 			status := "Pending"
 			allocatedDevice := ""
@@ -75,12 +83,17 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 		}
 	} else {
 		// Log warning or return empty list if API not supported
-		fmt.Printf("Warning: resource.k8s.io/v1 ResourceClaims API not available: %v\n", err)
+		msg := fmt.Sprintf("resource.k8s.io/v1 ResourceClaims API not available: %v", err)
+		fmt.Printf("Warning: %s\n", msg)
+		status.Warnings = append(status.Warnings, msg)
+		status.ResourceClaimsAvailable = false
+		status.IsPartial = true
 	}
 
 	// 2. Discover ResourceSlices (to build pools and devices)
 	sliceList, err := clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 	if err == nil {
+		status.ResourceSlicesAvailable = true
 		poolMap := make(map[string]*model.DevicePool)
 
 		for _, slice := range sliceList.Items {
@@ -177,12 +190,17 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 			pools = append(pools, *p)
 		}
 	} else {
-		fmt.Printf("Warning: resource.k8s.io/v1 ResourceSlices API not available: %v\n", err)
+		msg := fmt.Sprintf("resource.k8s.io/v1 ResourceSlices API not available: %v", err)
+		fmt.Printf("Warning: %s\n", msg)
+		status.Warnings = append(status.Warnings, msg)
+		status.ResourceSlicesAvailable = false
+		status.IsPartial = true
 	}
 
 	// 3. Map Claims to Owner Pods by querying Pods
 	podList, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
 	if err == nil {
+		status.PodsAvailable = true
 		for _, pod := range podList.Items {
 			for _, podClaim := range pod.Spec.ResourceClaims {
 				claimName := ""
@@ -203,7 +221,13 @@ func DiscoverDRA(ctx context.Context, clientset kubernetes.Interface) ([]model.D
 				}
 			}
 		}
+	} else {
+		msg := fmt.Sprintf("core/v1 Pods API not available: %v", err)
+		fmt.Printf("Warning: %s\n", msg)
+		status.Warnings = append(status.Warnings, msg)
+		status.PodsAvailable = false
+		status.IsPartial = true
 	}
 
-	return pools, devices, claims, nil
+	return pools, devices, claims, status, nil
 }

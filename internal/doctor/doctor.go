@@ -36,6 +36,7 @@ func NewRegistry() *Registry {
 	r.Register(&OrphanedClaimsCheck{})
 	r.Register(&PodReferenceCheck{})
 	r.Register(&StaleResourceSliceCheck{})
+	r.Register(&V136FeatureUsageCheck{})
 	return r
 }
 
@@ -380,6 +381,107 @@ func (c *StaleResourceSliceCheck) Run(ctx context.Context, clientset kubernetes.
 		res.Status = status
 		res.Evidence = strings.Join(evidence, "; ")
 		res.Remediation = strings.Join(remediation, " ")
+	}
+
+	return res
+}
+
+// V136FeatureUsageCheck checks if advanced v1.36 DRA features are used.
+type V136FeatureUsageCheck struct{}
+
+func (c *V136FeatureUsageCheck) ID() string       { return "DRA-006" }
+func (c *V136FeatureUsageCheck) Name() string     { return "Advanced DRA Features Usage" }
+func (c *V136FeatureUsageCheck) Category() string { return "cluster" }
+func (c *V136FeatureUsageCheck) Run(ctx context.Context, clientset kubernetes.Interface) model.DoctorCheckResult {
+	res := model.DoctorCheckResult{
+		ID:           c.ID(),
+		Name:         c.Name(),
+		Category:     c.Category(),
+		Status:       model.StatusPass,
+		Severity:     "info",
+		Evidence:     "No advanced v1.36 features (Taints, Tolerations, BindingConditions, etc.) detected.",
+		Remediation:  "No action required.",
+		DocReference: "https://kubernetes.io/docs/concepts/extend-kubernetes/compute-resource-sharing/",
+	}
+
+	claims, err := clientset.ResourceV1().ResourceClaims("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		res.Status = model.StatusUnknown
+		res.Evidence = fmt.Sprintf("Failed to list ResourceClaims: %v", err)
+		return res
+	}
+
+	slices, err := clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		res.Status = model.StatusUnknown
+		res.Evidence = fmt.Sprintf("Failed to list ResourceSlices: %v", err)
+		return res
+	}
+
+	var foundFeatures []string
+
+	for _, claim := range claims.Items {
+		for _, req := range claim.Spec.Devices.Requests {
+			if req.Exactly != nil {
+				if len(req.Exactly.Tolerations) > 0 {
+					foundFeatures = append(foundFeatures, "ResourceClaim request tolerations")
+				}
+				if req.Exactly.Capacity != nil {
+					foundFeatures = append(foundFeatures, "request capacity requirements")
+				}
+			}
+			for _, subReq := range req.FirstAvailable {
+				if len(subReq.Tolerations) > 0 {
+					foundFeatures = append(foundFeatures, "ResourceClaim request tolerations")
+				}
+				if subReq.Capacity != nil {
+					foundFeatures = append(foundFeatures, "request capacity requirements")
+				}
+			}
+		}
+	}
+
+	for _, slice := range slices.Items {
+		for _, dev := range slice.Spec.Devices {
+			if len(dev.Taints) > 0 {
+				foundFeatures = append(foundFeatures, "ResourceSlice spec.devices[].taints")
+			}
+			if dev.BindsToNode != nil && *dev.BindsToNode {
+				foundFeatures = append(foundFeatures, "ResourceSlice bindsToNode")
+			}
+			if len(dev.BindingConditions) > 0 {
+				foundFeatures = append(foundFeatures, "bindingConditions")
+			}
+			if len(dev.BindingFailureConditions) > 0 {
+				foundFeatures = append(foundFeatures, "bindingFailureConditions")
+			}
+			if dev.AllowMultipleAllocations != nil && *dev.AllowMultipleAllocations {
+				foundFeatures = append(foundFeatures, "allowMultipleAllocations")
+			}
+			if len(dev.ConsumesCounters) > 0 {
+				foundFeatures = append(foundFeatures, "consumesCounters")
+			}
+			if len(dev.NodeAllocatableResourceMappings) > 0 {
+				foundFeatures = append(foundFeatures, "nodeAllocatableResourceMappings")
+			}
+		}
+	}
+
+	if len(foundFeatures) > 0 {
+		// Deduplicate features
+		uniqueFeatures := make(map[string]bool)
+		var deduped []string
+		for _, f := range foundFeatures {
+			if !uniqueFeatures[f] {
+				uniqueFeatures[f] = true
+				deduped = append(deduped, f)
+			}
+		}
+
+		res.Status = model.StatusWarn
+		res.Severity = "medium"
+		res.Evidence = fmt.Sprintf("Found usage of advanced v1.36+ features: %s.", strings.Join(deduped, ", "))
+		res.Remediation = "DRAForge simulator and explain engine only partially model these advanced scheduler semantics. Results may be incomplete."
 	}
 
 	return res

@@ -121,6 +121,29 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 		FieldPath:  ".status.allocation",
 	}
 
+	// Check for advanced features in the claim
+	hasAdvancedFeatures := false
+	for _, req := range liveClaim.Spec.Devices.Requests {
+		if req.Exactly != nil {
+			if len(req.Exactly.Tolerations) > 0 || req.Exactly.Capacity != nil {
+				hasAdvancedFeatures = true
+			}
+		}
+		for _, subReq := range req.FirstAvailable {
+			if len(subReq.Tolerations) > 0 || subReq.Capacity != nil {
+				hasAdvancedFeatures = true
+			}
+		}
+	}
+	if hasAdvancedFeatures {
+		rootNode.Children = append(rootNode.Children, model.ReasonNode{
+			Message:    "Claim uses advanced v1.36 features (e.g. Tolerations, Capacity) which are only partially modeled.",
+			Confidence: "informational",
+			SourceType: "ResourceClaim",
+			FieldPath:  ".spec.devices.requests",
+		})
+	}
+
 	if liveClaim.Status.Allocation != nil && liveClaim.Status.Allocation.NodeSelector != nil {
 		rootNode.Children = append(rootNode.Children, model.ReasonNode{
 			Message:    "Node selector computed, pending final allocation",

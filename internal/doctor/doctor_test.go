@@ -327,3 +327,69 @@ func TestPodReferenceCheck_MissingReservedFor(t *testing.T) {
 		t.Errorf("expected Evidence to contain 'pod not in claim ReservedFor list', got %s", res.Evidence)
 	}
 }
+
+func TestV136FeatureUsageCheck_Pass(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	check := &V136FeatureUsageCheck{}
+	res := check.Run(context.TODO(), clientset)
+	if res.Status != model.StatusPass {
+		t.Errorf("expected PASS when no resources exist, got %v", res.Status)
+	}
+}
+
+func TestV136FeatureUsageCheck_WarnSlice(t *testing.T) {
+	bindsToNode := true
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-slice"},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver: "test-driver",
+			Devices: []resourcev1.Device{
+				{
+					Name:        "dev-1",
+					BindsToNode: &bindsToNode,
+					Taints: []resourcev1.DeviceTaint{
+						{Key: "test", Value: "val", Effect: resourcev1.DeviceTaintEffect("NoSchedule")},
+					},
+				},
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(slice)
+	check := &V136FeatureUsageCheck{}
+	res := check.Run(context.TODO(), clientset)
+	if res.Status != model.StatusWarn {
+		t.Errorf("expected WARN, got %v", res.Status)
+	}
+	if !strings.Contains(res.Evidence, "ResourceSlice bindsToNode") || !strings.Contains(res.Evidence, "ResourceSlice spec.devices[].taints") {
+		t.Errorf("missing expected evidence in %q", res.Evidence)
+	}
+}
+
+func TestV136FeatureUsageCheck_WarnClaim(t *testing.T) {
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-claim", Namespace: "default"},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							Tolerations: []resourcev1.DeviceToleration{
+								{Key: "test", Value: "val", Effect: resourcev1.DeviceTaintEffect("NoSchedule")},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(claim)
+	check := &V136FeatureUsageCheck{}
+	res := check.Run(context.TODO(), clientset)
+	if res.Status != model.StatusWarn {
+		t.Errorf("expected WARN, got %v", res.Status)
+	}
+	if !strings.Contains(res.Evidence, "ResourceClaim request tolerations") {
+		t.Errorf("missing expected evidence in %q", res.Evidence)
+	}
+}

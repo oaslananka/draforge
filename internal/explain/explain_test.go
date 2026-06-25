@@ -953,3 +953,51 @@ func TestExplainClaim_PendingNodeSelector(t *testing.T) {
 		t.Errorf("expected to find node selector reason node in children")
 	}
 }
+
+func TestExplainClaim_WithAdvancedFeatures(t *testing.T) {
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-claim",
+			Namespace: "default",
+		},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							Tolerations: []resourcev1.DeviceToleration{
+								{Key: "test", Value: "val", Effect: resourcev1.DeviceTaintEffect("NoSchedule")},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			Allocation: &resourcev1.AllocationResult{
+				NodeSelector: &corev1.NodeSelector{},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim)
+
+	result, err := ExplainClaim(context.TODO(), clientset, "default", "test-claim")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the informational node was added to the children of the pending node
+	foundWarning := false
+	for _, child := range result.ReasonTree.Children {
+		if child.Confidence == "informational" && strings.Contains(child.Message, "advanced v1.36 features") {
+			foundWarning = true
+			break
+		}
+	}
+
+	if !foundWarning {
+		t.Errorf("expected warning node for advanced features, but it was not found")
+	}
+}

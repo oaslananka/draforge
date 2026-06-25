@@ -226,13 +226,6 @@ func (c *PodReferenceCheck) Run(ctx context.Context, clientset kubernetes.Interf
 		DocReference: "https://kubernetes.io/docs/concepts/extend-kubernetes/compute-resource-sharing/",
 	}
 
-	_, _, claims, err := discovery.DiscoverDRA(ctx, clientset)
-	if err != nil {
-		res.Status = model.StatusUnknown
-		res.Evidence = fmt.Sprintf("Failed to discover claims: %v", err)
-		return res
-	}
-
 	podList, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		res.Status = model.StatusUnknown
@@ -240,9 +233,20 @@ func (c *PodReferenceCheck) Run(ctx context.Context, clientset kubernetes.Interf
 		return res
 	}
 
-	claimMap := make(map[string]bool)
-	for _, cl := range claims {
-		claimMap[cl.Namespace+"/"+cl.Name] = true
+	apiClaims, err := clientset.ResourceV1().ResourceClaims("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		res.Status = model.StatusUnknown
+		res.Evidence = fmt.Sprintf("Failed to list API claims for reference check: %v", err)
+		return res
+	}
+
+	claimReservedForMap := make(map[string][]string)
+	for _, cl := range apiClaims.Items {
+		var reservedFor []string
+		for _, ref := range cl.Status.ReservedFor {
+			reservedFor = append(reservedFor, ref.Name)
+		}
+		claimReservedForMap[cl.Namespace+"/"+cl.Name] = reservedFor
 	}
 
 	invalidRefs := []string{}
@@ -250,8 +254,20 @@ func (c *PodReferenceCheck) Run(ctx context.Context, clientset kubernetes.Interf
 		for _, pc := range pod.Spec.ResourceClaims {
 			if pc.ResourceClaimName != nil {
 				target := pod.Namespace + "/" + *pc.ResourceClaimName
-				if !claimMap[target] {
-					invalidRefs = append(invalidRefs, pod.Namespace+"/"+pod.Name+" -> "+*pc.ResourceClaimName)
+				reservedFor, exists := claimReservedForMap[target]
+				if !exists {
+					invalidRefs = append(invalidRefs, pod.Namespace+"/"+pod.Name+" -> "+*pc.ResourceClaimName+" (claim not found)")
+				} else {
+					podFound := false
+					for _, name := range reservedFor {
+						if name == pod.Name {
+							podFound = true
+							break
+						}
+					}
+					if !podFound {
+						invalidRefs = append(invalidRefs, pod.Namespace+"/"+pod.Name+" -> "+*pc.ResourceClaimName+" (pod not in claim ReservedFor list)")
+					}
 				}
 			}
 		}

@@ -197,6 +197,9 @@ func TestExplainClaim_Success(t *testing.T) {
 	if !strings.Contains(result.ReasonTree.Message, "successfully allocated") {
 		t.Errorf("unexpected reason message: %s", result.ReasonTree.Message)
 	}
+	if !strings.Contains(result.ReasonTree.Evidence, "Reserved for consumers: gpu-pod") {
+		t.Errorf("expected Evidence to contain 'Reserved for consumers: gpu-pod', got: %s", result.ReasonTree.Evidence)
+	}
 }
 
 func TestExplainClaim_MissingDeviceClass(t *testing.T) {
@@ -388,17 +391,14 @@ func TestExplainClaim_SelectorMismatchAndCapacity(t *testing.T) {
 	for _, child := range result.ReasonTree.Children {
 		if strings.Contains(child.Message, "devices evaluated") {
 			foundSummary = true
-			if len(child.Children) != 3 {
-				t.Fatalf("expected 3 children for evaluation node, got %d", len(child.Children))
+			if len(child.Children) != 2 {
+				t.Fatalf("expected 2 children for evaluation node, got %d", len(child.Children))
 			}
 			if !strings.Contains(child.Children[0].Message, "1 rejected because selector evaluated to false") {
 				t.Errorf("unexpected selector mismatch child: %s", child.Children[0].Message)
 			}
-			if !strings.Contains(child.Children[1].Message, "0 rejected because device health status was unhealthy") {
-				t.Errorf("unexpected unhealthy check child: %s", child.Children[1].Message)
-			}
-			if !strings.Contains(child.Children[2].Message, "1 rejected because requested capacity") {
-				t.Errorf("unexpected capacity mismatch child: %s", child.Children[2].Message)
+			if !strings.Contains(child.Children[1].Message, "1 rejected because requested capacity") {
+				t.Errorf("unexpected capacity mismatch child: %s", child.Children[1].Message)
 			}
 		}
 	}
@@ -748,4 +748,208 @@ func TestExplainClaim_InvalidCEL(t *testing.T) {
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+func TestExplainClaim_OmitZeroCountNodes(t *testing.T) {
+	ctx := context.Background()
+	claimName := "test-omit-zero"
+	namespace := "default"
+	nodeName := "node-1"
+
+	// Create claim, device class, and a resource slice that creates a scenario
+	// where ONLY capacity is missing, but no unhealthy devices or selector mismatches.
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              claimName,
+			Namespace:         namespace,
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "gpu-class",
+						},
+					},
+				},
+			},
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{
+				{
+					Name: "gpu-pod",
+				},
+			},
+		},
+	}
+
+	class := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gpu-class",
+		},
+		Spec: resourcev1.DeviceClassSpec{
+			Selectors: []resourcev1.DeviceSelector{
+				{
+					CEL: &resourcev1.CELDeviceSelector{
+						Expression: `device.attributes["family"] == "h100"`,
+					},
+				},
+			},
+		},
+	}
+
+	// This slice contains a single h100 device that is healthy, but we will allocate it to a DIFFERENT claim
+	slice := &resourcev1.ResourceSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "my-slice",
+		},
+		Spec: resourcev1.ResourceSliceSpec{
+			Driver:   "gpu-driver",
+			NodeName: &nodeName,
+			Pool: resourcev1.ResourcePool{
+				Name: "gpu-pool",
+			},
+			Devices: []resourcev1.Device{
+				{
+					Name: "gpu-1",
+					Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+						"family": {
+							StringValue: ptr("h100"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	otherClaim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "other-claim",
+			Namespace: namespace,
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			Allocation: &resourcev1.AllocationResult{
+				Devices: resourcev1.DeviceAllocationResult{
+					Results: []resourcev1.DeviceRequestAllocationResult{
+						{
+							Device: "gpu-1",
+							Driver: "gpu-driver",
+							Pool:   "gpu-pool",
+						},
+					},
+				},
+				NodeSelector: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "kubernetes.io/hostname",
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{nodeName},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, class, slice, otherClaim)
+	result, err := ExplainClaim(ctx, clientset, namespace, claimName)
+	if err != nil {
+		t.Fatalf("ExplainClaim failed: %v", err)
+	}
+
+	foundSummary := false
+	for _, child := range result.ReasonTree.Children {
+		if strings.Contains(child.Message, "devices evaluated") {
+			foundSummary = true
+			if len(child.Children) != 1 {
+				t.Fatalf("expected 1 child for evaluation node (only capacity), got %d", len(child.Children))
+			}
+			if !strings.Contains(child.Children[0].Message, "1 rejected because requested capacity") {
+				t.Errorf("unexpected child message: %s", child.Children[0].Message)
+			}
+		}
+	}
+
+	if !foundSummary {
+		t.Errorf("expected explanation to include evaluation summary")
+	}
+}
+
+func TestExplainClaim_PendingNodeSelector(t *testing.T) {
+	ctx := context.Background()
+	claimName := "pending-selector-claim"
+	namespace := "default"
+
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              claimName,
+			Namespace:         namespace,
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "req1",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							DeviceClassName: "test-class",
+						},
+					},
+				},
+			},
+		},
+		Status: resourcev1.ResourceClaimStatus{
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{
+				{Name: "test-consumer-pod"},
+			},
+			Allocation: &resourcev1.AllocationResult{
+				NodeSelector: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "kubernetes.io/hostname",
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"node-0"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	class := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-class",
+		},
+	}
+
+	clientset := fake.NewSimpleClientset(claim, class)
+	result, err := ExplainClaim(ctx, clientset, namespace, claimName)
+	if err != nil {
+		t.Fatalf("ExplainClaim failed: %v", err)
+	}
+
+	if result.Allocated {
+		t.Errorf("expected Allocated to be false, got true")
+	}
+
+	foundNodeSelectorReason := false
+	for _, child := range result.ReasonTree.Children {
+		if strings.Contains(child.Message, "Node selector computed") {
+			foundNodeSelectorReason = true
+			break
+		}
+	}
+	if !foundNodeSelectorReason {
+		t.Errorf("expected to find node selector reason node in children")
+	}
 }

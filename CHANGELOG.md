@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- _None._
+- Operator-grade documentation in `docs/operations/` (install, guide, troubleshooting).
 
 ### Changed
 - _None._

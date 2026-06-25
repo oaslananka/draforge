@@ -168,6 +168,9 @@ goreleaser release --clean
 |----------|-------------|
 | [Contributing Guide](CONTRIBUTING.md) | Setup, testing, PR expectations, and what not to commit |
 | [Security Policy](SECURITY.md) | Vulnerability reporting and security model |
+| [Installation Guide](docs/operations/install.md) | Demo and production installation profiles |
+| [Operations Guide](docs/operations/guide.md) | Day-two operations, upgrades, metrics, logs, and cleanup |
+| [Troubleshooting Guide](docs/operations/troubleshooting.md) | Diagnostics for common issues and pending claims |
 | [Maintainer Checklist](docs/maintainer-checklist.md) | Internal review and release processes |
 | [Release Process](docs/release.md) | Snapshot and tagged release workflow |
 | [Dashboard Guide](docs/dashboard.md) | Web dashboard setup and usage |

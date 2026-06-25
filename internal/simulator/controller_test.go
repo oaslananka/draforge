@@ -536,7 +536,7 @@ func TestReconcileOrphanCleanup(t *testing.T) {
 			},
 		},
 	}
-	reconciler.clientset.ResourceV1().ResourceSlices().Create(ctx, orphanSlice, metav1.CreateOptions{})
+	_, _ = reconciler.clientset.ResourceV1().ResourceSlices().Create(ctx, orphanSlice, metav1.CreateOptions{})
 
 	if err := reconciler.Reconcile(ctx); err != nil {
 		t.Fatalf("Reconcile failed: %v", err)

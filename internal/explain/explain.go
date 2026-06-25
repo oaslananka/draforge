@@ -151,10 +151,10 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 		if deviceClass != nil {
 			for _, sel := range deviceClass.Spec.Selectors {
 				if sel.CEL != nil {
-					passed, err := evaluateCEL(sel.CEL.Expression, d.Attributes, d.Capacities)
-					if err != nil {
+					passed, evalErr := evaluateCEL(sel.CEL.Expression, d.Attributes, d.Capacities)
+					if evalErr != nil {
 						selectorFailedErrorCount++
-						lastSelectorError = err
+						lastSelectorError = evalErr
 						passedSelector = false
 						break
 					}

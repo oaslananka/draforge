@@ -23,7 +23,7 @@ spec:
           mountPath: /workspace
       containers:
       - name: e2e-runner
-        image: golang:1.26.4
+        image: golang:1.26.5
         workingDir: /workspace
         command:
         - sh

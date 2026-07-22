@@ -48,7 +48,7 @@ tasks:
   vuln:
     desc: Run govulncheck
     cmds:
-      - govulncheck ./...
+      - '{{.GO_BIN}} tool govulncheck ./...'
 
   test:unit:
     desc: Run Go unit tests (fast, no race)

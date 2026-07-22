@@ -79,6 +79,6 @@ export function fetchDoctor(): Promise<DoctorReport> {
   return typedFetch<DoctorReport>('/api/doctor');
 }
 
-export function fetchExplain(claim: string, namespace: string = 'default'): Promise<ExplainResult> {
+export function fetchExplain(claim: string, namespace: string): Promise<ExplainResult> {
   return typedFetch<ExplainResult>(`/api/explain?claim=${encodeURIComponent(claim)}&namespace=${encodeURIComponent(namespace)}`);
 }

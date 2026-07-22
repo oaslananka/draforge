@@ -76,6 +76,11 @@ tasks:
     cmds:
       - cd web && pnpm audit --audit-level high
 
+  web:test:
+    desc: Run frontend unit and integration tests
+    cmds:
+      - cd web && pnpm test
+
   web:lint:
     desc: Lint web app
     cmds:

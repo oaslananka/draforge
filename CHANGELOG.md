@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Updated vulnerable Go and frontend development dependencies and added repeatable advisory gates to pull-request, scheduled security, and local validation workflows.
 - Restored live SSE graph streaming through the full middleware chain while preserving ordinary request timeouts and non-blocking subscriber delivery.
+- Preserved namespace-qualified ResourceClaim identity across dashboard selection, graph navigation, and explain API requests, including duplicate claim names across namespaces.
 
 ---
 

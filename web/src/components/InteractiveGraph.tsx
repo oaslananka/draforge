@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ResourceGraph } from '../api/types';
+import type { ClaimIdentity } from '../claims/identity';
+import { claimIdentityFromGraphNode } from '../claims/identity';
 
 interface NodePosition {
   id: string;
@@ -9,9 +11,15 @@ interface NodePosition {
   vy: number;
   type: string;
   label: string;
+  metadata?: Record<string, unknown>;
 }
 
-export default function InteractiveGraph({ graphData, onSelectClaim }: { graphData: ResourceGraph | null, onSelectClaim: (name: string) => void }) {
+interface InteractiveGraphProps {
+  graphData: ResourceGraph | null;
+  onSelectClaim: (claim: ClaimIdentity) => void;
+}
+
+export default function InteractiveGraph({ graphData, onSelectClaim }: InteractiveGraphProps) {
   const width = 800;
   const height = 500;
 
@@ -52,6 +60,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: { graphDa
           ...existing,
           type: n.type,
           label: n.label,
+          metadata: n.metadata,
         };
       }
       return {
@@ -62,6 +71,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: { graphDa
         vy: 0,
         type: n.type,
         label: n.label,
+        metadata: n.metadata,
       };
     });
 
@@ -379,7 +389,12 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: { graphDa
                 {selectedNode.type === 'ResourceClaim' && (
                   <button
                     className="badge badge-warning"
-                    onClick={() => onSelectClaim(selectedNode.label)}
+                    onClick={() => {
+                      const claim = claimIdentityFromGraphNode(selectedNode);
+                      if (claim) {
+                        onSelectClaim(claim);
+                      }
+                    }}
                     style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', alignSelf: 'flex-start', marginTop: '10px' }}
                   >
                     Diagnose Allocation

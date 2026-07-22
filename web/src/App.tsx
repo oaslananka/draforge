@@ -21,6 +21,8 @@ import {
 import type { Summary, VersionInfo } from './api/types';
 import InteractiveGraph from "./components/InteractiveGraph";
 import useSSE from "./hooks/useSSE";
+import type { ClaimIdentity } from './claims/identity';
+import { claimIdentityKey, toClaimIdentity } from './claims/identity';
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
 
@@ -42,7 +44,7 @@ export default function App() {
 
   // Global error and explain states
   const [globalError, setGlobalError] = useState('');
-  const [selectedClaim, setSelectedClaim] = useState<string>('');
+  const [selectedClaim, setSelectedClaim] = useState<ClaimIdentity | null>(null);
   const [explainResult, setExplainResult] = useState<ExplainResult | null>(null);
   const [explainError, setExplainError] = useState('');
   const [loadingExplain, setLoadingExplain] = useState(false);
@@ -61,8 +63,8 @@ export default function App() {
       fetchDevices().then(setDevices).catch(() => {}).finally(() => setLoadingDevices(false)),
       fetchClaims().then(data => {
         setClaims(data);
-        if (data.length > 0 && !selectedClaim) {
-          setSelectedClaim(data[0].name);
+        if (data.length > 0) {
+          setSelectedClaim(current => current ?? toClaimIdentity(data[0]));
         }
       }).catch(() => {}).finally(() => setLoadingClaims(false)),
       fetchDoctor().then(setDoctorReport).catch(() => {}).finally(() => setLoadingDoctor(false)),
@@ -74,12 +76,11 @@ export default function App() {
   }, []);
 
   // Fetch claim explanation
-  const handleExplain = async (claimName: string) => {
-    if (!claimName) return;
+  const handleExplain = async (claim: ClaimIdentity) => {
     setLoadingExplain(true);
     setExplainError('');
     try {
-      const data = await fetchExplain(claimName);
+      const data = await fetchExplain(claim.name, claim.namespace);
       setExplainResult(data);
     } catch (e: unknown) {
       const err = e as { message?: string };
@@ -94,7 +95,7 @@ export default function App() {
     if (selectedClaim) {
       handleExplain(selectedClaim);
     }
-  }, [selectedClaim]);
+  }, [selectedClaim?.name, selectedClaim?.namespace]);
 
   const renderReasonNode = (node: ReasonNode, depth = 0) => {
     const isSuccess = node.confidence === 'confirmed' && !node.message.includes('could not');
@@ -388,7 +389,7 @@ export default function App() {
                 </thead>
                 <tbody>
                   {claims.map(claim => (
-                    <tr key={claim.name} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <tr key={claimIdentityKey(claim)} style={{ borderBottom: '1px solid var(--border-light)' }}>
                       <td style={{ padding: '12px' }}><strong>{claim.name}</strong></td>
                       <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.namespace}</td>
                       <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.deviceClassName}</td>
@@ -411,8 +412,8 @@ export default function App() {
             <h2 style={{ marginBottom: '20px' }}>Resource Relationship Graph</h2>
             <InteractiveGraph
               graphData={graphData}
-              onSelectClaim={(name) => {
-                setSelectedClaim(name);
+              onSelectClaim={(claim) => {
+                setSelectedClaim(claim);
                 setActiveTab('explain');
               }}
             />
@@ -427,8 +428,13 @@ export default function App() {
               <label htmlFor="claim-select">Select ResourceClaim to diagnose:</label>
               <select
                 id="claim-select"
-                value={selectedClaim}
-                onChange={e => setSelectedClaim(e.target.value)}
+                value={selectedClaim ? claimIdentityKey(selectedClaim) : ''}
+                onChange={e => {
+                  const claim = claims.find(
+                    candidate => claimIdentityKey(candidate) === e.target.value,
+                  );
+                  setSelectedClaim(claim ? toClaimIdentity(claim) : null);
+                }}
                 style={{
                   background: 'var(--bg-secondary)',
                   color: 'white',
@@ -438,9 +444,14 @@ export default function App() {
                 }}
               >
                 <option value="">-- Choose Claim --</option>
-                {claims.map(c => (
-                  <option key={c.name} value={c.name}>{c.namespace}/{c.name} ({c.status})</option>
-                ))}
+                {claims.map(c => {
+                  const identityKey = claimIdentityKey(c);
+                  return (
+                    <option key={identityKey} value={identityKey}>
+                      {c.namespace}/{c.name} ({c.status})
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

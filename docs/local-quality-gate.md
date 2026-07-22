@@ -6,4 +6,4 @@ Tool versions: Go 1.26.5, Node 22, pnpm 11.5.2, Helm 3.17.3, Terraform 1.7.0, go
 
 Run bash scripts/local-quality-gate.sh from the repository root.
 
-The gate covers module hygiene, lint, vet, vulnerability scan, unit tests, race tests, web lint and build, Helm lint and template, Terraform validation, Terraform plan policy fixtures, and GoReleaser snapshot dry run.
+The gate covers module hygiene, lint, vet, vulnerability scanning, unit tests, race tests, frontend dependency audit, frontend unit and integration tests, web lint and build, Helm lint and template, Terraform validation, Terraform plan policy fixtures, and GoReleaser snapshot dry run.

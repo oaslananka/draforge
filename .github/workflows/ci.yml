@@ -52,7 +52,7 @@ jobs:
           awk -v cov="$cov" 'BEGIN { if (cov + 0 < 50.0) { print "Error: Coverage is below 50.0%"; exit 1 } }'
 
   web:
-    name: Web Lint & Build
+    name: Web Test, Lint & Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -73,6 +73,9 @@ jobs:
 
       - name: Audit frontend dependencies
         run: pnpm --dir web audit --audit-level high
+
+      - name: Test web app
+        run: pnpm --dir web test
 
       - name: Lint web app
         run: pnpm --dir web lint

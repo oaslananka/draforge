@@ -77,6 +77,8 @@ task lint           # Lint Go code with golangci-lint
 task vet            # Run go vet
 task test           # Run unit tests with race detector
 task web:install    # Install web dashboard dependencies
+task web:audit      # Audit frontend dependencies
+task web:test       # Run frontend unit and integration tests
 task web:lint       # Lint web dashboard
 task web:build      # Build web dashboard for production
 task helm:lint      # Lint Helm charts
@@ -123,8 +125,10 @@ The web dashboard is a Vite + React + TypeScript application located in `web/`.
 cd web
 pnpm install --frozen-lockfile  # Install dependencies
 pnpm dev                        # Start dev server (hot-reload on :5173)
-pnpm lint                       # ESLint check
-pnpm build                      # Production build to web/dist/
+pnpm audit --audit-level high     # Dependency advisory gate
+pnpm test                         # Unit and integration tests
+pnpm lint                         # ESLint check
+pnpm build                        # Production build to web/dist/
 ```
 
 The dev server proxies API requests to the Go backend running on port 8080.
@@ -243,7 +247,7 @@ task test:unit
 task test:race
 
 # Web dashboard (if changed)
-task web:lint && task web:build
+task web:audit && task web:test && task web:lint && task web:build
 ```
 
 All of the above must pass without errors. The CI pipeline (`.github/workflows/ci.yml`)

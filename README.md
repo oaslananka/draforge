@@ -116,7 +116,11 @@ go test -race -coverprofile=coverage.out ./...
 go vet ./...
 # or: task vet
 
-# Run full CI suite (unit + race)
+# Run frontend unit and integration tests
+pnpm --dir web test
+# or: task web:test
+
+# Run full Go CI suite (unit + race)
 task test
 ```
 

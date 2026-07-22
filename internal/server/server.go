@@ -390,7 +390,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	g, err := gb.BuildGraph(r.Context(), s.clientset, "", "")
 	if err == nil {
 		if data, marshalErr := json.Marshal(g); marshalErr == nil {
-			if writeErr := writeSSEEvent(w, controller, string(data)); writeErr != nil {
+			if writeSSEEvent(w, controller, string(data)) != nil {
 				return
 			}
 		}

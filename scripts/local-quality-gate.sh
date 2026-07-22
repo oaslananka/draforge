@@ -5,7 +5,7 @@ need() {
   command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 1; }
 }
 
-for tool in go helm terraform pnpm golangci-lint govulncheck goreleaser; do
+for tool in go helm terraform pnpm golangci-lint goreleaser; do
   need "$tool"
 done
 
@@ -13,9 +13,10 @@ go mod tidy
 git diff --exit-code go.mod go.sum
 golangci-lint run ./...
 go vet ./...
-govulncheck ./...
+go tool govulncheck ./...
 go test ./...
 go test -race -coverprofile=coverage.out ./...
+pnpm --dir web audit --audit-level high
 pnpm --dir web lint
 pnpm --dir web build
 helm lint deploy/helm/draforge

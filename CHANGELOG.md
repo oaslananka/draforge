@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - _None._
 
 ### Fixed
-- _None._
+- Updated vulnerable Go and frontend development dependencies and added repeatable advisory gates to pull-request, scheduled security, and local validation workflows.
 
 ---
 

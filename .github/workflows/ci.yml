@@ -36,11 +36,8 @@ jobs:
       - name: Run vet
         run: go vet ./...
 
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
       - name: Run govulncheck
-        run: govulncheck ./...
+        run: go tool govulncheck ./...
 
       - name: Run unit tests (fast)
         run: go test ./...
@@ -72,7 +69,10 @@ jobs:
           version: 11.5.2
 
       - name: Install dependencies
-        run: pnpm --dir web install --frozen-lockfile
+        run: pnpm --dir web install --frozen-lockfile --ignore-scripts
+
+      - name: Audit frontend dependencies
+        run: pnpm --dir web audit --audit-level high
 
       - name: Lint web app
         run: pnpm --dir web lint

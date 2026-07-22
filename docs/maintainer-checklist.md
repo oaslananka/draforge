@@ -48,7 +48,7 @@
 - [ ] Rate limiting and timeouts configured on HTTP server endpoints
 - [ ] CORS hardened (not `*` in production)
 - [ ] Dashboard endpoints are read-only; no write paths exposed
-- [ ] Any new dependencies reviewed for known vulnerabilities (`govulncheck ./...`)
+- [ ] Any new dependencies reviewed for known vulnerabilities (`go tool govulncheck ./...`)
 
 ## Cloud Cost Checklist
 

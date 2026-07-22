@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,6 +28,7 @@ type Server struct {
 	commit               string
 	allowedOrigins       string
 	allowedOriginsParsed []string // pre-parsed from allowedOrigins, avoids split/trim per request
+	logf                 func(format string, args ...any)
 	mu                   sync.Mutex
 	clients              map[chan string]bool
 }
@@ -54,6 +56,7 @@ func NewServer(clientset kubernetes.Interface, port int) *Server {
 		commit:               "dev",
 		allowedOrigins:       allowedOrigins,
 		allowedOriginsParsed: parsed,
+		logf:                 defaultLogf,
 		clients:              make(map[chan string]bool),
 	}
 }
@@ -68,8 +71,7 @@ func (s *Server) SetBuildInfo(version, commit string) {
 	}
 }
 
-// Start launches the HTTP server and handles graceful shutdown.
-func (s *Server) Start(ctx context.Context) error {
+func (s *Server) handler() http.Handler {
 	mux := http.NewServeMux()
 
 	// 1. Health Endpoints
@@ -91,7 +93,6 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.Handle("/api/stream", s.cors(s.requestLogging(http.HandlerFunc(s.handleStream))))
 
 	// 4. Frontend static files
-	// Serve files from web/dist
 	fileServer := http.FileServer(http.Dir("./web/dist"))
 	mux.Handle("/", s.securityHeaders(s.requestLogging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Fallback to index.html for React SPA routing
@@ -102,12 +103,17 @@ func (s *Server) Start(ctx context.Context) error {
 		fileServer.ServeHTTP(w, r)
 	}))))
 
-	// Start background SSE broadcaster
+	return mux
+}
+
+// Start launches the HTTP server and handles graceful shutdown.
+func (s *Server) Start(ctx context.Context) error {
+	// Start background SSE broadcaster.
 	go s.startSSEBroadcaster(ctx)
 
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.port),
-		Handler:      mux,
+		Handler:      s.handler(),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
@@ -193,6 +199,10 @@ func (s *Server) cors(next http.Handler) http.Handler {
 	})
 }
 
+func defaultLogf(format string, args ...any) {
+	_, _ = fmt.Printf(format, args...)
+}
+
 // requestLogging logs HTTP method, path, status code and duration.
 // Sensitive query parameters are not logged.
 func (s *Server) requestLogging(next http.Handler) http.Handler {
@@ -201,7 +211,11 @@ func (s *Server) requestLogging(next http.Handler) http.Handler {
 		lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(lrw, r)
 		duration := time.Since(start)
-		fmt.Printf("[%s] %s %s - %d (%s)\n",
+		logf := s.logf
+		if logf == nil {
+			logf = defaultLogf
+		}
+		logf("[%s] %s %s - %d (%s)\n",
 			r.Method, r.URL.Path, r.URL.RawQuery, lrw.statusCode, duration)
 	})
 }
@@ -209,12 +223,30 @@ func (s *Server) requestLogging(next http.Handler) http.Handler {
 // loggingResponseWriter wraps http.ResponseWriter to capture the status code.
 type loggingResponseWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode  int
+	wroteHeader bool
+}
+
+// Unwrap exposes the underlying writer to http.ResponseController so optional
+// capabilities such as flushing and per-request deadlines survive middleware.
+func (lrw *loggingResponseWriter) Unwrap() http.ResponseWriter {
+	return lrw.ResponseWriter
 }
 
 func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	if lrw.wroteHeader {
+		return
+	}
 	lrw.statusCode = code
+	lrw.wroteHeader = true
 	lrw.ResponseWriter.WriteHeader(code)
+}
+
+func (lrw *loggingResponseWriter) Write(data []byte) (int, error) {
+	if !lrw.wroteHeader {
+		lrw.WriteHeader(http.StatusOK)
+	}
+	return lrw.ResponseWriter.Write(data)
 }
 
 // Healthz
@@ -327,14 +359,16 @@ func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {
 
 // Stream (Server-Sent Events)
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
-	// Set SSE Headers
+	// Set SSE Headers.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+	controller := http.NewResponseController(w)
+	// Ordinary requests keep the server-wide WriteTimeout. SSE is intentionally
+	// long-lived, so clear only this request's write deadline when supported.
+	if err := controller.SetWriteDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		http.Error(w, "Unable to configure streaming deadline", http.StatusInternalServerError)
 		return
 	}
 
@@ -351,31 +385,49 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		close(messageChan)
 	}()
 
-	// Stream initial graph immediately
+	// Stream initial graph immediately.
 	gb := graph.NewGraphBuilder()
 	g, err := gb.BuildGraph(r.Context(), s.clientset, "", "")
 	if err == nil {
-		if data, err := json.Marshal(g); err == nil {
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", string(data))
-			flusher.Flush()
+		if data, marshalErr := json.Marshal(g); marshalErr == nil {
+			if writeErr := writeSSEEvent(w, controller, string(data)); writeErr != nil {
+				return
+			}
 		}
 	}
 
-	notify := r.Context().Done()
 	for {
 		select {
-		case <-notify:
+		case <-r.Context().Done():
 			return
-		case msg := <-messageChan:
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", msg)
-			flusher.Flush()
+		case msg, ok := <-messageChan:
+			if !ok {
+				return
+			}
+			if err := writeSSEEvent(w, controller, msg); err != nil {
+				return
+			}
 		}
 	}
 }
 
+func writeSSEEvent(w http.ResponseWriter, controller *http.ResponseController, data string) error {
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+		return err
+	}
+	return controller.Flush()
+}
+
 // startSSEBroadcaster gathers graph data and broadcasts it to SSE clients.
 func (s *Server) startSSEBroadcaster(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Second)
+	s.runSSEBroadcaster(ctx, 5*time.Second)
+}
+
+func (s *Server) runSSEBroadcaster(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -403,16 +455,21 @@ func (s *Server) startSSEBroadcaster(ctx context.Context) {
 				continue
 			}
 
-			// Broadcast
-			s.mu.Lock()
-			for ch := range s.clients {
-				select {
-				case ch <- string(data):
-				default:
-					// Slow consumer, skip
-				}
-			}
-			s.mu.Unlock()
+			s.broadcast(string(data))
+		}
+	}
+}
+
+// broadcast delivers an update without allowing a full subscriber buffer to
+// delay healthy clients. Client registration and removal use the same mutex.
+func (s *Server) broadcast(message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for ch := range s.clients {
+		select {
+		case ch <- message:
+		default:
+			// Slow consumer: retain its buffered event and continue to others.
 		}
 	}
 }

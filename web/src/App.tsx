@@ -22,7 +22,11 @@ import type { Summary, VersionInfo } from './api/types';
 import InteractiveGraph from "./components/InteractiveGraph";
 import useSSE from "./hooks/useSSE";
 import type { ClaimIdentity } from './claims/identity';
-import { claimIdentityKey, toClaimIdentity } from './claims/identity';
+import {
+  claimIdentityKey,
+  findClaimIdentityByKey,
+  toClaimIdentity,
+} from './claims/identity';
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
 
@@ -430,10 +434,7 @@ export default function App() {
                 id="claim-select"
                 value={selectedClaim ? claimIdentityKey(selectedClaim) : ''}
                 onChange={e => {
-                  const claim = claims.find(
-                    candidate => claimIdentityKey(candidate) === e.target.value,
-                  );
-                  setSelectedClaim(claim ? toClaimIdentity(claim) : null);
+                  setSelectedClaim(findClaimIdentityByKey(claims, e.target.value));
                 }}
                 style={{
                   background: 'var(--bg-secondary)',

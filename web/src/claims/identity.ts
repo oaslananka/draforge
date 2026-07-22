@@ -18,6 +18,14 @@ export function claimIdentityKey(claim: ClaimIdentity): string {
   return `${encodeURIComponent(claim.namespace)}/${encodeURIComponent(claim.name)}`;
 }
 
+export function findClaimIdentityByKey(
+  claims: ReadonlyArray<Pick<ResourceClaimInfo, 'name' | 'namespace'>>,
+  key: string,
+): ClaimIdentity | null {
+  const claim = claims.find(candidate => claimIdentityKey(candidate) === key);
+  return claim ? toClaimIdentity(claim) : null;
+}
+
 export function claimIdentityFromGraphNode(
   node: GraphNode,
 ): ClaimIdentity | null {

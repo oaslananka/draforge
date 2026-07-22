@@ -15,8 +15,8 @@ interface NodePosition {
 }
 
 interface InteractiveGraphProps {
-  graphData: ResourceGraph | null;
-  onSelectClaim: (claim: ClaimIdentity) => void;
+  readonly graphData: ResourceGraph | null;
+  readonly onSelectClaim: (claim: ClaimIdentity) => void;
 }
 
 export default function InteractiveGraph({ graphData, onSelectClaim }: InteractiveGraphProps) {

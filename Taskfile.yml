@@ -71,6 +71,11 @@ tasks:
     cmds:
       - cd web && pnpm install --frozen-lockfile
 
+  web:audit:
+    desc: Audit frontend dependencies for high-severity advisories
+    cmds:
+      - cd web && pnpm audit --audit-level high
+
   web:lint:
     desc: Lint web app
     cmds:

@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: draforge-e2e-RUN_ID
+  namespace: draforge-ci
+  labels:
+    app.kubernetes.io/name: draforge
+    app.kubernetes.io/component: remote-e2e
+    draforge.oaslananka/e2e-run-id: RUN_LABEL
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: draforge-e2e-RUN_ID
+  labels:
+    app.kubernetes.io/name: draforge
+    app.kubernetes.io/component: remote-e2e
+    draforge.oaslananka/e2e-run-id: RUN_LABEL
+rules:
+  - nonResourceURLs: ["/api", "/apis", "/apis/*", "/version"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["resource.k8s.io"]
+    resources: ["resourceclaims", "resourceslices"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: draforge-e2e-RUN_ID
+  labels:
+    app.kubernetes.io/name: draforge
+    app.kubernetes.io/component: remote-e2e
+    draforge.oaslananka/e2e-run-id: RUN_LABEL
+subjects:
+  - kind: ServiceAccount
+    name: draforge-e2e-RUN_ID
+    namespace: draforge-ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: draforge-e2e-RUN_ID

@@ -32,23 +32,42 @@ DRAFORGE_E2E=1 go test -tags=e2e ./tests/e2e/ -v
 
 ## Manual Cloud E2E (DOKS)
 
-For production-like environments, we can run manual remote E2E tests against a DigitalOcean Kubernetes cluster (DOKS).
+The manual `E2E Tests` workflow runs the tagged smoke package on an **existing** DOKS cluster. It does not create or destroy the cluster, node pools, VPC, or registry.
 
-**Requirements**: This requires the `DIGITALOCEAN_TOKEN` secret and provisions billable resources. It is gated behind manual confirmation in GitHub Actions.
+### Required secret and approvals
 
-To run:
-1. Go to GitHub Actions -> **E2E Tests** workflow.
-2. Click **Run workflow**.
-3. You **must** enter `run-e2e-doks` in the confirmation field.
-4. Specify the cluster name (e.g., `draforge-cluster`).
+- Store `DIGITALOCEAN_TOKEN` as a GitHub Actions repository secret and protect the `e2e-doks` environment with maintainer approval.
+- Prefer a custom-scope DigitalOcean token with only `kubernetes:read` and `kubernetes:access_cluster`.
+- Never place the token, generated kubeconfig, or cluster credentials in workflow inputs, logs, artifacts, or committed files.
+- The workflow requests a one-hour kubeconfig credential using `--expiry-seconds 3600`.
 
-The workflow will provision resources, run the test via `scripts/remote-e2e.sh`, stream logs, and then automatically clean up the billable resources.
+### Cost impact
+
+The workflow reconciles the shared `draforge-ci` Namespace, ResourceQuota, and LimitRange, then creates one short-lived Job, ServiceAccount, read-only ClusterRole, and ClusterRoleBinding for the run. It does not add DigitalOcean infrastructure, but the existing DOKS worker nodes remain billable while the cluster exists. The shared namespace controls remain after cleanup and do not create separate DigitalOcean charges. Review the cost-control runbook before execution and destroy unused showcase infrastructure separately.
+
+### Running the workflow
+
+1. Confirm the target cluster already exists and exposes the `resource.k8s.io` APIs required by the smoke test.
+2. Go to **GitHub Actions → E2E Tests → Run workflow**.
+3. Enter the exact confirmation phrase `run-e2e-doks`.
+4. Enter the existing cluster name and optionally a 7–40 character commit SHA.
+5. Approve the `e2e-doks` environment deployment.
+
+The remote Job runs:
+
+```bash
+DRAFORGE_E2E=1 go test -count=1 -json -tags=e2e ./tests/e2e/...
+```
+
+A run succeeds only when `TestSmoke` executes and passes. The harness fails on build-tag mistakes, `no packages to test`, zero executed tests, an all-skipped result, cluster connection failure, or a failed DRA API availability check.
+
+Run-scoped Job and RBAC resources are deleted by both the script trap and the workflow cleanup job. Cleanup is attempted after success, failure, and cancellation. The shared `draforge-ci` Namespace, ResourceQuota, and LimitRange are intentionally retained for later remote jobs.
 
 ## Log Collection
 
-During E2E testing, logs are collected for debugging purposes. If a test fails:
-1. In the **E2E Matrix** workflow, artifacts are uploaded containing cluster logs.
-2. In the **Manual Cloud E2E**, logs are streamed directly to the GitHub Actions console.
+During E2E testing, logs are collected for debugging purposes:
+1. The **E2E Matrix** workflow uploads cluster diagnostics when a matrix entry fails.
+2. The **Manual Cloud E2E** workflow always uploads a seven-day `remote-e2e-<run-id>` artifact containing the Job and Pod YAML, clone and runner logs, namespace events, and `go-test.json` when available.
 3. For local debugging, use standard `kubectl logs` commands:
    ```bash
    kubectl logs -n draforge-system -l app.kubernetes.io/name=draforge-controller

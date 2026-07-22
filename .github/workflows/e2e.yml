@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Type "run-e2e-doks" to confirm this will provision billable DigitalOcean resources'
+        description: 'Type "run-e2e-doks" to confirm this will run workloads on a billable DOKS cluster'
         required: true
         type: string
         default: ''
@@ -28,8 +28,9 @@ concurrency:
 
 # Requirements
 # ------------
-# This workflow is manual-only and can provision billable DigitalOcean Kubernetes
-# resources. It requires the DIGITALOCEAN_TOKEN GitHub secret with read+write scope.
+# This workflow is manual-only and runs workloads on an existing billable
+# DigitalOcean Kubernetes cluster. DIGITALOCEAN_TOKEN should use only the kubernetes:read and
+# kubernetes:access_cluster custom scopes required to locate the cluster and save kubeconfig.
 #
 # Safety gates:
 # - manual workflow_dispatch only
@@ -93,11 +94,13 @@ jobs:
           token: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
       - name: Save DigitalOcean Kubeconfig
-        run: doctl kubernetes cluster kubeconfig save "$DOKS_CLUSTER_NAME"
+        run: doctl kubernetes cluster kubeconfig save "$DOKS_CLUSTER_NAME" --expiry-seconds 3600
 
       - name: Run E2E Script
         env:
           COMMIT_SHA: ${{ inputs.commit_sha }}
+          REMOTE_E2E_RUN_ID: ${{ github.run_id }}
+          REMOTE_E2E_ARTIFACT_DIR: artifacts/remote-e2e
         run: |
           set -euo pipefail
           if [[ -n "$COMMIT_SHA" ]]; then
@@ -105,6 +108,15 @@ jobs:
           else
             bash scripts/remote-e2e.sh
           fi
+
+      - name: Upload remote E2E logs and test results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-e2e-${{ github.run_id }}
+          path: artifacts/remote-e2e/
+          if-no-files-found: warn
+          retention-days: 7
 
   cleanup:
     name: Cleanup DOKS Resources
@@ -120,14 +132,32 @@ jobs:
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
         if: always()
+        continue-on-error: true
         with:
           token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - name: Save DigitalOcean kubeconfig for cleanup
+        if: always()
+        continue-on-error: true
+        run: doctl kubernetes cluster kubeconfig save "${{ inputs.cluster_name }}" --expiry-seconds 3600
+
+      - name: Remove run-scoped E2E resources
+        if: always()
+        continue-on-error: true
+        env:
+          RUN_LABEL: ${{ github.run_id }}
+        run: |
+          kubectl delete job,serviceaccount -n draforge-ci \
+            -l "draforge.oaslananka/e2e-run-id=$RUN_LABEL" \
+            --ignore-not-found=true --wait=false
+          kubectl delete clusterrole,clusterrolebinding \
+            -l "draforge.oaslananka/e2e-run-id=$RUN_LABEL" \
+            --ignore-not-found=true --wait=false
 
       - name: Tear down Helm release and sample resources
         if: always()
         continue-on-error: true
         run: |
-          doctl kubernetes cluster kubeconfig save "${{ inputs.cluster_name }}"
           helm uninstall draforge -n draforge-system --ignore-not-found=true
           kubectl delete -f examples/scenarios/basic-gpu.yaml --ignore-not-found=true
 

@@ -19,7 +19,9 @@ fail() {
 }
 
 assert_file() {
-    [[ -f "$1" ]] || fail "expected file $1"
+    local file
+    file=$1
+    [[ -f "$file" ]] || fail "expected file $file"
 }
 
 assert_contains() {

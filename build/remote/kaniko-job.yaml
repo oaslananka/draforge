@@ -7,50 +7,112 @@ spec:
   backoffLimit: 0
   template:
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
-      - name: clone
-        image: alpine/git:2.45.2
-        command:
-        - sh
-        - -c
-        - |
-          git clone REPO_URL /workspace && \
-          cd /workspace && \
-          git checkout COMMIT_SHA
-        volumeMounts:
-        - name: workspace
-          mountPath: /workspace
+        - name: clone
+          image: alpine/git:2.45.2
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p "$HOME"
+              git clone REPO_URL /workspace
+              cd /workspace
+              git checkout --detach COMMIT_SHA
+          env:
+            - name: HOME
+              value: /tmp/home
+            - name: TMPDIR
+              value: /tmp
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+              ephemeral-storage: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+              ephemeral-storage: "4Gi"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
       containers:
-      - name: kaniko
-        image: gcr.io/kaniko-project/executor:v1.23.1
-        args:
-        - --context=dir:///workspace
-        - --dockerfile=/workspace/build/package/Dockerfile.COMPONENT_NAME
-        - --destination=REGISTRY_URL/IMAGE_NAME:TAG
-        - --cache=false
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "1Gi"
-          limits:
-            cpu: "1.5"
-            memory: "2Gi"
-        volumeMounts:
-        - name: workspace
-          mountPath: /workspace
-        - name: registry-creds
-          mountPath: /kaniko/.docker
-        - name: cache
-          mountPath: /cache
+        - name: kaniko
+          image: ghcr.io/kaniko-build/dist/chainguard-dev-kaniko/executor:v1.25.15@sha256:86deb96280f5020e009dc03a8c2eb482ade3541a85d65613d07f9ba30c8c5fe5
+          args:
+            - --context=dir:///workspace
+            - --dockerfile=/workspace/build/package/Dockerfile.COMPONENT_NAME
+            - --destination=REGISTRY_URL/IMAGE_NAME:TAG
+            - --cache=false
+            - --cleanup
+          securityContext:
+            # Kaniko must unpack image filesystems and execute root-owned Dockerfile RUN steps.
+            runAsNonRoot: false
+            runAsUser: 0
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - MKNOD
+                - SETFCAP
+                - SETGID
+                - SETUID
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+              ephemeral-storage: "2Gi"
+            limits:
+              cpu: "1.5"
+              memory: "2Gi"
+              ephemeral-storage: "8Gi"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: registry-creds
+              mountPath: /kaniko/.docker
+              readOnly: true
+            - name: cache
+              mountPath: /cache
+            - name: tmp
+              mountPath: /tmp
       volumes:
-      - name: workspace
-        emptyDir: {}
-      - name: registry-creds
-        secret:
-          secretName: registry-draforge
-          items:
-          - key: .dockerconfigjson
-            path: config.json
-      - name: cache
-        emptyDir: {}
+        - name: workspace
+          emptyDir:
+            sizeLimit: "4Gi"
+        - name: registry-creds
+          secret:
+            secretName: registry-draforge
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+        - name: cache
+          emptyDir:
+            sizeLimit: "4Gi"
+        - name: tmp
+          emptyDir:
+            sizeLimit: "512Mi"

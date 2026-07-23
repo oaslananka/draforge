@@ -49,6 +49,7 @@ resource allocations (GPUs, edge devices, smartNICs) without requiring physical 
    corepack enable && corepack prepare pnpm@11.5.2 --activate
    cd web && pnpm install --frozen-lockfile
    ```
+   The workspace enforces a seven-day package maturity window and only permits the allowlisted `esbuild` lifecycle step.
 
 5. **Verify setup:**
    ```bash
@@ -81,6 +82,8 @@ task web:audit      # Audit frontend dependencies
 task web:test       # Run frontend unit and integration tests
 task web:lint       # Lint web dashboard
 task web:build      # Build web dashboard for production
+task security:verify-actions # Verify immutable GitHub Action references
+task security:verify-workloads # Verify workload token and storage limits
 task helm:lint      # Lint Helm charts
 task helm:verify-images # Verify public, digest, DOCR, and multi-arch image contracts
 task helm:verify-lifecycle # Verify readiness and graceful shutdown Helm settings

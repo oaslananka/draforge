@@ -27,9 +27,11 @@ server:
     limits:
       cpu: 500m
       memory: 256Mi
+      ephemeral-storage: 256Mi
     requests:
       cpu: 100m
       memory: 128Mi
+      ephemeral-storage: 64Mi
   securityContext:
     runAsNonRoot: true
     runAsUser: 1000
@@ -76,9 +78,11 @@ controller:
     limits:
       cpu: 500m
       memory: 256Mi
+      ephemeral-storage: 256Mi
     requests:
       cpu: 100m
       memory: 128Mi
+      ephemeral-storage: 64Mi
   securityContext:
     runAsNonRoot: true
     runAsUser: 1000
@@ -104,9 +108,11 @@ nodePlugin:
     limits:
       cpu: 500m
       memory: 256Mi
+      ephemeral-storage: 256Mi
     requests:
       cpu: 100m
       memory: 128Mi
+      ephemeral-storage: 64Mi
   securityContext:
     privileged: false
     allowPrivilegeEscalation: false

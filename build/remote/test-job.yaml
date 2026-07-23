@@ -7,39 +7,102 @@ spec:
   backoffLimit: 0
   template:
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
-      - name: clone
-        image: alpine/git:2.45.2
-        command:
-        - sh
-        - -c
-        - |
-          git clone REPO_URL /workspace && \
-          cd /workspace && \
-          git checkout COMMIT_SHA
-        volumeMounts:
-        - name: workspace
-          mountPath: /workspace
+        - name: clone
+          image: alpine/git:2.45.2
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p "$HOME"
+              git clone REPO_URL /workspace
+              cd /workspace
+              git checkout --detach COMMIT_SHA
+          env:
+            - name: HOME
+              value: /tmp/home
+            - name: TMPDIR
+              value: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+              ephemeral-storage: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+              ephemeral-storage: "4Gi"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
       containers:
-      - name: test-runner
-        image: golang:1.26.5
-        workingDir: /workspace
-        command:
-        - sh
-        - -c
-        - |
-          go test -v -race ./...
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "1Gi"
-          limits:
-            cpu: "1.5"
-            memory: "2Gi"
-        volumeMounts:
-        - name: workspace
-          mountPath: /workspace
+        - name: test-runner
+          image: golang:1.26.5
+          workingDir: /workspace
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p "$HOME" "$GOCACHE" "$GOMODCACHE"
+              go test -v -race ./...
+          env:
+            - name: HOME
+              value: /cache/home
+            - name: GOCACHE
+              value: /cache/go-build
+            - name: GOMODCACHE
+              value: /cache/go-mod
+            - name: TMPDIR
+              value: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+              ephemeral-storage: "1Gi"
+            limits:
+              cpu: "1.5"
+              memory: "2Gi"
+              ephemeral-storage: "4Gi"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: cache
+              mountPath: /cache
+            - name: tmp
+              mountPath: /tmp
       volumes:
-      - name: workspace
-        emptyDir: {}
+        - name: workspace
+          emptyDir:
+            sizeLimit: "4Gi"
+        - name: cache
+          emptyDir:
+            sizeLimit: "2Gi"
+        - name: tmp
+          emptyDir:
+            sizeLimit: "512Mi"

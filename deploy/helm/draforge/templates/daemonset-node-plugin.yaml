@@ -78,7 +78,8 @@ spec:
       volumes:
         - name: cdi-dir
           {{- if $demoMode }}
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 16Mi
           {{- else }}
           hostPath:
             path: /var/lib/kubelet/device-plugins/cdi

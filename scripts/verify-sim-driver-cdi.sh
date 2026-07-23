@@ -47,7 +47,8 @@ assert_contains "$default_manifest" '            - --refresh-interval=3s'
 assert_contains "$default_manifest" '              containerPort: 8083'
 assert_contains "$default_manifest" '              path: /healthz'
 assert_contains "$default_manifest" '              path: /readyz'
-assert_contains "$default_manifest" '          emptyDir: {}'
+assert_contains "$default_manifest" '          emptyDir:'
+assert_contains "$default_manifest" '            sizeLimit: 16Mi'
 assert_not_contains "$default_manifest" '            path: /var/lib/kubelet/device-plugins/cdi'
 
 node_manifest="$work_dir/node.yaml"
@@ -57,7 +58,7 @@ assert_contains "$node_manifest" '          runAsNonRoot: false'
 assert_contains "$node_manifest" '          runAsUser: 0'
 assert_contains "$node_manifest" '            path: /var/lib/kubelet/device-plugins/cdi'
 assert_contains "$node_manifest" '            type: DirectoryOrCreate'
-assert_not_contains "$node_manifest" '          emptyDir: {}'
+assert_not_contains "$node_manifest" '          emptyDir:'
 assert_contains "$node_manifest" '            readOnlyRootFilesystem: true'
 assert_contains "$node_manifest" '            allowPrivilegeEscalation: false'
 

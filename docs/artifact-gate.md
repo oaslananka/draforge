@@ -22,9 +22,11 @@ The CI gate verifies these outputs:
 Manual commands:
 
 ```bash
-pnpm --dir web install --frozen-lockfile
+pnpm --dir web install --frozen-lockfile --ignore-scripts
 pnpm --dir web build
 helm lint deploy/helm/draforge
+scripts/verify-github-action-pins.sh
+scripts/verify-workload-security.sh
 scripts/verify-chart-images.sh
 scripts/test-chart-image-verifier.sh
 scripts/verify-dashboard-exposure.sh

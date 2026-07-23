@@ -20,27 +20,22 @@ kubectl apply -f build/remote/quota.yaml
 
 # 2. Generate the Job manifest
 MANIFEST_TEMP=$(mktemp)
-cat build/remote/test-job.yaml \
-    | sed "s/RUN_ID/$RUN_ID/g" \
-    | sed "s|REPO_URL|$REPO_URL|g" \
-    | sed "s|COMMIT_SHA|$COMMIT_SHA|g" \
-    > "$MANIFEST_TEMP"
+sed \
+    -e "s/RUN_ID/$RUN_ID/g" \
+    -e "s|REPO_URL|$REPO_URL|g" \
+    -e "s|COMMIT_SHA|$COMMIT_SHA|g" \
+    build/remote/test-job.yaml > "$MANIFEST_TEMP"
 
 # 3. Apply the Job
 kubectl apply -f "$MANIFEST_TEMP"
 
-# Helper function for cleanup
-cleanup() {
-    echo "==> Cleaning up test Job..."
-    kubectl delete -f "$MANIFEST_TEMP" --ignore-not-found=true
-    rm -f "$MANIFEST_TEMP"
-}
-trap cleanup EXIT
+# Clean up the rendered manifest and remote Job on every exit path.
+trap 'echo "==> Cleaning up test Job..."; kubectl delete -f "$MANIFEST_TEMP" --ignore-not-found=true; rm -f "$MANIFEST_TEMP"' EXIT
 
 # 4. Wait for the pod to start
 echo "==> Waiting for test Pod to start..."
 pod_name=""
-for i in {1..30}; do
+for _ in $(seq 1 30); do
     pod_name=$(kubectl get pods -n draforge-ci -l job-name="$JOB_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
     if [ -n "$pod_name" ]; then
         break
@@ -55,7 +50,7 @@ fi
 
 # 5. Stream clone logs
 echo "==> Streaming checkout logs..."
-for i in {1..30}; do
+for _ in $(seq 1 30); do
     if kubectl logs -n draforge-ci "$pod_name" -c clone -f --tail=-1 2>/dev/null; then
         break
     fi
@@ -64,7 +59,7 @@ done
 
 # 6. Stream test runner logs
 echo "==> Streaming test runner logs..."
-for i in {1..30}; do
+for _ in $(seq 1 30); do
     if kubectl logs -n draforge-ci "$pod_name" -c test-runner -f --tail=-1 2>/dev/null; then
         break
     fi
@@ -74,7 +69,7 @@ done
 # 7. Check final status of the Job
 echo "==> Checking test completion status..."
 status=""
-for i in {1..10}; do
+for _ in $(seq 1 10); do
     status=$(kubectl get job -n draforge-ci "$JOB_NAME" -o jsonpath='{.status.succeeded}' 2>/dev/null || true)
     if [ "$status" = "1" ]; then
         break

@@ -14,6 +14,16 @@ interface ApiError {
   code?: string;
 }
 
+class ApiRequestError extends Error {
+  readonly code?: string;
+
+  constructor(error: ApiError) {
+    super(error.message);
+    this.name = 'ApiRequestError';
+    this.code = error.code;
+  }
+}
+
 function parseApiError(body: unknown): ApiError {
   if (body && typeof body === 'object') {
     const obj = body as Record<string, unknown>;
@@ -42,12 +52,12 @@ async function typedFetch<T>(url: string): Promise<T> {
     } catch {
       // ignore parse failure, use default message
     }
-    throw apiErr;
+    throw new ApiRequestError(apiErr);
   }
   try {
     return (await res.json()) as T;
   } catch {
-    throw { message: 'Failed to parse API response as JSON' } satisfies ApiError;
+    throw new ApiRequestError({ message: 'Failed to parse API response as JSON' });
   }
 }
 

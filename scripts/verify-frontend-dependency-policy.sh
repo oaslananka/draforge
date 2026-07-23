@@ -45,11 +45,15 @@ for package in \
   assert_absent "$lockfile" "$package"
 done
 
-node_base='FROM node:22.23.1-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS frontend-builder'
-corepack_install='npm install --global --ignore-scripts --force corepack@0.35.0'
+node_version_comment='# node:22.23.1-alpine'
+node_base='FROM node@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS frontend-builder'
+corepack_arg='ARG COREPACK_VERSION=0.35.0'
+corepack_package="\"corepack@\${COREPACK_VERSION}\""
 pnpm_activate='corepack prepare pnpm@11.5.2 --activate'
+assert_contains "$dockerfile" "$node_version_comment"
 assert_contains "$dockerfile" "$node_base"
-assert_contains "$dockerfile" "$corepack_install"
+assert_contains "$dockerfile" "$corepack_arg"
+assert_contains "$dockerfile" "$corepack_package"
 assert_contains "$dockerfile" "$pnpm_activate"
 
 workspace_copy='COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./'

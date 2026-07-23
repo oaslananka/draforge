@@ -1,10 +1,10 @@
 # Multi-stage Dockerfile for draforge-server
 # Stage 1: Build React Frontend Dashboard
-FROM node:22.23.1-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS frontend-builder
+# node:22.23.1-alpine
+FROM node@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS frontend-builder
 WORKDIR /web
-RUN npm install --global --ignore-scripts --force corepack@0.35.0 && \
-    corepack enable && \
-    corepack prepare pnpm@11.5.2 --activate
+ARG COREPACK_VERSION=0.35.0
+RUN npm install       --global       --ignore-scripts       --force       "corepack@${COREPACK_VERSION}" &&     corepack enable &&     corepack prepare pnpm@11.5.2 --activate
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 COPY web/vendor ./vendor
 RUN pnpm install --frozen-lockfile --ignore-scripts

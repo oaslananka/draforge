@@ -27,10 +27,61 @@ DRAForge provides native support for monitoring and logging to assist operators 
 
 ### Metrics
 
-Both the API server and the reconciler expose Prometheus metrics via a `/metrics` handler.
+The API server exposes Prometheus metrics on its HTTP service. The controller exposes runtime health and metrics on the named `runtime` port, which defaults to TCP `8082` and serves `/metrics`.
 
-- **Endpoint:** The metrics are exposed on the components' respective HTTP ports (typically port 8080) at the `/metrics` path.
-- **Integration:** You can configure your cluster's Prometheus operator to scrape these endpoints. Example `ServiceMonitor` configurations are not included by default but can be added alongside the Helm deployment to target the `draforge-controller` and `draforge-api-server` services.
+The controller metrics Service is enabled by default, but the controller NetworkPolicy keeps all ingress closed until a monitoring peer is explicitly selected. This prevents unrelated namespaces from scraping the controller merely because the Service exists.
+
+#### Allow a restricted monitoring peer
+
+Use a namespace selector and, preferably, a pod selector:
+
+```yaml
+controller:
+  metrics:
+    networkPolicy:
+      enabled: true
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+```
+
+Install or upgrade with the values file:
+
+```bash
+helm upgrade --install draforge deploy/helm/draforge \
+  --namespace draforge-system \
+  --create-namespace \
+  -f monitoring-values.yaml
+```
+
+The generated NetworkPolicy permits only matching pods in matching namespaces to reach the controller container metrics port. Verify namespace labels with:
+
+```bash
+kubectl get namespace monitoring --show-labels
+```
+
+Leaving `podSelector` empty allows every pod in the selected namespace, so production deployments should normally provide both selectors. Disabling `controller.metrics.service.enabled` removes the Service and keeps the controller ingress policy closed even if the metrics NetworkPolicy values remain configured.
+
+#### Optional Prometheus Operator ServiceMonitor
+
+A `ServiceMonitor` can be rendered when the Prometheus Operator CRDs are already installed:
+
+```yaml
+controller:
+  metrics:
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      labels:
+        release: prometheus
+      interval: 30s
+      scrapeTimeout: 10s
+```
+
+The ServiceMonitor selects the DRAForge controller Service in the Helm release namespace and scrapes the named `runtime` port at `/metrics`. It is disabled by default and schema validation rejects enabling it while the metrics Service is disabled. Enabling the ServiceMonitor does not open NetworkPolicy ingress; configure the restricted monitoring peer shown above as part of the same values profile.
 
 ### Logging
 

@@ -102,6 +102,11 @@ tasks:
       - scripts/verify-chart-images.sh
       - scripts/test-chart-image-verifier.sh
 
+  helm:verify-metrics:
+    desc: Verify restricted controller metrics scraping and ServiceMonitor rendering
+    cmds:
+      - scripts/verify-controller-metrics-policy.sh
+
   infra:preflight:
     desc: Validate Terraform showcase tools and static configuration
     cmds:

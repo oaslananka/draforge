@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserved namespace-qualified ResourceClaim identity across dashboard selection, graph navigation, and explain API requests, including duplicate claim names across namespaces.
 - Repaired the remote DOKS E2E harness with tagged test execution, result verification, run-scoped read-only RBAC, failure artifacts, and cancellation-safe cleanup.
 - Aligned Helm defaults with the public GHCR server, controller, and sim-driver images; added appVersion tags, digest pinning, a DOCR showcase override, and multi-arch release verification.
+- Added opt-in, namespace/pod-restricted controller metrics ingress and an optional ServiceMonitor while keeping controller ingress closed by default.
 
 ---
 

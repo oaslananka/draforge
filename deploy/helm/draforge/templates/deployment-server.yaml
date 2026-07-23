@@ -34,6 +34,11 @@ spec:
             - --readiness-timeout={{ .Values.server.lifecycle.readinessTimeout }}
             - --readiness-grace-period={{ .Values.server.lifecycle.readinessGracePeriod }}
             - --shutdown-timeout={{ .Values.server.lifecycle.shutdownTimeout }}
+          {{- with .Values.server.cors.allowedOrigins }}
+          env:
+            - name: CORS_ALLOWED_ORIGINS
+              value: {{ join "," . | quote }}
+          {{- end }}
           ports:
             - containerPort: 8080
               name: http

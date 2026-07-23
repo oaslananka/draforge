@@ -27,6 +27,7 @@ pnpm --dir web build
 helm lint deploy/helm/draforge
 scripts/verify-chart-images.sh
 scripts/test-chart-image-verifier.sh
+scripts/verify-dashboard-exposure.sh
 mkdir -p charts
 helm package deploy/helm/draforge --destination charts
 goreleaser release --snapshot --clean --skip=docker,sbom,sign

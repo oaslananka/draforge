@@ -118,12 +118,30 @@
         },
         "lifecycle": {
           "$ref": "#/definitions/lifecycle"
+        },
+        "cors": {
+          "type": "object",
+          "properties": {
+            "allowedOrigins": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "allowedOrigins"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
         "replicaCount",
         "image",
-        "lifecycle"
+        "lifecycle",
+        "cors"
       ]
     },
     "controller": {
@@ -328,12 +346,328 @@
           "type": "boolean"
         }
       }
+    },
+    "gateway": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "allowInsecureHTTP": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hostname": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*)?$"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "secretName": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*)?$"
+            }
+          },
+          "required": [
+            "enabled",
+            "secretName"
+          ],
+          "additionalProperties": false
+        },
+        "authentication": {
+          "type": "object",
+          "properties": {
+            "proxyService": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 63,
+                  "pattern": "^(?:[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)?$"
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
+              },
+              "required": [
+                "name",
+                "port"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "proxyService"
+          ],
+          "additionalProperties": false
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "className": {
+              "type": "string",
+              "minLength": 1
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "enabled",
+            "className",
+            "annotations"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "enabled",
+        "allowInsecureHTTP",
+        "className",
+        "hostname",
+        "annotations",
+        "tls",
+        "authentication",
+        "ingress"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
     "global",
     "server",
     "controller",
-    "nodePlugin"
+    "nodePlugin",
+    "gateway"
+  ],
+  "allOf": [
+    {
+      "not": {
+        "properties": {
+          "gateway": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "ingress": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            },
+            "required": [
+              "enabled",
+              "ingress"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {
+              "gateway": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "gateway": {
+                "properties": {
+                  "ingress": {
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "enabled"
+                    ]
+                  }
+                },
+                "required": [
+                  "ingress"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "if": {
+          "properties": {
+            "gateway": {
+              "properties": {
+                "allowInsecureHTTP": {
+                  "const": true
+                }
+              },
+              "required": [
+                "allowInsecureHTTP"
+              ]
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "gateway": {
+              "properties": {
+                "tls": {
+                  "properties": {
+                    "enabled": {
+                      "const": false
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "gateway": {
+              "properties": {
+                "hostname": {
+                  "minLength": 1
+                },
+                "tls": {
+                  "properties": {
+                    "enabled": {
+                      "const": true
+                    },
+                    "secretName": {
+                      "minLength": 1
+                    }
+                  }
+                },
+                "authentication": {
+                  "properties": {
+                    "proxyService": {
+                      "properties": {
+                        "name": {
+                          "minLength": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "server": {
+              "properties": {
+                "cors": {
+                  "properties": {
+                    "allowedOrigins": {
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^https://[A-Za-z0-9](?:[-A-Za-z0-9.]*[A-Za-z0-9])?(?::[0-9]{1,5})?$"
+                      },
+                      "not": {
+                        "contains": {
+                          "const": "*"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "anyOf": [
+            {
+              "properties": {
+                "gateway": {
+                  "properties": {
+                    "enabled": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ]
+                }
+              }
+            },
+            {
+              "properties": {
+                "gateway": {
+                  "properties": {
+                    "ingress": {
+                      "properties": {
+                        "enabled": {
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "enabled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ingress"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "gateway": {
+            "properties": {
+              "allowInsecureHTTP": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    }
   ]
 }

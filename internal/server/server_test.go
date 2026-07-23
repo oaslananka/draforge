@@ -201,6 +201,31 @@ func TestVersionEndpoint(t *testing.T) {
 	}
 }
 
+func TestNewServerParsesConfiguredCORSOrigins(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://draforge.example.com, https://ops.example.com")
+	srv := NewServer(nil, 8081)
+
+	want := []string{"https://draforge.example.com", "https://ops.example.com"}
+	if len(srv.allowedOriginsParsed) != len(want) {
+		t.Fatalf("parsed origins = %#v, want %#v", srv.allowedOriginsParsed, want)
+	}
+	for index, origin := range want {
+		if srv.allowedOriginsParsed[index] != origin {
+			t.Fatalf("parsed origin %d = %q, want %q", index, srv.allowedOriginsParsed[index], origin)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/claims", nil)
+	req.Header.Set("Origin", "https://ops.example.com")
+	rr := httptest.NewRecorder()
+	srv.cors(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://ops.example.com" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want configured origin", got)
+	}
+}
+
 func TestCORSConfigurableOrigins(t *testing.T) {
 	srv := NewServer(nil, 8081)
 
@@ -239,6 +264,16 @@ func TestCORSConfigurableOrigins(t *testing.T) {
 
 	if rr3.Header().Get("Access-Control-Allow-Origin") != "" {
 		t.Errorf("expected empty CORS for non-matching origin, got %q", rr3.Header().Get("Access-Control-Allow-Origin"))
+	}
+
+	// Restricted configuration must not emit a wildcard for requests without Origin.
+	req4 := httptest.NewRequest("GET", "/api/claims", nil)
+	rr4 := httptest.NewRecorder()
+	srv2.cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr4, req4)
+	if rr4.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Errorf("expected no CORS header without Origin under restricted config, got %q", rr4.Header().Get("Access-Control-Allow-Origin"))
 	}
 }
 

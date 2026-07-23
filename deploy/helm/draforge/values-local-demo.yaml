@@ -1,0 +1,9 @@
+# Explicit non-production HTTP exposure for local/demo clusters.
+server:
+  cors:
+    allowedOrigins:
+      - "*"
+
+gateway:
+  enabled: true
+  allowInsecureHTTP: true

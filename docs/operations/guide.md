@@ -15,6 +15,8 @@ Upgrading DRAForge primarily involves updating the Helm release.
      --namespace draforge-system
    ```
 
+> **v0.3 exposure change:** External Gateway/Ingress resources are now disabled by default. Before upgrading an intentionally public deployment, prepare a secure exposure values file with TLS, an authentication proxy Service, and restrictive HTTPS CORS. The local-demo profile is explicitly unauthenticated and non-production.
+
 3. **Verify Component Versions:**
    After the upgrade completes, verify the running versions:
    ```bash

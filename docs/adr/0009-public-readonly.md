@@ -1,9 +1,9 @@
-﻿# ADR-0009: Public Read-Only Security Model
+# ADR-0009: Read-Only API Is Not Anonymous-by-Default
 
 - **Status**: Approved
-- **Context**: The showcase dashboard is publicly accessible, but must not allow unauthorized changes.
-- **Decision**: Expose a read-only HTTP server API for the public dashboard. Admin mutations (like fault injection or scenario resets) must be protected by authenticating against the Kubernetes API (RBAC).
-- **Alternatives**: No public dashboard or public write APIs.
-- **Consequences**: Public users can view, but not modify, cluster DRA state.
-- **Security Considerations**: Strict CORS, CSP, secure headers, and API rate limits.
-- **Operational Considerations**: Runs in a read-only container filesystem.
+- **Context**: DRAForge does not expose mutation APIs in the dashboard, but read endpoints reveal cluster topology, identities, allocation state, device attributes/capacities, diagnostics, and event evidence.
+- **Decision**: Keep the dashboard API read-only while disabling external exposure by default. Secure public routing must terminate TLS and pass through an operator-managed OIDC/identity-aware proxy. Administrative mutations remain CLI-only and authenticated through Kubernetes RBAC.
+- **Alternatives**: Treat read-only data as safe for anonymous access, expose no dashboard, or add application-managed identity storage.
+- **Consequences**: Local access uses port-forwarding; public operators must deploy and operate the identity proxy.
+- **Security Considerations**: CORS, CSP, headers, and rate limits are defense in depth and do not replace authentication. Demo HTTP exposure is explicit and non-production.
+- **Operational Considerations**: The authentication proxy must support long-lived SSE connections and route upstream to the internal DRAForge Service.

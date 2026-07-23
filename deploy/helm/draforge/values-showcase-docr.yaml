@@ -1,5 +1,5 @@
 # DigitalOcean Container Registry overrides for the DOKS showcase build flow.
-# The public chart defaults remain credential-free GHCR references.
+# This profile intentionally enables unauthenticated HTTP exposure for a short-lived demo.
 global:
   imageRegistry: registry.digitalocean.com/draforge
   imagePullSecrets:
@@ -11,6 +11,9 @@ server:
     tag: server-latest
     digest: ""
     pullPolicy: Always
+  cors:
+    allowedOrigins:
+      - "*"
 
 controller:
   image:
@@ -25,3 +28,7 @@ nodePlugin:
     tag: sim-driver-latest
     digest: ""
     pullPolicy: Always
+
+gateway:
+  enabled: true
+  allowInsecureHTTP: true

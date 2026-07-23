@@ -164,10 +164,14 @@ func (m modelState) View() string {
 		if len(m.claims) == 0 {
 			s.WriteString("  No active ResourceClaims found.\n")
 		} else {
-			fmt.Fprintf(&s, "  %-25s %-15s %-15s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASS", "STATUS")
-			s.WriteString(strings.Repeat("-", 75) + "\n")
-			for _, c := range m.claims {
-				fmt.Fprintf(&s, "  %-25s %-15s %-15s %-15s\n", c.Name, c.Namespace, c.DeviceClassName, c.Status)
+			fmt.Fprintf(&s, "  %-25s %-15s %-35s %-12s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASSES", "ALLOCATIONS", "STATUS")
+			s.WriteString(strings.Repeat("-", 110) + "\n")
+			for _, claim := range m.claims {
+				classes := strings.Join(claim.RequestedClassNames(), ",")
+				if classes == "" {
+					classes = "-"
+				}
+				fmt.Fprintf(&s, "  %-25s %-15s %-35s %-12d %-15s\n", claim.Name, claim.Namespace, classes, len(claim.EffectiveAllocations()), claim.Status)
 			}
 		}
 

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/oaslananka/draforge/internal/health"
+	"github.com/oaslananka/draforge/pkg/model"
+	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -419,5 +421,46 @@ func TestDoctorEndpoint(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestClaimsEndpointPreservesCompleteRequestAndAllocationIdentity(t *testing.T) {
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "multi", Namespace: "team-a"},
+		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{Requests: []resourcev1.DeviceRequest{
+			{Name: "gpu", Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class", Count: 2}},
+			{Name: "accelerator", FirstAvailable: []resourcev1.DeviceSubRequest{
+				{Name: "nic", DeviceClassName: "nic-class"},
+				{Name: "fpga", DeviceClassName: "fpga-class"},
+			}},
+		}}},
+		Status: resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{
+			NodeSelector: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+				MatchFields: []corev1.NodeSelectorRequirement{{Key: "metadata.name", Operator: corev1.NodeSelectorOpIn, Values: []string{"node-a"}}},
+			}}},
+			Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+				{Request: "gpu", Driver: "driver-a.example", Pool: "shared", Device: "dev-0"},
+				{Request: "accelerator/nic", Driver: "driver-b.example", Pool: "shared", Device: "dev-0"},
+			}},
+		}},
+	}
+
+	srv := NewServer(fake.NewSimpleClientset(claim), 8081)
+	request := httptest.NewRequest(http.MethodGet, "/api/claims", nil)
+	response := httptest.NewRecorder()
+	srv.handleClaims(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+
+	var claims []model.ResourceClaimInfo
+	if err := json.Unmarshal(response.Body.Bytes(), &claims); err != nil {
+		t.Fatalf("decode claims: %v", err)
+	}
+	if len(claims) != 1 || len(claims[0].Requests) != 2 || len(claims[0].Allocations) != 2 {
+		t.Fatalf("complete claim collections not preserved: %#v", claims)
+	}
+	if claims[0].Allocations[1].DriverName != "driver-b.example" || claims[0].Allocations[1].PoolName != "shared" || claims[0].Allocations[1].NodeName != "node-a" {
+		t.Fatalf("second allocation identity lost: %#v", claims[0].Allocations[1])
 	}
 }

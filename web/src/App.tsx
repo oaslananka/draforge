@@ -22,6 +22,7 @@ import type { Summary, VersionInfo } from './api/types';
 import InteractiveGraph from "./components/InteractiveGraph";
 import useSSE from "./hooks/useSSE";
 import type { ClaimIdentity } from './claims/identity';
+import { claimAllocationLabels, claimClassNames } from './claims/summary';
 import {
   claimIdentityKey,
   findClaimIdentityByKey,
@@ -396,9 +397,9 @@ export default function App() {
                     <tr key={claimIdentityKey(claim)} style={{ borderBottom: '1px solid var(--border-light)' }}>
                       <td style={{ padding: '12px' }}><strong>{claim.name}</strong></td>
                       <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.namespace}</td>
-                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.deviceClassName}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claimClassNames(claim).join(', ') || '-'}</td>
                       <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.ownerPodName || 'None'}</td>
-                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claim.allocatedDevice || 'Pending'}</td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{claimAllocationLabels(claim).join('; ') || 'Pending'}</td>
                       <td style={{ padding: '12px' }}>
                         <span className={`badge ${claim.status === 'Allocated' ? 'badge-success' : 'badge-warning'}`}>{claim.status}</span>
                       </td>

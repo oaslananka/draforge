@@ -219,6 +219,7 @@ func TestGraphFormats(t *testing.T) {
 			{ID: "pod/default/my-pod", Type: "Pod", Label: "my-pod"},
 			{ID: "claim/default/my-claim", Type: "ResourceClaim", Label: "my-claim"},
 			{ID: "device/gpu-0", Type: "Device", Label: "gpu-0"},
+			{ID: "allocation/default/my-claim/0", Type: "Allocation", Label: "request-a"},
 		},
 		Edges: []model.GraphEdge{
 			{From: "pod/default/my-pod", To: "claim/default/my-claim", Type: "claims"},
@@ -236,6 +237,9 @@ func TestGraphFormats(t *testing.T) {
 	}
 	if !contains(dot, "allocates") || !contains(dot, "claims") {
 		t.Errorf("ToDOT() missing edges: %s", dot)
+	}
+	if !contains(dot, "request-a") || !contains(dot, "fillcolor=orange") {
+		t.Errorf("ToDOT() does not distinguish allocation nodes: %s", dot)
 	}
 
 	// 2. Test Mermaid Output
@@ -303,10 +307,15 @@ func newTestClaim(name, namespace, className, allocatedDevice, allocatedNode str
 					{
 						Device: allocatedDevice,
 						Driver: "nvidia.com",
-						Pool:   allocatedNode,
+						Pool:   "gpu-pool",
 					},
 				},
 			},
+		}
+		if allocatedNode != "" {
+			rc.Status.Allocation.NodeSelector = &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+				MatchFields: []corev1.NodeSelectorRequirement{{Key: "metadata.name", Operator: corev1.NodeSelectorOpIn, Values: []string{allocatedNode}}},
+			}}}
 		}
 	}
 	return rc
@@ -730,4 +739,77 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestBuildGraphPreservesAllRequestClassesAndAllocationIdentities(t *testing.T) {
+	nodeName := "node-a"
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "multi", Namespace: "team-a"},
+		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{Requests: []resourcev1.DeviceRequest{
+			{Name: "gpu", Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class", Count: 1}},
+			{Name: "accelerator", FirstAvailable: []resourcev1.DeviceSubRequest{
+				{Name: "nic", DeviceClassName: "nic-class", Count: 1},
+				{Name: "fpga", DeviceClassName: "fpga-class", Count: 1},
+			}},
+		}}},
+		Status: resourcev1.ResourceClaimStatus{Allocation: &resourcev1.AllocationResult{
+			NodeSelector: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+				MatchFields: []corev1.NodeSelectorRequirement{{Key: "metadata.name", Operator: corev1.NodeSelectorOpIn, Values: []string{nodeName}}},
+			}}},
+			Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+				{Request: "gpu", Driver: "driver-a.example", Pool: "shared", Device: "dev-0"},
+				{Request: "accelerator/nic", Driver: "driver-b.example", Pool: "shared", Device: "dev-0"},
+			}},
+		}},
+	}
+
+	objects := []runtime.Object{
+		newTestPoolSlice("slice-a", "driver-a.example", nodeName, "shared", "dev-0"),
+		newTestPoolSlice("slice-b", "driver-b.example", nodeName, "shared", "dev-0"),
+		claim,
+		&resourcev1.DeviceClass{ObjectMeta: metav1.ObjectMeta{Name: "gpu-class"}},
+		&resourcev1.DeviceClass{ObjectMeta: metav1.ObjectMeta{Name: "nic-class"}},
+		&resourcev1.DeviceClass{ObjectMeta: metav1.ObjectMeta{Name: "fpga-class"}},
+	}
+
+	resourceGraph, err := NewGraphBuilder().BuildGraph(context.Background(), fake.NewSimpleClientset(objects...), "", "")
+	if err != nil {
+		t.Fatalf("BuildGraph: %v", err)
+	}
+
+	claimID := "claim/team-a/multi"
+	wantEdges := map[string]bool{
+		edgeKey(claimID, "class/gpu-class", "uses-class"):                                             true,
+		edgeKey(claimID, "class/nic-class", "uses-class"):                                             true,
+		edgeKey(claimID, "class/fpga-class", "uses-class"):                                            true,
+		edgeKey(claimID, deviceGraphID("driver-a.example", nodeName, "shared", "dev-0"), "allocates"): true,
+		edgeKey(claimID, deviceGraphID("driver-b.example", nodeName, "shared", "dev-0"), "allocates"): true,
+	}
+	for _, edge := range resourceGraph.Edges {
+		delete(wantEdges, edgeKey(edge.From, edge.To, edge.Type))
+	}
+	if len(wantEdges) != 0 {
+		t.Fatalf("missing complete request/allocation edges: %#v", wantEdges)
+	}
+
+	allocationNodes := 0
+	claimFound := false
+	for _, graphNode := range resourceGraph.Nodes {
+		if graphNode.Type == "Allocation" {
+			allocationNodes++
+		}
+		if graphNode.ID != claimID {
+			continue
+		}
+		claimFound = true
+		if graphNode.Metadata["requestCount"] != 2 || graphNode.Metadata["allocationCount"] != 2 {
+			t.Fatalf("claim metadata lost collection cardinality: %#v", graphNode.Metadata)
+		}
+	}
+	if !claimFound {
+		t.Fatalf("claim node %q not found", claimID)
+	}
+	if allocationNodes != 2 {
+		t.Fatalf("allocation nodes = %d, want every allocation result", allocationNodes)
+	}
 }

@@ -607,9 +607,9 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		// 3. Claims
 		_, _ = fmt.Fprintf(w, "# HELP draforge_claims_total Total number of ResourceClaims\n")
 		_, _ = fmt.Fprintf(w, "# TYPE draforge_claims_total gauge\n")
-		for _, c := range claims {
-			_, _ = fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,status=%q} 1\n",
-				c.Name, c.Namespace, c.DeviceClassName, c.Status)
+		for _, claim := range claims {
+			_, _ = fmt.Fprintf(w, "draforge_claims_total{claim=%q,namespace=%q,class=%q,classes=%q,allocation_count=\"%d\",status=%q} 1\n",
+				claim.Name, claim.Namespace, claim.DeviceClassName, strings.Join(claim.RequestedClassNames(), ","), len(claim.EffectiveAllocations()), claim.Status)
 		}
 	}
 

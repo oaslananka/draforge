@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oaslananka/draforge/pkg/model"
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -999,5 +1000,82 @@ func TestExplainClaim_WithAdvancedFeatures(t *testing.T) {
 
 	if !foundWarning {
 		t.Errorf("expected warning node for advanced features, but it was not found")
+	}
+}
+
+func TestExplainClaimAllocatedEvidenceIncludesEveryAllocation(t *testing.T) {
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "multi", Namespace: "team-a"},
+		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{Requests: []resourcev1.DeviceRequest{
+			{Name: "gpu", Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "gpu-class", Count: 2}},
+		}}},
+		Status: resourcev1.ResourceClaimStatus{
+			Allocation: &resourcev1.AllocationResult{
+				NodeSelector: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+					MatchFields: []corev1.NodeSelectorRequirement{{Key: "metadata.name", Operator: corev1.NodeSelectorOpIn, Values: []string{"node-a"}}},
+				}}},
+				Devices: resourcev1.DeviceAllocationResult{Results: []resourcev1.DeviceRequestAllocationResult{
+					{Request: "gpu", Driver: "driver-a.example", Pool: "shared", Device: "dev-0"},
+					{Request: "gpu", Driver: "driver-b.example", Pool: "shared", Device: "dev-0"},
+				}},
+			},
+			ReservedFor: []resourcev1.ResourceClaimConsumerReference{{Name: "consumer"}},
+		},
+	}
+
+	result, err := ExplainClaim(context.Background(), fake.NewSimpleClientset(claim), "team-a", "multi")
+	if err != nil {
+		t.Fatalf("ExplainClaim: %v", err)
+	}
+	for _, identity := range []string{
+		"gpu: driver-a.example/shared/dev-0 on node-a",
+		"gpu: driver-b.example/shared/dev-0 on node-a",
+	} {
+		if !strings.Contains(result.ReasonTree.Evidence, identity) {
+			t.Fatalf("allocated evidence missing %q: %s", identity, result.ReasonTree.Evidence)
+		}
+	}
+}
+
+func TestExplainClaimPendingPreservesEveryRequestedClass(t *testing.T) {
+	claim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "multi", Namespace: "team-a"},
+		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{Requests: []resourcev1.DeviceRequest{
+			{Name: "gpu", Exactly: &resourcev1.ExactDeviceRequest{DeviceClassName: "missing-gpu"}},
+			{Name: "accelerator", FirstAvailable: []resourcev1.DeviceSubRequest{
+				{Name: "nic", DeviceClassName: "existing-nic"},
+				{Name: "fpga", DeviceClassName: "missing-fpga"},
+			}},
+		}}},
+	}
+	class := &resourcev1.DeviceClass{ObjectMeta: metav1.ObjectMeta{Name: "existing-nic"}}
+
+	result, err := ExplainClaim(context.Background(), fake.NewSimpleClientset(claim, class), "team-a", "multi")
+	if err != nil {
+		t.Fatalf("ExplainClaim: %v", err)
+	}
+
+	allMessages := result.ReasonTree.Message + "\n" + result.ReasonTree.Evidence
+	var walk func([]model.ReasonNode)
+	walk = func(nodes []model.ReasonNode) {
+		for _, node := range nodes {
+			allMessages += "\n" + node.Message + "\n" + node.Evidence
+			walk(node.Children)
+		}
+	}
+	walk(result.ReasonTree.Children)
+	for _, className := range []string{"missing-gpu", "existing-nic", "missing-fpga"} {
+		if !strings.Contains(allMessages, className) {
+			t.Fatalf("explanation does not expose class %q:\n%s", className, allMessages)
+		}
+	}
+	for _, className := range []string{"missing-gpu", "missing-fpga"} {
+		found := false
+		for _, remedy := range result.Remedy {
+			found = found || strings.Contains(remedy, className)
+		}
+		if !found {
+			t.Fatalf("missing remediation for class %q: %#v", className, result.Remedy)
+		}
 	}
 }

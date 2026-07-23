@@ -84,6 +84,7 @@ task web:build      # Build web dashboard for production
 task helm:lint      # Lint Helm charts
 task helm:verify-images # Verify public, digest, DOCR, and multi-arch image contracts
 task helm:verify-lifecycle # Verify readiness and graceful shutdown Helm settings
+task helm:verify-sim-driver # Verify demo/node CDI output and health probes
 task helm:verify-exposure # Verify disabled, demo, and secure public exposure profiles
 task helm:verify-metrics # Verify restricted controller metrics scraping
 task sbom           # Generate CycloneDX SBOM (requires syft)

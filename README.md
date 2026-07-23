@@ -98,6 +98,7 @@ task demo:up
 This task explicitly applies the non-production `values-showcase-docr.yaml` profile, which enables unauthenticated HTTP exposure. It audits resource limits, provisions infrastructure, builds images remotely, installs the Helm release, and outputs the demo URL. Do not use this profile with sensitive clusters or as a production deployment.
 
 A normal Helm install creates only internal ClusterIP services. Production public access requires TLS and an operator-managed OIDC/identity-aware proxy; see the [installation guide](docs/operations/install.md).
+The node plugin defaults to isolated `demo` CDI output. Host-integrated kubelet CDI output is an explicit `nodePlugin.outputMode=node` opt-in and fails closed when Kubernetes or the host CDI directory is unavailable.
 
 To tear down the showcase and clean all billable resources:
 ```bash

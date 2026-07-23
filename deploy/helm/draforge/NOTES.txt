@@ -14,3 +14,9 @@ Server API & Dashboard:
 Components deployed:
   - Simulator Controller: Deployment
   - Node Plugin (CDI): DaemonSet
+    mode={{ .Values.nodePlugin.outputMode }}, health port={{ .Values.nodePlugin.health.port }}
+    {{- if eq .Values.nodePlugin.outputMode "demo" }}
+    demo mode uses an isolated emptyDir and static test devices.
+    {{- else }}
+    node mode writes atomically to the host kubelet CDI directory and fails readiness closed.
+    {{- end }}

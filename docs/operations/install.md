@@ -92,6 +92,23 @@ The production profile installs credential-free GHCR images and internal Cluster
    kubectl port-forward svc/draforge-server -n draforge-system 8080:8080
    ```
 
+### Node Plugin CDI Modes
+
+The default chart uses `nodePlugin.outputMode: demo`. It writes two explicit test devices to a pod-local `emptyDir`, runs as UID 1000, and does not touch the host kubelet CDI directory.
+
+Host-integrated output is an explicit opt-in:
+
+```bash
+helm upgrade --install draforge deploy/helm/draforge \
+  --namespace draforge-system \
+  --create-namespace \
+  --set nodePlugin.outputMode=node
+```
+
+Node mode mounts `/var/lib/kubelet/device-plugins/cdi` and therefore runs as UID 0 to write the root-owned host directory. It is still non-privileged: privilege escalation is disabled, all capabilities are dropped, the root filesystem is read-only, and RuntimeDefault seccomp remains enabled.
+
+The sim-driver validates that the CDI directory is a writable, non-symlink directory. It writes mode `0644` files through a temporary file, fsync, and atomic rename. Kubernetes API or write failures do not introduce static fallback devices or truncate the current document; the pod becomes not-ready and preserves the last-known-good CDI file until a refresh succeeds. Kubelet probes use `/healthz` and `/readyz` on port `8083`.
+
 ### Explicit Local Demo Exposure
 
 For a disposable cluster, the local demo profile enables direct HTTP routing and wildcard CORS:

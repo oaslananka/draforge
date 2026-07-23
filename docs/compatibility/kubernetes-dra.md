@@ -113,8 +113,8 @@ explicitly supports them.
    CDI output are different operational modes and should not be presented as the
    same production behavior. This is configured via the `nodePlugin.outputMode`
    Helm chart value:
-   - `demo` (default): Uses an `emptyDir` for testing without modifying the host.
-   - `node`: Mounts a `hostPath` (`/var/lib/kubelet/device-plugins/cdi`) to provide output to the node's kubelet.
+   - `demo` (default): Uses an `emptyDir`, writes explicit static demo devices, runs as non-root, and never modifies the host.
+   - `node`: Mounts the kubelet CDI `hostPath`, runs as UID 0 with privilege escalation disabled and all Linux capabilities dropped, and derives devices only from Kubernetes allocations for the current node. Directory, API, or atomic write failures are fail-closed: readiness becomes false and the last-known-good document remains in place.
 
 5. **Granular authorization is not implemented.** DRAForge currently assumes
    broad enough read access to observe DRA objects. Per-device status visibility

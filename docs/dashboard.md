@@ -41,6 +41,21 @@ The dashboard handles the stream with controlled reconnection:
 
 A stream status badge is visible in the dashboard header.
 
+## Frontend architecture and tests
+
+`App.tsx` is a small composition root. API/query state is isolated in `useDashboardData`, claim explanation requests are isolated in `useClaimExplanation`, SSE lifecycle remains in `useSSE`, and tab rendering is delegated to `DashboardViewRouter`. Header, footer, graph, and view state components are independently reviewable.
+
+The Vitest + jsdom + React Testing Library suite runs without Kubernetes or a live API server. Deterministic mocks cover:
+
+- initial and partial API failures plus empty states;
+- SSE connected, reconnecting, malformed-message, and cleanup behavior;
+- namespace-qualified duplicate claim selection and explain requests;
+- graph-to-explain navigation;
+- diagnostics rendering and active-tab accessibility;
+- keyboard selection of SVG graph nodes.
+
+Run the same required CI gate locally with `pnpm --dir web test`. Lint and production build remain separate required checks.
+
 ## Empty Cluster Behavior
 
 When no DRA resources are discovered, the dashboard shows clear messages:

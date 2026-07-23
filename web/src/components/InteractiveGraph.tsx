@@ -257,7 +257,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
     <div style={{ display: 'flex', gap: '20px', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="badge badge-success" style={{ border: 'none', cursor: 'pointer' }} onClick={handleResetZoom}>Reset View</button>
+          <button type="button" className="badge badge-success" style={{ border: 'none', cursor: 'pointer' }} onClick={handleResetZoom}>Reset View</button>
         </div>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Use mouse wheel to zoom, drag background to pan.</span>
       </div>
@@ -340,8 +340,17 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                   <g
                     key={node.id}
                     transform={`translate(${node.x}, ${node.y})`}
-                    onMouseDown={(e) => handleNodeMouseDown(e, node)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${node.type} ${node.label}`}
+                    onMouseDown={(event) => handleNodeMouseDown(event, node)}
                     onClick={() => setSelectedNode(node)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedNode(node);
+                      }
+                    }}
                     onMouseEnter={() => setHoveredNodeId(node.id)}
                     onMouseLeave={() => setHoveredNodeId(null)}
                     style={{ cursor: 'pointer', opacity }}
@@ -392,6 +401,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                 </div>
                 {selectedNode.type === 'ResourceClaim' && (
                   <button
+                    type="button"
                     className="badge badge-warning"
                     onClick={() => {
                       const claim = claimIdentityFromGraphNode(selectedNode);
@@ -450,20 +460,24 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                               {rel.type === 'incoming' ? '← ' : '→ '}
                               {rel.relType}
                             </span>
-                            <span
+                            <button
+                              type="button"
                               style={{
                                 color: getNodeColor(rel.node.type, rel.node.id),
                                 fontWeight: 'bold',
                                 cursor: 'pointer',
-                                textDecoration: 'underline'
+                                textDecoration: 'underline',
+                                background: 'transparent',
+                                border: 0,
+                                padding: 0,
                               }}
                               onClick={() => {
-                                const found = nodes.find(n => n.id === rel.node.id);
+                                const found = nodes.find((candidate) => candidate.id === rel.node.id);
                                 if (found) setSelectedNode(found);
                               }}
                             >
                               {rel.node.label}
-                            </span>
+                            </button>
                           </div>
                         ))}
                       </div>

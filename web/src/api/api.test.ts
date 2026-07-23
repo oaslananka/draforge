@@ -38,3 +38,33 @@ describe('fetchExplain', () => {
     );
   });
 });
+
+
+describe('API error handling', () => {
+  it('throws an Error instance for structured API failures', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      json: async () => ({ error: { message: 'access denied', code: 'forbidden' } }),
+    } as Response));
+
+    await expect(fetchExplain('claim-a', 'default')).rejects.toMatchObject({
+      name: 'ApiRequestError',
+      message: 'access denied',
+      code: 'forbidden',
+    });
+  });
+
+  it('throws an Error instance when a success response is not JSON', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => { throw new SyntaxError('invalid JSON'); },
+    } as unknown as Response));
+
+    await expect(fetchExplain('claim-a', 'default')).rejects.toMatchObject({
+      name: 'ApiRequestError',
+      message: 'Failed to parse API response as JSON',
+    });
+  });
+});

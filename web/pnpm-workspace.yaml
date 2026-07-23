@@ -2,3 +2,20 @@ overrides:
   "brace-expansion@<1.1.16": "1.1.16"
 allowBuilds:
   esbuild: true
+
+minimumReleaseAge: 10080
+minimumReleaseAgeIgnoreMissingTime: false
+minimumReleaseAgeExclude:
+  # Exact lockfile versions audited with OSV Scanner and pnpm audit on 2026-07-23.
+  # Newer releases remain subject to the seven-day maturity window.
+  - '@typescript-eslint/eslint-plugin@8.65.0'
+  - '@typescript-eslint/parser@8.65.0'
+  - '@typescript-eslint/project-service@8.65.0'
+  - '@typescript-eslint/scope-manager@8.65.0'
+  - '@typescript-eslint/tsconfig-utils@8.65.0'
+  - '@typescript-eslint/type-utils@8.65.0'
+  - '@typescript-eslint/types@8.65.0'
+  - '@typescript-eslint/typescript-estree@8.65.0'
+  - '@typescript-eslint/utils@8.65.0'
+  - '@typescript-eslint/visitor-keys@8.65.0'
+  - 'obug@2.1.4'

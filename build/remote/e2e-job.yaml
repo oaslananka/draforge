@@ -21,6 +21,14 @@ spec:
       automountServiceAccountToken: true
       restartPolicy: Never
       terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: clone
           image: alpine/git:2.45.2
@@ -29,12 +37,35 @@ spec:
             - -c
             - |
               set -eu
+              mkdir -p "$HOME"
               git clone --filter=blob:none REPO_URL /workspace
               cd /workspace
               git checkout --detach COMMIT_SHA
+          env:
+            - name: HOME
+              value: /tmp/home
+            - name: TMPDIR
+              value: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+              ephemeral-storage: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+              ephemeral-storage: "4Gi"
           volumeMounts:
             - name: workspace
               mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
       containers:
         - name: e2e-runner
           image: golang:1.26.5
@@ -48,20 +79,48 @@ spec:
               value: "1"
             - name: DRAFORGE_E2E_RESULTS
               value: /artifacts/go-test.json
+            - name: HOME
+              value: /cache/home
+            - name: GOCACHE
+              value: /cache/go-build
+            - name: GOMODCACHE
+              value: /cache/go-mod
+            - name: TMPDIR
+              value: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           resources:
             requests:
               cpu: "500m"
               memory: "1Gi"
+              ephemeral-storage: "1Gi"
             limits:
               cpu: "1.5"
               memory: "2Gi"
+              ephemeral-storage: "4Gi"
           volumeMounts:
             - name: workspace
               mountPath: /workspace
             - name: artifacts
               mountPath: /artifacts
+            - name: cache
+              mountPath: /cache
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: workspace
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: "4Gi"
         - name: artifacts
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: "1Gi"
+        - name: cache
+          emptyDir:
+            sizeLimit: "2Gi"
+        - name: tmp
+          emptyDir:
+            sizeLimit: "512Mi"

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added opt-in, namespace/pod-restricted controller metrics ingress and an optional ServiceMonitor while keeping controller ingress closed by default.
 - Added dependency-aware Kubernetes readiness, signal-driven graceful API shutdown, bounded force-close behavior, and cancellation-safe SSE cleanup for server and controller runtimes.
 - Hardened sim-driver CDI output with explicit demo/node modes, atomic fsync-and-rename updates, fully qualified device identity, last-known-good preservation, and API/CDI-aware readiness.
+- Resolved scanner-identified supply-chain and workload security gaps by pinning GitHub Actions to immutable SHAs, enforcing pnpm package maturity and script controls, confining Terraform plan inputs, bounding ephemeral storage, and disabling unnecessary service-account tokens.
 
 ---
 

@@ -91,6 +91,16 @@ tasks:
     cmds:
       - cd web && pnpm build
 
+  security:verify-actions:
+    desc: Verify GitHub Actions are pinned to full commit SHAs
+    cmds:
+      - scripts/verify-github-action-pins.sh
+
+  security:verify-workloads:
+    desc: Verify workload token and ephemeral-storage security contracts
+    cmds:
+      - scripts/verify-workload-security.sh
+
   helm:lint:
     desc: Lint Helm charts
     cmds:

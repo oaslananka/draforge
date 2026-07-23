@@ -22,6 +22,8 @@ pnpm --dir web lint
 pnpm --dir web build
 helm lint deploy/helm/draforge
 helm template draforge deploy/helm/draforge >/tmp/draforge-helm-template.yaml
+scripts/verify-github-action-pins.sh
+scripts/verify-workload-security.sh
 scripts/verify-chart-images.sh
 scripts/test-chart-image-verifier.sh
 scripts/verify-controller-metrics-policy.sh

@@ -12,6 +12,8 @@ from typing import Any
 GPU_SIZE_RE = re.compile(r".*gpu.*|.*g-.*", re.IGNORECASE)
 MAX_CLUSTER_CREATES = 1
 MAX_NODE_COUNT = 2
+MAX_PLAN_FILE_BYTES = 64 * 1024 * 1024
+REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOWED_CREATE_TYPES = {
     "digitalocean_container_registry",
     "digitalocean_kubernetes_cluster",
@@ -34,6 +36,32 @@ def _is_mutating(actions: list[str]) -> bool:
     return any(action in actions for action in ("create", "update", "replace", "delete"))
 
 
+class PlanInputError(ValueError):
+    """Raised when the plan input path is unsafe or invalid."""
+
+
+def _resolve_plan_path(plan_path: str | Path) -> Path:
+    candidate = Path(plan_path)
+    if candidate.suffix.lower() != ".json":
+        raise PlanInputError("plan file must use the .json extension")
+
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise PlanInputError(f"plan file is not accessible: {exc}") from exc
+
+    try:
+        resolved.relative_to(REPO_ROOT)
+    except ValueError as exc:
+        raise PlanInputError("plan file must be located inside the repository") from exc
+
+    if not resolved.is_file():
+        raise PlanInputError("plan path must reference a regular file")
+    if resolved.stat().st_size > MAX_PLAN_FILE_BYTES:
+        raise PlanInputError(f"plan file exceeds {MAX_PLAN_FILE_BYTES} bytes")
+    return resolved
+
+
 def _check_node_pool(node_pool: dict[str, Any], errors: list[str]) -> None:
     node_count = node_pool.get("node_count")
     if node_count is not None and (node_count < 1 or node_count > MAX_NODE_COUNT):
@@ -48,8 +76,12 @@ def _check_node_pool(node_pool: dict[str, Any], errors: list[str]) -> None:
 
 
 def validate_plan(plan_path: str | Path) -> list[str]:
-    with Path(plan_path).open("r", encoding="utf-8") as f:
-        plan = json.load(f)
+    resolved_plan_path = _resolve_plan_path(plan_path)
+    with resolved_plan_path.open("r", encoding="utf-8") as plan_file:
+        plan = json.load(plan_file)
+
+    if not isinstance(plan, dict):
+        return ["Invalid plan: top-level JSON value must be an object."]
 
     resource_changes = plan.get("resource_changes", [])
     if not isinstance(resource_changes, list):
@@ -102,7 +134,12 @@ def main(argv: list[str]) -> int:
         print("Usage: validate-plan.py <terraform-plan-json>", file=sys.stderr)
         return 2
 
-    errors = validate_plan(argv[1])
+    try:
+        errors = validate_plan(argv[1])
+    except (PlanInputError, OSError, json.JSONDecodeError) as exc:
+        print(f"Invalid plan input: {exc}", file=sys.stderr)
+        return 2
+
     if errors:
         print("==> Terraform Plan Audit FAILED with the following violations:")
         for error in errors:

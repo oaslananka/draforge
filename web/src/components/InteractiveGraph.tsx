@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { ResourceGraph } from '../api/types';
 import type { ClaimIdentity } from '../claims/identity';
 import { claimIdentityFromGraphNode } from '../claims/identity';
+import { deterministicInitialPosition } from '../graph/layout';
 
 interface NodePosition {
   id: string;
@@ -63,10 +64,11 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
           metadata: n.metadata,
         };
       }
+      const position = deterministicInitialPosition(n.id, width, height);
       return {
         id: n.id,
-        x: width / 2 + (Math.random() - 0.5) * 100,
-        y: height / 2 + (Math.random() - 0.5) * 100,
+        x: position.x,
+        y: position.y,
         vx: 0,
         vy: 0,
         type: n.type,

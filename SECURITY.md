@@ -81,6 +81,17 @@ To fully secure this repository, enable the following GitHub settings:
 | Secret scanning | Detect accidental credential commits | Settings > Security & analysis > Secret scanning |
 | Code scanning (CodeQL) | Automated vulnerability detection | Already configured in `.github/workflows/security.yml` |
 
+### Supply-Chain and Workload Controls
+
+- Every external GitHub Action is pinned to a full 40-character commit SHA. `scripts/verify-github-action-pins.sh` is required by CI and the local quality gate.
+- pnpm resolution enforces a seven-day minimum package release age and fails closed when registry publish-time metadata is missing.
+- Any package-maturity exception must pin an exact package version and be justified by clean OSV Scanner and pnpm audit results; package-wide exceptions are not permitted.
+- CI, release, and container frontend installs use `--ignore-scripts`; local development permits only the explicitly allowlisted `esbuild` build step.
+- Remote build and unit-test Jobs disable service-account token automounting because they do not call the Kubernetes API. Remote E2E uses a dedicated, run-scoped read-only ClusterRoleBinding.
+- Remote test and E2E containers run as UID/GID 1000 with read-only root filesystems and bounded writable cache/tmp volumes. The Kaniko build executor is the documented exception: image unpacking and root-owned Dockerfile steps require UID 0 and a writable rootfs, so it uses an immutable maintained-fork digest with no service-account token, no privilege escalation, RuntimeDefault seccomp, and the unnecessary `NET_RAW` capability removed.
+- Helm and remote Jobs define ephemeral-storage requests, limits, and bounded `emptyDir` volumes to reduce node disk exhaustion risk.
+- Terraform plan validation accepts only bounded JSON files that resolve inside the repository, preventing path traversal and symlink escapes.
+
 ### CI/CD Security
 
 - Normal CI (`ci.yml`) does not require any cloud credentials and runs safely

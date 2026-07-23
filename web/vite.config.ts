@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: 'happy-dom',
+    environment: './src/test/linkedom-environment.ts',
     setupFiles: './src/test/setup.ts',
     clearMocks: true,
   },

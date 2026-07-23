@@ -45,7 +45,7 @@ A stream status badge is visible in the dashboard header.
 
 `App.tsx` is a small composition root. API/query state is isolated in `useDashboardData`, claim explanation requests are isolated in `useClaimExplanation`, SSE lifecycle remains in `useSSE`, and tab rendering is delegated to `DashboardViewRouter`. Header, footer, graph, and view state components are independently reviewable.
 
-The Vitest + happy-dom + React Testing Library suite runs without Kubernetes or a live API server. Deterministic mocks cover:
+The Vitest + repository-owned linkedom environment + React Testing Library suite runs without Kubernetes or a live API server. Deterministic mocks cover:
 
 - initial and partial API failures plus empty states;
 - SSE connected, reconnecting, malformed-message, and cleanup behavior;

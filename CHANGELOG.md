@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added dependency-aware Kubernetes readiness, signal-driven graceful API shutdown, bounded force-close behavior, and cancellation-safe SSE cleanup for server and controller runtimes.
 - Hardened sim-driver CDI output with explicit demo/node modes, atomic fsync-and-rename updates, fully qualified device identity, last-known-good preservation, and API/CDI-aware readiness.
 - Preserved every ResourceClaim request/class alternative and allocation result across discovery, API, CLI, dashboard, graph, and explain output using complete driver/pool/device/node identity without pool-to-node fallback.
-- Added a happy-dom-based React Testing Library harness for critical dashboard flows and split API state, explanation lifecycle, navigation, and tab rendering out of `App.tsx`.
+- Added a repository-owned linkedom-backed React Testing Library harness for critical dashboard flows and split API state, explanation lifecycle, navigation, and tab rendering out of `App.tsx`.
 - Resolved scanner-identified supply-chain and workload security gaps by pinning GitHub Actions to immutable SHAs, enforcing pnpm package maturity and script controls, confining Terraform plan inputs, bounding ephemeral storage, and disabling unnecessary service-account tokens.
 
 ---

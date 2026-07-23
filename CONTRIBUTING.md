@@ -140,7 +140,7 @@ pnpm lint                         # ESLint check
 pnpm build                        # Production build to web/dist/
 ```
 
-The frontend test command uses Vitest, happy-dom, and React Testing Library. Critical tests mock API and EventSource boundaries, so they do not require a Kubernetes cluster. New navigation, query-state, SSE, graph-selection, or diagnostics behavior must include a deterministic regression test.
+The frontend test command uses Vitest, a repository-owned linkedom environment, and React Testing Library. Critical tests mock API and EventSource boundaries, so they do not require a Kubernetes cluster. New navigation, query-state, SSE, graph-selection, or diagnostics behavior must include a deterministic regression test.
 
 The dev server proxies API requests to the Go backend running on port 8080.
 Start the Go server separately with `draforge serve` or `task build && ./bin/draforge serve`.

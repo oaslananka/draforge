@@ -4,12 +4,16 @@ The web dashboard is a read-only React single-page application served by the DRA
 
 ## Read-Only Model
 
-The dashboard enforces a strict **read-only** public API model:
+The dashboard uses a strict **read-only** API model, but it is not public by default:
 
-- All data is fetched via HTTP `GET` requests.
-- The frontend never performs write operations (no POST/PUT/PATCH/DELETE).
-- Cluster modifications (scenario application, fault injection) are CLI-only operations using the administrator's `kubeconfig`.
-- CORS defaults to `*` (public), configurable via `CORS_ALLOWED_ORIGINS`.
+- All data is fetched via HTTP `GET` requests; the frontend performs no POST/PUT/PATCH/DELETE operations.
+- Cluster modifications remain CLI-only and use the administrator's `kubeconfig`.
+- A normal Helm install creates only internal services. Use `kubectl port-forward` for local operator access.
+- The standalone binary defaults CORS to `*` for local use. Secure Helm exposure sets an explicit HTTPS origin. CORS is not an authentication boundary.
+
+### Metadata visible to dashboard readers
+
+An authenticated dashboard reader can observe resource names and namespaces, node identity/readiness, pod-to-claim relationships, ResourceClaims and allocation state, ResourceSlices, DeviceClasses, device attributes and capacities, simulated pools, diagnostic results, graph relationships, and selected Kubernetes event evidence. Treat this as operational cluster metadata and protect it accordingly.
 
 ## API Endpoints
 

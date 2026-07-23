@@ -227,27 +227,21 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// CORS middleware for APIs
-// Uses s.allowedOrigins which defaults to "*" (read-only public model)
-// and can be narrowed via the CORS_ALLOWED_ORIGINS env var.
+// CORS middleware for APIs.
+// The standalone binary defaults to "*" for local use. External Helm profiles
+// set CORS_ALLOWED_ORIGINS explicitly; CORS is not an authentication boundary.
 // Allowed origins are parsed once at server init for performance.
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if s.allowedOrigins == "*" || origin == "" {
+		if s.allowedOrigins == "*" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-		} else {
+		} else if origin != "" {
 			origins := s.allowedOriginsParsed
 			if origins == nil {
-				for _, o := range strings.Split(s.allowedOrigins, ",") {
-					o = strings.TrimSpace(o)
-					if origin == o {
-						w.Header().Set("Access-Control-Allow-Origin", origin)
-						w.Header().Set("Vary", "Origin")
-						break
-					}
+				for _, configured := range strings.Split(s.allowedOrigins, ",") {
+					origins = append(origins, strings.TrimSpace(configured))
 				}
-				goto done
 			}
 			for _, allowed := range origins {
 				if origin == allowed {
@@ -257,7 +251,6 @@ func (s *Server) cors(next http.Handler) http.Handler {
 				}
 			}
 		}
-	done:
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 

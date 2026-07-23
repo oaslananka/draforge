@@ -26,14 +26,13 @@ Include in your report:
 
 ## Public Dashboard Security Model
 
-The DRAForge web dashboard is intentionally **read-only**:
+The DRAForge web dashboard is intentionally **read-only**, but read-only data can still be sensitive:
 
-- The Go web server exposes only read API endpoints and SSE event streams.
-- No write, create, update, or delete mutations are possible through the web UI.
-- All cluster mutations (scenario apply, fault injection, resource changes) require
-  CLI commands authenticated via the administrator's local `kubeconfig`.
-- The dashboard binds to all interfaces by default and **must** be placed behind
-  an ingress controller or identity-aware proxy in production deployments.
+- The Go web server exposes read API endpoints and SSE streams containing cluster topology, node and namespace identity, pod/claim relationships, DRA device attributes and capacities, allocation status, diagnostics, and selected event evidence.
+- No write, create, update, or delete mutations are possible through the web UI. Cluster mutations require CLI commands authenticated with the administrator's local `kubeconfig`.
+- A default Helm install creates no Gateway or Ingress listener. Use local port-forwarding for operator access.
+- Production external access must terminate TLS and route through an operator-managed OIDC or identity-aware proxy. The secure public example routes to that proxy Service instead of directly to DRAForge.
+- CORS limits browser origins; it is not authentication or authorization.
 
 ## Security Best Practices
 
@@ -52,8 +51,7 @@ The DRAForge web dashboard is intentionally **read-only**:
 - The Terraform showcase deployment provisions billable DigitalOcean resources.
 - `task demo:up` and `task demo:down` manage cloud infrastructure — review
   the Terraform plan before applying.
-- Demo deployments expose the dashboard publicly — do not use in production
-  or with sensitive data.
+- Demo profiles explicitly expose the dashboard over unauthenticated HTTP — do not use them in production or with sensitive data.
 - The E2E workflow (`.github/workflows/e2e.yml`) requires the `DIGITALOCEAN_TOKEN`
   secret and provisions cloud resources. It is gated to the upstream repository
   and requires explicit confirmation before running.

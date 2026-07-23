@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Operator-grade documentation in `docs/operations/` (install, guide, troubleshooting).
 
 ### Changed
-- _None._
+- Helm installs no longer create Gateway or Ingress listeners by default. External dashboard exposure now requires an explicit local-demo or secure-public values profile.
 
 ### Fixed
 - Updated vulnerable Go and frontend development dependencies and added repeatable advisory gates to pull-request, scheduled security, and local validation workflows.

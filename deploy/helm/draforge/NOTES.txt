@@ -1,11 +1,14 @@
 DRAForge is successfully deployed!
 
 Server API & Dashboard:
-  - Accessible internally at: {{ include "draforge.fullname" . }}-server.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.server.service.port }}
+  - Internal service: {{ include "draforge.fullname" . }}-server.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.server.service.port }}
   {{- if .Values.gateway.enabled }}
-  - Accessible externally via Gateway API.
+  - External Gateway profile is enabled ({{ ternary "local-demo HTTP" "secure HTTPS through the configured authentication proxy" .Values.gateway.allowInsecureHTTP }}).
   {{- else if .Values.gateway.ingress.enabled }}
-  - Accessible externally via Ingress.
+  - External Ingress profile is enabled ({{ ternary "local-demo HTTP" "secure HTTPS through the configured authentication proxy" .Values.gateway.allowInsecureHTTP }}).
+  {{- else }}
+  - External exposure is disabled. For local access:
+      kubectl port-forward svc/{{ include "draforge.fullname" . }}-server -n {{ .Release.Namespace }} 8080:{{ .Values.server.service.port }}
   {{- end }}
 
 Components deployed:

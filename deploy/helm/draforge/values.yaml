@@ -16,6 +16,9 @@ server:
   service:
     type: ClusterIP
     port: 8080
+  # Empty keeps the binary default. Externally exposed profiles must set this explicitly.
+  cors:
+    allowedOrigins: []
   lifecycle:
     readinessTimeout: 2s
     readinessGracePeriod: 15s
@@ -111,9 +114,20 @@ nodePlugin:
       type: RuntimeDefault
 
 gateway:
-  enabled: true
+  # External exposure is disabled by default. Use one of the explicit profile files.
+  enabled: false
+  allowInsecureHTTP: false
   className: cilium
-  hostname: "" # Dynamically set or fallback
+  hostname: ""
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
+  # Secure public routes terminate at an operator-managed identity-aware proxy.
+  authentication:
+    proxyService:
+      name: ""
+      port: 4180
   ingress:
     enabled: false
     className: nginx

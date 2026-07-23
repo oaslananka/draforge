@@ -2,6 +2,8 @@
 
 This runbook outlines how to deploy, manage, and tear down the DRAForge showcase platform on a 2-node DigitalOcean Kubernetes (DOKS) cluster.
 
+> **Non-production exposure:** `task demo:up` deliberately enables unauthenticated HTTP through `values-showcase-docr.yaml`. Use it only for short-lived demonstrations with non-sensitive cluster metadata, then run `task demo:down`.
+
 ## Setup Requirements
 
 Before launching the showcase:
@@ -27,11 +29,11 @@ task demo:up
 2. **Infrastructure Provisioning**: Initializes and runs `terraform apply` to spin up the Dedicated VPC, DOKS cluster, and private DigitalOcean Container Registry (DOCR).
 3. **Private Registry Integration**: Configures Kubeconfig registry secrets in the namespaces.
 4. **Remote Image Builds**: Submits rootless Kubernetes Kaniko jobs to build the `server`, `controller`, and `sim-driver` container images directly on the DOKS cluster.
-5. **Helm Chart Installation**: Deploys with `values-showcase-docr.yaml`, using the private DOCR component tags and the `registry-draforge` pull secret in `draforge-system`.
+5. **Helm Chart Installation**: Deploys with `values-showcase-docr.yaml`, using private DOCR component tags, the `registry-draforge` pull secret, wildcard demo CORS, and an explicitly enabled insecure HTTP Gateway.
 6. **Scenario Seeding**: Applies the custom simulated device pool configurations (e.g. `examples/scenarios/basic-gpu.yaml`).
 7. **Exposes Endpoint**: Retrieves the LoadBalancer IP of the Cilium Gateway and outputs the live dashboard URL.
 
-The public chart defaults remain on GHCR and do not render image pull secrets. The showcase override is intentionally applied only by `task demo:up` after `scripts/remote-build.sh` reconciles the DOCR secret in both `draforge-ci` and `draforge-system`.
+The normal chart defaults remain on GHCR, render no pull secret, and create no Gateway or Ingress. The showcase override is intentionally applied only by `task demo:up` after `scripts/remote-build.sh` reconciles the DOCR secret in both `draforge-ci` and `draforge-system`.
 
 ---
 

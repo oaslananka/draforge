@@ -39,6 +39,8 @@
 - [ ] `task demo:up` tested in a clean namespace
 - [ ] Dashboard access verified (read-only, no mutation)
 - [ ] Public URL does not expose admin or debug endpoints
+- [ ] Default Helm render contains no Gateway, HTTPRoute, or Ingress
+- [ ] Secure public route terminates TLS and targets the identity proxy Service, not DRAForge directly
 - [ ] `docs/assets/` screenshots updated if UI changed
 - [ ] Cleanup verified: `task demo:down` tears down all resources
 

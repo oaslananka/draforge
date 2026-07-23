@@ -70,7 +70,7 @@ The official DRAForge Helm chart defines the installation boundary.
 |---|---|---|
 | `values.yaml` schema | Stable | Structure of values configuring server, controller, and simulator. |
 | `DRAFORGE_METRICS_DETAIL` | Beta | Env var enabling high-cardinality metrics. |
-| `CORS_ALLOWED_ORIGINS` | Stable | Env var restricting dashboard API access. |
+| `CORS_ALLOWED_ORIGINS` | Stable | Comma-separated browser origins. It is defense in depth, not authentication. |
 
 ### Configuration Change Policy
 - **Helm Values**: Renaming or removing top-level keys in `values.yaml` requires a major version bump. Adding new keys is allowed in minor versions.

@@ -26,6 +26,7 @@ scripts/verify-chart-images.sh
 scripts/test-chart-image-verifier.sh
 scripts/verify-controller-metrics-policy.sh
 scripts/verify-runtime-lifecycle.sh
+scripts/verify-dashboard-exposure.sh
 terraform -chdir=infra/terraform/environments/showcase init -backend=false
 terraform -chdir=infra/terraform/environments/showcase fmt -check
 terraform -chdir=infra/terraform/environments/showcase validate

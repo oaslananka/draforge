@@ -1,0 +1,21 @@
+# Secure public exposure example.
+# Prerequisites:
+# - a TLS Secret named draforge-example-tls
+# - an OIDC-aware proxy Service named oauth2-proxy on port 4180
+# - the proxy upstream configured to http://draforge-server:8080
+server:
+  cors:
+    allowedOrigins:
+      - https://draforge.example.com
+
+gateway:
+  enabled: true
+  allowInsecureHTTP: false
+  hostname: draforge.example.com
+  tls:
+    enabled: true
+    secretName: draforge-example-tls
+  authentication:
+    proxyService:
+      name: oauth2-proxy
+      port: 4180

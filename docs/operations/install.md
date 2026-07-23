@@ -40,7 +40,7 @@ The Demo profile is optimized for local exploration using a `kind` cluster with 
 
 ## Production Profile (Helm Deployment)
 
-The production profile installs the public chart with credential-free GHCR image defaults. The server, controller, and sim-driver repositories are separate, and an empty image tag resolves to the chart `appVersion`.
+The production profile installs credential-free GHCR images and internal ClusterIP services. External dashboard exposure is disabled by default. The server, controller, and sim-driver repositories are separate, and an empty image tag resolves to the chart `appVersion`.
 
 ### Prerequisites
 - [Helm v3+](https://helm.sh/docs/intro/install/)
@@ -67,7 +67,7 @@ The production profile installs the public chart with credential-free GHCR image
    - `ghcr.io/oaslananka/draforge-controller:<appVersion>`
    - `ghcr.io/oaslananka/draforge-sim-driver:<appVersion>`
 
-   No image pull secret is rendered by default.
+   No image pull secret, Gateway, HTTPRoute, or Ingress is rendered by default.
 
 3. **Optionally pin immutable image digests:**
    ```bash
@@ -92,7 +92,42 @@ The production profile installs the public chart with credential-free GHCR image
    kubectl port-forward svc/draforge-server -n draforge-system 8080:8080
    ```
 
-   Long-lived public exposure should use an authenticated and TLS-protected ingress path.
+### Explicit Local Demo Exposure
+
+For a disposable cluster, the local demo profile enables direct HTTP routing and wildcard CORS:
+
+```bash
+helm upgrade --install draforge deploy/helm/draforge \
+  --namespace draforge-system \
+  --create-namespace \
+  -f deploy/helm/draforge/values-local-demo.yaml
+```
+
+This profile is unauthenticated and must not be used with sensitive data or production clusters.
+
+### Secure Public Exposure
+
+The chart does not deploy an identity provider. Before using `values-public-example.yaml`, provide:
+
+1. A TLS Secret such as `draforge-example-tls` in the release namespace.
+2. An OIDC/identity-aware reverse proxy Service such as `oauth2-proxy:4180` in the same namespace.
+3. Proxy upstream configuration pointing to the internal `http://draforge-server:8080` Service.
+4. An HTTPS hostname and matching restrictive CORS origin.
+
+```bash
+helm upgrade --install draforge deploy/helm/draforge \
+  --namespace draforge-system \
+  --create-namespace \
+  -f deploy/helm/draforge/values-public-example.yaml
+```
+
+The secure Gateway route targets the authentication proxy, not the DRAForge Service, preventing the public route from bypassing authentication. The proxy must enforce OIDC login/session policy, forward SSE without buffering, set secure cookies, and add HSTS and other edge headers. CORS only controls browser origin access and does not replace authentication.
+
+For an Ingress controller, set `gateway.enabled: false` and `gateway.ingress.enabled: true` while retaining the same hostname, TLS Secret, proxy Service, and HTTPS CORS origin. Controller-specific annotations may be placed under `gateway.ingress.annotations`.
+
+### Upgrade Note for v0.3
+
+Earlier chart defaults created an HTTP Gateway automatically. Upgrades to v0.3 create no external listener unless an explicit profile enables one. Existing public installations must choose either the short-lived local-demo profile or a TLS/authenticated public configuration before upgrading.
 
 ### DigitalOcean Showcase Registry Override
 

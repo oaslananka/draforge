@@ -112,6 +112,11 @@ tasks:
     cmds:
       - scripts/verify-runtime-lifecycle.sh
 
+  helm:verify-exposure:
+    desc: Verify disabled, local-demo, and secure public dashboard exposure
+    cmds:
+      - scripts/verify-dashboard-exposure.sh
+
   infra:preflight:
     desc: Validate Terraform showcase tools and static configuration
     cmds:

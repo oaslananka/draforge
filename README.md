@@ -89,12 +89,15 @@ To run DRAForge locally using a Go development environment and a `kind` cluster:
 ### Quickstart B: DigitalOcean Kubernetes (DOKS) Showcase
 > **⚠️ Billable Resources**: This task provisions a live DOKS cluster and DOCR registry on your DigitalOcean account and incurs cloud costs. Always run `task demo:down` when finished to destroy all billable resources.
 
-To deploy a live read-only public showcase to DOKS:
+To deploy the short-lived DOKS showcase:
 
 ```bash
 task demo:up
 ```
-This script audits resource limits, runs Terraform provisioners, builds images remotely via Kaniko, installs the Helm release, and outputs the live external URL.
+
+This task explicitly applies the non-production `values-showcase-docr.yaml` profile, which enables unauthenticated HTTP exposure. It audits resource limits, provisions infrastructure, builds images remotely, installs the Helm release, and outputs the demo URL. Do not use this profile with sensitive clusters or as a production deployment.
+
+A normal Helm install creates only internal ClusterIP services. Production public access requires TLS and an operator-managed OIDC/identity-aware proxy; see the [installation guide](docs/operations/install.md).
 
 To tear down the showcase and clean all billable resources:
 ```bash
@@ -194,7 +197,7 @@ Screenshots of the terminal UI and web dashboard are stored in [docs/assets/](do
 
 ## Security Model
 
-DRAForge enforces a read-only public API model. The Go web server exposes read-only endpoints and SSE streams to the dashboard, preventing any write actions or pod execution from the web UI. Cluster modifications (scenario application and fault injections) are strictly restricted to the CLI and authenticated using the administrator's local `kubeconfig` (see [ADR-0009](docs/adr/0009-public-readonly.md)).
+DRAForge exposes a read-only dashboard API, but Helm does not expose it externally by default. Read endpoints can reveal operational cluster metadata, so production public access must use TLS and an operator-managed identity-aware proxy. Cluster modifications remain CLI-only and authenticate with the administrator's local `kubeconfig` (see [ADR-0009](docs/adr/0009-public-readonly.md)).
 
 For Kubernetes DRA API support and known limitations, see [Kubernetes DRA Compatibility](docs/compatibility/kubernetes-dra.md).
 

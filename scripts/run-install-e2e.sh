@@ -110,15 +110,18 @@ consumer_exists() {
 }
 
 network_policy_baseline_allowed() {
-  kubectl exec -n "$FIXTURE_NAMESPACE" network-policy-denied --     nc -z -w 2 "${RELEASE_NAME}-server.${SYSTEM_NAMESPACE}.svc" 8080
+  kubectl exec -n "$FIXTURE_NAMESPACE" network-policy-denied -- \
+    nc -z -w 2 "${RELEASE_NAME}-server.${SYSTEM_NAMESPACE}.svc" 8080
 }
 
 network_policy_metrics_allowed() {
-  kubectl exec -n "$SYSTEM_NAMESPACE" network-policy-allowed --     nc -z -w 2 "${RELEASE_NAME}-controller" 8082
+  kubectl exec -n "$SYSTEM_NAMESPACE" network-policy-allowed -- \
+    nc -z -w 2 "${RELEASE_NAME}-controller" 8082
 }
 
 network_policy_metrics_denied() {
-  if kubectl exec -n "$FIXTURE_NAMESPACE" network-policy-denied --     nc -z -w 2 "${RELEASE_NAME}-controller.${SYSTEM_NAMESPACE}.svc" 8082 >/dev/null 2>&1; then
+  if kubectl exec -n "$FIXTURE_NAMESPACE" network-policy-denied -- \
+    nc -z -w 2 "${RELEASE_NAME}-controller.${SYSTEM_NAMESPACE}.svc" 8082 >/dev/null 2>&1; then
     return 1
   fi
   return 0

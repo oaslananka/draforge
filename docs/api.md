@@ -22,8 +22,16 @@ All endpoints are prefixed with `/api/` (except for `/metrics`, `/healthz`, and 
 | `/api/stream` | SSE | Beta | Server-Sent Events stream for graph updates. |
 | `/api/version` | GET | Stable | Binary build version and commit. |
 | `/metrics` | GET | Stable | Prometheus-compatible telemetry. |
-| `/healthz` | GET | Stable | Liveness probe endpoint. |
-| `/readyz` | GET | Stable | Readiness probe endpoint. |
+| `/healthz` | GET | Stable | Process liveness endpoint; independent from transient Kubernetes API outages. |
+| `/readyz` | GET | Stable | Bounded Kubernetes API dependency readiness with failure grace and credential-safe JSON reasons. |
+
+### Health endpoint contract
+
+`/healthz` returns HTTP `200` while the process and HTTP handler are alive. It does not contact Kubernetes and should be used for liveness probes.
+
+`/readyz` performs a read-only, context-bounded Kubernetes namespace list. The default dependency timeout is `2s`. A failed dependency check remains HTTP `200` with `status: "degraded"` during the default `15s` readiness grace period; continued failures return HTTP `503` with the stable reason `kubernetes_api_unavailable`. Successful checks immediately restore `status: "ready"` and record `lastSuccess`.
+
+Readiness responses deliberately omit raw client errors, tokens, kubeconfig paths, API URLs, and credentials. Stable payload fields are `status`, `ready`, `degraded`, `reason`, `message`, `checkedAt`, and optional `lastSuccess`.
 
 ### API Change Policy
 - **Stable Endpoints**: Breaking changes to payload structures (removing fields, changing types) require a major version bump. Additive changes are permitted in minor releases.

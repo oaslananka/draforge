@@ -32,6 +32,29 @@
         "digest",
         "pullPolicy"
       ]
+    },
+    "lifecycle": {
+      "type": "object",
+      "properties": {
+        "readinessTimeout": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(ms|s|m|h)$"
+        },
+        "readinessGracePeriod": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*(ms|s|m|h))$"
+        },
+        "shutdownTimeout": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(ms|s|m|h)$"
+        }
+      },
+      "required": [
+        "readinessTimeout",
+        "readinessGracePeriod",
+        "shutdownTimeout"
+      ],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -92,11 +115,15 @@
         },
         "image": {
           "$ref": "#/definitions/image"
+        },
+        "lifecycle": {
+          "$ref": "#/definitions/lifecycle"
         }
       },
       "required": [
         "replicaCount",
-        "image"
+        "image",
+        "lifecycle"
       ]
     },
     "controller": {
@@ -279,12 +306,16 @@
               }
             }
           ]
+        },
+        "lifecycle": {
+          "$ref": "#/definitions/lifecycle"
         }
       },
       "required": [
         "replicaCount",
         "image",
-        "metrics"
+        "metrics",
+        "lifecycle"
       ]
     },
     "networkPolicies": {

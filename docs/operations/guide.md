@@ -21,6 +21,42 @@ Upgrading DRAForge primarily involves updating the Helm release.
    kubectl get pods -n draforge-system -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[0].image}{"\n"}{end}'
    ```
 
+## Runtime Health and Shutdown
+
+Both the API server and simulation controller expose separate liveness and readiness endpoints:
+
+- `/healthz` is process-only liveness and remains HTTP `200` during transient Kubernetes API outages.
+- `/readyz` performs a read-only Kubernetes namespace list with a bounded request context. It returns a degraded HTTP `200` during the configured failure grace period and HTTP `503` if the dependency remains unavailable beyond that period.
+
+The public response uses stable reason codes and never includes raw Kubernetes client errors, credentials, API tokens, kubeconfig paths, or cluster URLs.
+
+The Helm chart configures both workloads with these defaults:
+
+```yaml
+server:
+  lifecycle:
+    readinessTimeout: 2s
+    readinessGracePeriod: 15s
+    shutdownTimeout: 5s
+controller:
+  lifecycle:
+    readinessTimeout: 2s
+    readinessGracePeriod: 15s
+    shutdownTimeout: 5s
+```
+
+Set `readinessGracePeriod: 0` to fail readiness immediately. Timeout and shutdown values must be positive Go-style durations using `ms`, `s`, `m`, or `h`. Keep `shutdownTimeout` below the Pod termination grace period (Kubernetes defaults it to 30 seconds) so the process can complete its graceful shutdown before kubelet sends `SIGKILL`.
+
+`draforge serve` listens for `SIGINT` and `SIGTERM`. On shutdown it stops accepting new connections, cancels active request contexts and SSE streams, waits up to `shutdownTimeout`, and force-closes remaining HTTP connections if the graceful deadline expires. The controller uses the same signal-aware readiness and shutdown settings for its runtime server.
+
+For direct binary use, the corresponding flags are:
+
+```text
+--readiness-timeout
+--readiness-grace-period
+--shutdown-timeout
+```
+
 ## Observability
 
 DRAForge provides native support for monitoring and logging to assist operators in maintaining cluster health.

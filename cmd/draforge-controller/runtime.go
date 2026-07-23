@@ -6,13 +6,20 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/oaslananka/draforge/internal/health"
 	"github.com/oaslananka/draforge/internal/simulator"
 )
 
-func newRuntimeServer(addr string, reconciler *simulator.Reconciler) *http.Server {
+func newRuntimeServer(addr string, reconciler *simulator.Reconciler, readiness *health.ReadinessProbe) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", okHandler)
-	mux.HandleFunc("/readyz", okHandler)
+	if readiness == nil {
+		mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "readiness probe is not configured", http.StatusServiceUnavailable)
+		})
+	} else {
+		mux.Handle("/readyz", readiness)
+	}
 	mux.HandleFunc("/metrics", metricsHandler(reconciler))
 	return &http.Server{
 		Addr:              addr,

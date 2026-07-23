@@ -180,3 +180,43 @@ func waitForSSEClients(t *testing.T, srv *Server, want int) {
 	srv.mu.Unlock()
 	t.Fatalf("expected %d SSE clients, got %d", want, got)
 }
+
+func TestSSEClientsReleasedWhenServerRequestContextIsCanceled(t *testing.T) {
+	srv := NewServer(fake.NewSimpleClientset(), 0)
+	requestCtx, cancelRequests := context.WithCancel(context.Background())
+	httpServer := srv.newHTTPServer(requestCtx)
+	testServer := httptest.NewUnstartedServer(httpServer.Handler)
+	testServer.Config.BaseContext = httpServer.BaseContext
+	testServer.Start()
+	defer func() {
+		testServer.CloseClientConnections()
+		testServer.Close()
+	}()
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(testServer.URL + "/api/stream")
+	if err != nil {
+		t.Fatalf("connect to SSE endpoint: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	reader := bufio.NewReader(resp.Body)
+	_ = readSSEData(t, reader)
+	waitForSSEClients(t, srv, 1)
+	cancelRequests()
+	waitForSSEClients(t, srv, 0)
+
+	readDone := make(chan error, 1)
+	go func() {
+		_, readErr := reader.ReadString('\n')
+		readDone <- readErr
+	}()
+	select {
+	case readErr := <-readDone:
+		if readErr == nil {
+			t.Fatal("expected canceled SSE connection to close")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("SSE connection remained open after request context cancellation")
+	}
+}

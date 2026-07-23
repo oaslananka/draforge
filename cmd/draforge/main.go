@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/oaslananka/draforge/internal/cluster"
@@ -15,6 +17,7 @@ import (
 	"github.com/oaslananka/draforge/internal/doctor"
 	"github.com/oaslananka/draforge/internal/explain"
 	"github.com/oaslananka/draforge/internal/graph"
+	"github.com/oaslananka/draforge/internal/health"
 	"github.com/oaslananka/draforge/internal/server"
 	"github.com/oaslananka/draforge/internal/tui"
 	"github.com/oaslananka/draforge/pkg/model"
@@ -33,11 +36,40 @@ var (
 	commitSHA  = "dev"
 )
 
-func main() {
-	rootCmd := NewRootCommand()
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+type serveOptions struct {
+	Port                 int
+	ReadinessTimeout     time.Duration
+	ReadinessGracePeriod time.Duration
+	ShutdownTimeout      time.Duration
+}
+
+var runServeCommand = func(ctx context.Context, kubeconfigPath string, options serveOptions) error {
+	clientset, _, _, err := cluster.NewClientset(kubeconfigPath)
+	if err != nil {
+		return err
 	}
+	srv := server.NewServerWithOptions(clientset, options.Port, server.ServerOptions{
+		ReadinessTimeout:     options.ReadinessTimeout,
+		ReadinessGracePeriod: options.ReadinessGracePeriod,
+		ShutdownTimeout:      options.ShutdownTimeout,
+	})
+	srv.SetBuildInfo(versionVal, commitSHA)
+	return srv.Start(ctx)
+}
+
+func main() {
+	os.Exit(run())
+}
+
+func run() int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	rootCmd := NewRootCommand()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		return 1
+	}
+	return 0
 }
 
 // NewRootCommand builds the complete DRAForge CLI command tree.
@@ -233,20 +265,25 @@ func NewRootCommand() *cobra.Command {
 
 	// 8. Serve Command
 	var serverPort int
+	var readinessTimeout time.Duration
+	var readinessGracePeriod time.Duration
+	var shutdownTimeout time.Duration
 	var serveCmd = &cobra.Command{
 		Use:   "serve",
 		Short: "Start HTTP API and React SPA Dashboard server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cs, _, _, err := cluster.NewClientset(kubeconfig)
-			if err != nil {
-				return err
-			}
-			srv := server.NewServer(cs, serverPort)
-			srv.SetBuildInfo(versionVal, commitSHA)
-			return srv.Start(context.Background())
+			return runServeCommand(cmd.Context(), kubeconfig, serveOptions{
+				Port:                 serverPort,
+				ReadinessTimeout:     readinessTimeout,
+				ReadinessGracePeriod: readinessGracePeriod,
+				ShutdownTimeout:      shutdownTimeout,
+			})
 		},
 	}
 	serveCmd.Flags().IntVarP(&serverPort, "server-port", "p", 8080, "HTTP server listening port")
+	serveCmd.Flags().DurationVar(&readinessTimeout, "readiness-timeout", health.DefaultReadinessTimeout, "Maximum duration of one Kubernetes API readiness check")
+	serveCmd.Flags().DurationVar(&readinessGracePeriod, "readiness-grace-period", health.DefaultReadinessGracePeriod, "Grace period for transient Kubernetes API readiness failures")
+	serveCmd.Flags().DurationVar(&shutdownTimeout, "shutdown-timeout", server.DefaultShutdownTimeout, "Maximum graceful HTTP shutdown duration before force close")
 
 	// 9. Scenario Command
 	var scenarioFile string

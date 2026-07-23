@@ -23,6 +23,8 @@
 - [ ] GoReleaser run: `goreleaser release --clean`
 - [ ] Release artifacts verified locally: `task release:verify`
 - [ ] GitHub release assets verified (archives, checksums, SBOMs)
+- [ ] Chart `version` and `appVersion` match the release tag without the leading `v`
+- [ ] After `docker logout ghcr.io`, `VERIFY_REMOTE_IMAGES=1 scripts/verify-chart-images.sh <version>` passes for all three public GHCR manifests
 - [ ] Docker images pushed to `ghcr.io/oaslananka/` and multi-arch manifests created
 - [ ] Release smoke-tested:
   ```bash

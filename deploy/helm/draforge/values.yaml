@@ -1,16 +1,18 @@
 # deploy/helm/draforge/values.yaml
 
 global:
-  imageRegistry: registry.digitalocean.com/draforge
-  imagePullSecrets:
-    - name: registry-draforge
+  # Public releases are published to GHCR. Override this registry for private mirrors.
+  imageRegistry: ghcr.io
+  imagePullSecrets: []
 
 server:
   replicaCount: 1
   image:
-    repository: draforge
-    tag: "server-latest"
-    pullPolicy: Always
+    repository: oaslananka/draforge-server
+    # Empty tag defaults to Chart.appVersion. Set digest to pin an immutable image.
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 8080
@@ -35,9 +37,10 @@ server:
 controller:
   replicaCount: 1
   image:
-    repository: draforge
-    tag: "controller-latest"
-    pullPolicy: Always
+    repository: oaslananka/draforge-controller
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
   metrics:
     port: 8082
     service:
@@ -65,9 +68,10 @@ controller:
 nodePlugin:
   outputMode: "demo" # Must be either "demo" or "node"
   image:
-    repository: draforge
-    tag: "sim-driver-latest"
-    pullPolicy: Always
+    repository: oaslananka/draforge-sim-driver
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
   resources:
     limits:
       cpu: 500m

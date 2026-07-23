@@ -1,24 +1,87 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
+  "definitions": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^(?:sha256:[a-f0-9]{64})?$"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      },
+      "required": [
+        "repository",
+        "tag",
+        "digest",
+        "pullPolicy"
+      ]
+    }
+  },
   "properties": {
     "global": {
       "type": "object",
       "properties": {
         "imageRegistry": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
+        },
+        "imagePullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
         }
-      }
+      },
+      "required": [
+        "imageRegistry",
+        "imagePullSecrets"
+      ]
     },
     "nodePlugin": {
       "type": "object",
       "properties": {
         "outputMode": {
           "type": "string",
-          "enum": ["demo", "node"],
+          "enum": [
+            "demo",
+            "node"
+          ],
           "default": "demo"
+        },
+        "image": {
+          "$ref": "#/definitions/image"
         }
-      }
+      },
+      "required": [
+        "outputMode",
+        "image"
+      ]
     },
     "server": {
       "type": "object",
@@ -26,8 +89,31 @@
         "replicaCount": {
           "type": "integer",
           "minimum": 1
+        },
+        "image": {
+          "$ref": "#/definitions/image"
         }
-      }
+      },
+      "required": [
+        "replicaCount",
+        "image"
+      ]
+    },
+    "controller": {
+      "type": "object",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        }
+      },
+      "required": [
+        "replicaCount",
+        "image"
+      ]
     },
     "networkPolicies": {
       "type": "object",
@@ -40,5 +126,11 @@
         }
       }
     }
-  }
+  },
+  "required": [
+    "global",
+    "server",
+    "controller",
+    "nodePlugin"
+  ]
 }

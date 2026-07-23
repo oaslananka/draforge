@@ -29,6 +29,11 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+        with:
+          version: v3.17.3
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
@@ -63,6 +68,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify chart metadata and image references
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: scripts/verify-chart-images.sh "${RELEASE_VERSION#v}"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -73,3 +83,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COSIGN_EXPERIMENTAL: "true"
           COSIGN_YES: "true"
+
+      - name: Log out of GHCR before public pull verification
+        run: docker logout ghcr.io
+
+      - name: Verify public multi-arch image manifests anonymously
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+          VERIFY_REMOTE_IMAGES: "1"
+        run: scripts/verify-chart-images.sh "${RELEASE_VERSION#v}"

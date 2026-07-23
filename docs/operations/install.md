@@ -40,7 +40,7 @@ The Demo profile is optimized for local exploration using a `kind` cluster with 
 
 ## Production Profile (Helm Deployment)
 
-The Production profile is designed for deploying DRAForge into a remote Kubernetes cluster (e.g., DigitalOcean Kubernetes). This method uses Helm to manage the application lifecycle.
+The production profile installs the public chart with credential-free GHCR image defaults. The server, controller, and sim-driver repositories are separate, and an empty image tag resolves to the chart `appVersion`.
 
 ### Prerequisites
 - [Helm v3+](https://helm.sh/docs/intro/install/)
@@ -49,31 +49,60 @@ The Production profile is designed for deploying DRAForge into a remote Kubernet
 
 ### Installation Steps
 
-1. **Add the Repository (If applicable):**
-   *(Note: Adjust this step based on where the Helm chart is hosted, or use the local chart directory if cloning from source)*
+1. **Clone the repository:**
    ```bash
-   # From the cloned repository root:
-   cd deploy/helm/draforge
+   git clone https://github.com/oaslananka/draforge.git
+   cd draforge
    ```
 
 2. **Install via Helm:**
-   Deploy the DRAForge stack into a dedicated namespace (`draforge-system`).
    ```bash
    helm install draforge deploy/helm/draforge \
      --namespace draforge-system \
      --create-namespace
    ```
 
-3. **Verify Deployment:**
-   Check the status of the deployed pods and services:
+   The default render uses:
+   - `ghcr.io/oaslananka/draforge-server:<appVersion>`
+   - `ghcr.io/oaslananka/draforge-controller:<appVersion>`
+   - `ghcr.io/oaslananka/draforge-sim-driver:<appVersion>`
+
+   No image pull secret is rendered by default.
+
+3. **Optionally pin immutable image digests:**
+   ```bash
+   helm upgrade --install draforge deploy/helm/draforge \
+     --namespace draforge-system \
+     --create-namespace \
+     --set-string server.image.digest=sha256:<server-digest> \
+     --set-string controller.image.digest=sha256:<controller-digest> \
+     --set-string nodePlugin.image.digest=sha256:<sim-driver-digest>
+   ```
+
+   A configured digest takes precedence over the component tag.
+
+4. **Verify deployment:**
    ```bash
    kubectl get pods -n draforge-system
    kubectl get svc -n draforge-system
    ```
 
-4. **Access the Dashboard (Optional):**
-   In production, the dashboard should be exposed securely. For quick verification, you can port-forward the API server:
+5. **Access the dashboard for local verification:**
    ```bash
-   kubectl port-forward svc/draforge-api-server -n draforge-system 8080:80
+   kubectl port-forward svc/draforge-server -n draforge-system 8080:8080
    ```
-   *Note: Ensure proper ingress and authentication are configured for long-term access, as the dashboard is unprotected by default.*
+
+   Long-lived public exposure should use an authenticated and TLS-protected ingress path.
+
+### DigitalOcean Showcase Registry Override
+
+The DOKS showcase build flow publishes component images to a private DigitalOcean Container Registry layout. `task demo:up` creates the `registry-draforge` pull secret in `draforge-system` and installs the chart with:
+
+```bash
+helm upgrade --install draforge deploy/helm/draforge \
+  --namespace draforge-system \
+  --create-namespace \
+  -f deploy/helm/draforge/values-showcase-docr.yaml
+```
+
+Do not use this override for ordinary public installs; it requires private DOCR credentials.

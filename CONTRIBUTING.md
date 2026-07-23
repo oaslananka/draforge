@@ -82,6 +82,7 @@ task web:test       # Run frontend unit and integration tests
 task web:lint       # Lint web dashboard
 task web:build      # Build web dashboard for production
 task helm:lint      # Lint Helm charts
+task helm:verify-images # Verify public, digest, DOCR, and multi-arch image contracts
 task sbom           # Generate CycloneDX SBOM (requires syft)
 task release:local  # GoReleaser snapshot build (requires goreleaser)
 ```

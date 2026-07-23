@@ -103,8 +103,8 @@ This will:
 3. Generate `checksums.txt`.
 4. Generate CycloneDX SBOMs for each archive.
 5. Build and push Docker images to `ghcr.io/oaslananka/`:
-   - Per-architecture images tagged with `v0.1.0-amd64`, `v0.1.0-arm64`.
-   - Multi-arch manifest images (`v0.1.0`, `v0.1`, `latest`).
+   - Per-architecture images tagged with `0.1.0-amd64`, `0.1.0-arm64`.
+   - Multi-arch manifest images (`0.1.0`, `v0.1`, `latest`).
 6. Create a GitHub release with the archives and checksums attached.
 7. (If configured) Sign checksums and Docker images with Cosign.
 
@@ -114,11 +114,15 @@ This will:
 # Check GitHub release
 gh release view v0.1.0
 
-# Check container images
-docker pull ghcr.io/oaslananka/draforge-server:v0.1.0
+# Verify chart metadata and image references match the release tag
+scripts/verify-chart-images.sh 0.1.0
+
+# Check all published multi-architecture manifests without registry credentials
+docker logout ghcr.io
+VERIFY_REMOTE_IMAGES=1 scripts/verify-chart-images.sh 0.1.0
 
 # Verify binary version
-docker run --rm ghcr.io/oaslananka/draforge-server:v0.1.0 version
+docker run --rm ghcr.io/oaslananka/draforge-server:0.1.0 version
 
 # Check SBOM
 gh release download v0.1.0 -p "*.sbom"

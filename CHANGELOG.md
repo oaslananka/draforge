@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Operator-grade documentation in `docs/operations/` (install, guide, troubleshooting).
+- Added install-level kind E2E coverage for the complete Helm stack, with digest-pinned Kubernetes v1.35/v1.36 targets, reduced pull-request and full scheduled/release matrices, simulator allocation fixtures, namespace-qualified API/SSE/metrics verification, RBAC assertions, enforced Calico NetworkPolicy probes, and failure diagnostics.
+- Updated the frontend container build to a digest-pinned Node 22.23.1 image and exact current Corepack release so pnpm signature verification remains deterministic in clean Docker builds.
 
 ### Changed
 - Helm installs no longer create Gateway or Ingress listeners by default. External dashboard exposure now requires an explicit local-demo or secure-public values profile.

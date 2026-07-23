@@ -65,10 +65,10 @@ Automatic peer installation is disabled; required peers must be declared explici
 | Go | 1.26+ | Compiler and runtime |
 | Task | latest | Task runner (`task build`, `task test`, etc.) |
 | pnpm | 11.5.2 | Web dashboard package management |
-| Docker | latest | Container image builds (release only) |
+| Docker | current stable | Container image builds and local install E2E |
 | GoReleaser | v2.x | Release automation (maintainer use) |
 | Syft | latest | SBOM generation (release only) |
-| Kind | optional | Local Kubernetes cluster for testing |
+| kind | policy-pinned | Install-level Kubernetes E2E; see `tests/install-e2e/kubernetes-versions.json` |
 
 ## Common Commands
 
@@ -91,6 +91,8 @@ task helm:verify-lifecycle # Verify readiness and graceful shutdown Helm setting
 task helm:verify-sim-driver # Verify demo/node CDI output and health probes
 task helm:verify-exposure # Verify disabled, demo, and secure public exposure profiles
 task helm:verify-metrics # Verify restricted controller metrics scraping
+task e2e:install-contract # Test install E2E orchestration without a cluster
+task e2e:install-kind # Install and verify the full stack on the PR baseline
 task sbom           # Generate CycloneDX SBOM (requires syft)
 task release:local  # GoReleaser snapshot build (requires goreleaser)
 ```
@@ -116,15 +118,27 @@ task test
 
 ### End-to-End Tests
 
-E2E tests require a real or Kind-based Kubernetes cluster with DRA feature gate
-enabled and are guarded by the `DRAFORGE_E2E` environment variable:
+The fast orchestration contract requires no cluster:
+
+```bash
+task e2e:install-contract
+```
+
+The install-level suite builds all three images, creates a policy-pinned kind cluster, installs the digest-verified NetworkPolicy CNI, installs the complete Helm release, and verifies ResourceSlice publication, claim allocation, consumer Pod association, readiness, discovery, graph, explain, metrics, SSE, RBAC, and enforced NetworkPolicies:
+
+```bash
+task e2e:install-kind
+```
+
+Run every full compatibility target with `task e2e:install-kind-full`. Docker daemon access, kind, kubectl, Helm, jq, and curl are required. See `docs/e2e-matrix.md` for versions, artifacts, and troubleshooting.
+
+The separate tagged smoke package remains available for an already configured real cluster:
 
 ```bash
 DRAFORGE_E2E=1 go test -tags=e2e ./tests/e2e/... -v
 ```
 
-**Note:** E2E tests are excluded from `task test` / `go test ./...` by default.
-You must set `DRAFORGE_E2E=1` explicitly to run them.
+E2E packages are excluded from `task test` and `go test ./...` by default.
 
 ## Web Dashboard Development
 

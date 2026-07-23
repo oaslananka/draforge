@@ -1,8 +1,12 @@
 # Multi-stage Dockerfile for draforge-server
 # Stage 1: Build React Frontend Dashboard
-FROM node:22.12-alpine AS frontend-builder
+# node:22.23.1-alpine
+ARG NODE_IMAGE=node@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2
+FROM ${NODE_IMAGE} AS frontend-builder
 WORKDIR /web
-RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+RUN npm install --global --ignore-scripts --force corepack@0.35.0 && \
+    corepack enable && \
+    corepack prepare pnpm@11.5.2 --activate
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 COPY web/vendor ./vendor
 RUN pnpm install --frozen-lockfile --ignore-scripts
@@ -10,7 +14,7 @@ COPY web/ ./
 RUN pnpm build
 
 # Stage 2: Build Go API Server
-FROM golang:1.26.4 AS backend-builder
+FROM golang:1.26.5 AS backend-builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download

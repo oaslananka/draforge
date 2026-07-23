@@ -1,18 +1,87 @@
-name: E2E Matrix Tests
+name: Install E2E Matrix
 
 on:
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '17 3 * * 1'
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Kubernetes matrix profile
+        required: true
+        type: choice
+        default: full
+        options:
+          - pull-request
+          - full
+  workflow_call:
+    inputs:
+      profile:
+        description: Kubernetes matrix profile
+        required: false
+        type: string
+        default: full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  local-e2e:
-    name: Local E2E Matrix (kind)
+  matrix:
+    name: Resolve Kubernetes matrix
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      profile: ${{ steps.resolve.outputs.profile }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Resolve matrix profile from compatibility policy
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_PROFILE: ${{ inputs.profile }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$REQUESTED_PROFILE" ]]; then
+            profile=$REQUESTED_PROFILE
+          else
+            case "$EVENT_NAME" in
+              pull_request)
+                profile=pull-request
+                ;;
+              schedule)
+                profile=full
+                ;;
+              *)
+                echo "ERROR: install E2E profile is required for event: $EVENT_NAME" >&2
+                exit 1
+                ;;
+            esac
+          fi
+          matrix=$(scripts/e2e-matrix.sh "$profile")
+          echo "profile=$profile" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  install-e2e:
+    name: Kubernetes ${{ matrix.kubernetes }} install E2E
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
     strategy:
       fail-fast: false
-      matrix:
-        k8s_version: [v1.32.11, v1.33.12, v1.34.8, v1.35.5, v1.36.1]
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    env:
+      DRAFORGE_INSTALL_E2E_ARTIFACT_DIR: artifacts/install-e2e
+      DRAFORGE_INSTALL_E2E_COMMIT: ${{ github.sha }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Setup Go
@@ -20,58 +89,63 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Setup Task
-        uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.17.3
 
       - name: Create kind cluster config
         run: |
-          cat <<'CONFIG' > kind-config.yaml
+          cat > kind-config.yaml <<'CONFIG'
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           featureGates:
             DynamicResourceAllocation: true
+          networking:
+            disableDefaultCNI: true
+            podSubnet: 192.168.0.0/16
           CONFIG
 
-      - name: Setup kind cluster
+      - name: Create kind cluster
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
-          version: v0.24.0
-          node_image: kindest/node:${{ matrix.k8s_version }}
+          version: ${{ matrix.kind_version }}
+          node_image: ${{ matrix.node_image }}
           config: kind-config.yaml
-          cluster_name: draforge-e2e
+          cluster_name: draforge-install-e2e
+          wait: 0s
 
-      - name: Verify cluster is running
+      - name: Install NetworkPolicy-capable CNI
+        run: scripts/install-e2e-cni.sh
+
+      - name: Verify Kubernetes compatibility target
         run: |
-          kubectl cluster-info
-          kubectl api-resources | grep -E 'resourceclaims|resourceslices|deviceclasses'
+          set -euo pipefail
+          kubectl version
+          kubectl api-resources --api-group=resource.k8s.io
 
-      - name: Build binaries
-        run: task build
+      - name: Build local DRAForge images
+        run: scripts/build-install-e2e-images.sh
 
-      - name: Deploy DRAForge resources
+      - name: Load images into kind
         run: |
-          kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
-          kubectl apply -f examples/scenarios/basic-gpu.yaml
-          kubectl get simulateddevicepools.draforge.oaslananka -A
+          set -euo pipefail
+          for image in server controller sim-driver; do
+            kind load docker-image "docker.io/draforge-e2e/${image}:local" --name draforge-install-e2e
+          done
 
-      - name: Run E2E tests
-        env:
-          DRAFORGE_E2E: '1'
-        run: go test -tags=e2e ./tests/e2e/... -v
+      - name: Install and verify complete DRAForge stack
+        run: scripts/run-install-e2e.sh
 
-      - name: Collect cluster logs on failure
-        if: failure()
-        run: |
-          mkdir -p logs
-          kubectl get nodes -o wide > logs/nodes.txt || true
-          kubectl get all --all-namespaces > logs/all-resources.txt || true
-          kubectl describe pods --all-namespaces > logs/pod-descriptions.txt || true
-          kubectl get events --all-namespaces --sort-by='.metadata.creationTimestamp' > logs/events.txt || true
+      - name: Collect install E2E diagnostics
+        if: always()
+        run: scripts/collect-install-e2e-artifacts.sh
 
-      - name: Upload logs artifact
+      - name: Upload failed install E2E artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: e2e-logs-${{ matrix.k8s_version }}
-          path: logs/
-          retention-days: 5
+          name: install-e2e-${{ matrix.kubernetes }}-${{ github.run_id }}
+          path: artifacts/install-e2e/
+          if-no-files-found: error
+          retention-days: 7

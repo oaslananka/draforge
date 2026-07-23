@@ -7,21 +7,29 @@ import (
 	"testing"
 )
 
-func TestCheckRequiresExecutedPassingSmokeTest(t *testing.T) {
+func TestCheckAcceptsPassingSmokeTest(t *testing.T) {
+	input := strings.Join([]string{
+		`{"Action":"start","Package":"github.com/oaslananka/draforge/tests/e2e"}`,
+		`{"Action":"run","Package":"github.com/oaslananka/draforge/tests/e2e","Test":"TestSmoke"}`,
+		`{"Action":"pass","Package":"github.com/oaslananka/draforge/tests/e2e","Test":"TestSmoke"}`,
+		`{"Action":"pass","Package":"github.com/oaslananka/draforge/tests/e2e"}`,
+	}, "\n")
+
+	summary, err := Check(strings.NewReader(input), "TestSmoke")
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if summary.Executed != 1 || summary.Passed != 1 || !summary.RequiredPassed {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+}
+
+func TestCheckRejectsInvalidRuns(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
 		wantErr string
 	}{
-		{
-			name: "passing smoke test",
-			input: strings.Join([]string{
-				`{"Action":"start","Package":"github.com/oaslananka/draforge/tests/e2e"}`,
-				`{"Action":"run","Package":"github.com/oaslananka/draforge/tests/e2e","Test":"TestSmoke"}`,
-				`{"Action":"pass","Package":"github.com/oaslananka/draforge/tests/e2e","Test":"TestSmoke"}`,
-				`{"Action":"pass","Package":"github.com/oaslananka/draforge/tests/e2e"}`,
-			}, "\n"),
-		},
 		{
 			name:    "no packages",
 			input:   `go: warning: "./tests/e2e/..." matched no packages` + "\n" + `no packages to test`,
@@ -57,19 +65,15 @@ func TestCheckRequiresExecutedPassingSmokeTest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			summary, err := Check(strings.NewReader(tt.input), "TestSmoke")
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("Check() error = %v", err)
-				}
-				if summary.Executed != 1 || summary.Passed != 1 || summary.RequiredPassed != true {
-					t.Fatalf("unexpected summary: %+v", summary)
-				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("Check() error = %v, want substring %q", err, tt.wantErr)
-			}
+			assertCheckError(t, tt.input, tt.wantErr)
 		})
+	}
+}
+
+func assertCheckError(t *testing.T, input, wantErr string) {
+	t.Helper()
+	_, err := Check(strings.NewReader(input), "TestSmoke")
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("Check() error = %v, want substring %q", err, wantErr)
 	}
 }

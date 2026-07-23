@@ -21,72 +21,82 @@ type Summary struct {
 }
 
 type testEvent struct {
-	Action  string `json:"Action"`
-	Package string `json:"Package"`
-	Test    string `json:"Test"`
-	Output  string `json:"Output"`
+	Action string `json:"Action"`
+	Test   string `json:"Test"`
+	Output string `json:"Output"`
 }
 
 // Check validates that at least one test executed, not all tests were skipped,
 // and the named required test both ran and passed.
 func Check(r io.Reader, requiredTest string) (Summary, error) {
+	summary, sawNoPackages, err := scanTestEvents(r, requiredTest)
+	if err != nil {
+		return summary, err
+	}
+	return validateSummary(summary, requiredTest, sawNoPackages)
+}
+
+func scanTestEvents(r io.Reader, requiredTest string) (Summary, bool, error) {
 	var summary Summary
 	var sawNoPackages bool
 
 	scanner := bufio.NewScanner(r)
-	buffer := make([]byte, 64*1024)
-	scanner.Buffer(buffer, 1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "no packages to test") || strings.Contains(line, "matched no packages") {
-			sawNoPackages = true
-		}
-
-		var event testEvent
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue
-		}
-		if strings.Contains(event.Output, "no packages to test") || strings.Contains(event.Output, "matched no packages") {
-			sawNoPackages = true
-		}
-		if event.Test == "" {
-			continue
-		}
-
-		switch event.Action {
-		case "run":
-			summary.Executed++
-			if event.Test == requiredTest {
-				summary.RequiredRan = true
-			}
-		case "pass":
-			summary.Passed++
-			if event.Test == requiredTest {
-				summary.RequiredPassed = true
-			}
-		case "fail":
-			summary.Failed++
-		case "skip":
-			summary.Skipped++
+		event, hasTest, lineHasNoPackages := parseTestEvent(scanner.Text())
+		sawNoPackages = sawNoPackages || lineHasNoPackages
+		if hasTest {
+			applyTestEvent(&summary, event, requiredTest)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return summary, fmt.Errorf("read go test JSON: %w", err)
+		return summary, sawNoPackages, fmt.Errorf("read go test JSON: %w", err)
 	}
-	if sawNoPackages {
+	return summary, sawNoPackages, nil
+}
+
+func parseTestEvent(line string) (testEvent, bool, bool) {
+	noPackages := containsNoPackagesMessage(line)
+	var event testEvent
+	if err := json.Unmarshal([]byte(line), &event); err != nil {
+		return testEvent{}, false, noPackages
+	}
+	noPackages = noPackages || containsNoPackagesMessage(event.Output)
+	return event, event.Test != "", noPackages
+}
+
+func containsNoPackagesMessage(value string) bool {
+	return strings.Contains(value, "no packages to test") || strings.Contains(value, "matched no packages")
+}
+
+func applyTestEvent(summary *Summary, event testEvent, requiredTest string) {
+	switch event.Action {
+	case "run":
+		summary.Executed++
+		summary.RequiredRan = summary.RequiredRan || event.Test == requiredTest
+	case "pass":
+		summary.Passed++
+		summary.RequiredPassed = summary.RequiredPassed || event.Test == requiredTest
+	case "fail":
+		summary.Failed++
+	case "skip":
+		summary.Skipped++
+	}
+}
+
+func validateSummary(summary Summary, requiredTest string, sawNoPackages bool) (Summary, error) {
+	switch {
+	case sawNoPackages:
 		return summary, fmt.Errorf("no packages to test")
-	}
-	if summary.Executed == 0 {
+	case summary.Executed == 0:
 		return summary, fmt.Errorf("zero tests executed")
-	}
-	if summary.Passed == 0 && summary.Skipped == summary.Executed {
+	case summary.Passed == 0 && summary.Skipped == summary.Executed:
 		return summary, fmt.Errorf("all executed tests were skipped")
-	}
-	if !summary.RequiredRan || !summary.RequiredPassed {
+	case !summary.RequiredRan || !summary.RequiredPassed:
 		return summary, fmt.Errorf("required test %s did not pass", requiredTest)
-	}
-	if summary.Failed > 0 {
+	case summary.Failed > 0:
 		return summary, fmt.Errorf("%d tests failed", summary.Failed)
+	default:
+		return summary, nil
 	}
-	return summary, nil
 }

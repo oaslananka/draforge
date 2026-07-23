@@ -23,8 +23,10 @@ assert_file() {
 }
 
 assert_contains() {
-    local file=$1
-    local text=$2
+    local file
+    local text
+    file=$1
+    text=$2
     if ! grep -Fq -- "$text" "$file"; then
         echo "--- $file ---" >&2
         cat "$file" >&2 || true

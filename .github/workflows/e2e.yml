@@ -139,7 +139,7 @@ jobs:
       - name: Save DigitalOcean kubeconfig for cleanup
         if: always()
         continue-on-error: true
-        run: doctl kubernetes cluster kubeconfig save "${{ inputs.cluster_name }}" --expiry-seconds 3600
+        run: doctl kubernetes cluster kubeconfig save "$DOKS_CLUSTER_NAME" --expiry-seconds 3600
 
       - name: Remove run-scoped E2E resources
         if: always()

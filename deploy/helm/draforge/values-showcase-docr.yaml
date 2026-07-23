@@ -1,0 +1,27 @@
+# DigitalOcean Container Registry overrides for the DOKS showcase build flow.
+# The public chart defaults remain credential-free GHCR references.
+global:
+  imageRegistry: registry.digitalocean.com/draforge
+  imagePullSecrets:
+    - name: registry-draforge
+
+server:
+  image:
+    repository: draforge
+    tag: server-latest
+    digest: ""
+    pullPolicy: Always
+
+controller:
+  image:
+    repository: draforge
+    tag: controller-latest
+    digest: ""
+    pullPolicy: Always
+
+nodePlugin:
+  image:
+    repository: draforge
+    tag: sim-driver-latest
+    digest: ""
+    pullPolicy: Always

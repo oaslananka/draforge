@@ -47,6 +47,22 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Build an image reference from registry, repository, tag/digest and appVersion.
+Digest takes precedence; an empty tag defaults to Chart.appVersion.
+*/}}
+{{- define "draforge.image" -}}
+{{- $registry := trimSuffix "/" (required "global.imageRegistry is required" .registry) -}}
+{{- $repository := trimPrefix "/" (required "image.repository is required" .repository) -}}
+{{- $image := printf "%s/%s" $registry $repository -}}
+{{- if .digest -}}
+{{- printf "%s@%s" $image .digest -}}
+{{- else -}}
+{{- $tag := default .appVersion .tag -}}
+{{- printf "%s:%s" $image (required "image.tag or Chart.appVersion is required" $tag) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Restricted egress rules shared by DRAForge workloads.
 By default, workloads may resolve DNS and reach Kubernetes-style API server
 ports without allowing every protocol and port to every destination.

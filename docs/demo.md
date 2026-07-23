@@ -9,7 +9,7 @@ Before launching the showcase:
 2. Verify you have a valid DigitalOcean API token.
 3. Configure a `.env` file at the root of the repository containing:
    ```env
-   DIGITAL_OCEAN_API_TOKEN="your-digitalocean-api-token"
+   DIGITALOCEAN_TOKEN="your-digitalocean-api-token"
    ```
 
 ---
@@ -27,9 +27,11 @@ task demo:up
 2. **Infrastructure Provisioning**: Initializes and runs `terraform apply` to spin up the Dedicated VPC, DOKS cluster, and private DigitalOcean Container Registry (DOCR).
 3. **Private Registry Integration**: Configures Kubeconfig registry secrets in the namespaces.
 4. **Remote Image Builds**: Submits rootless Kubernetes Kaniko jobs to build the `server`, `controller`, and `sim-driver` container images directly on the DOKS cluster.
-5. **Helm Chart Installation**: Deploys the DRAForge services (with standard wildcard egress NetworkPolicies, image pull secrets, and HTTP API routing via Gateway API).
+5. **Helm Chart Installation**: Deploys with `values-showcase-docr.yaml`, using the private DOCR component tags and the `registry-draforge` pull secret in `draforge-system`.
 6. **Scenario Seeding**: Applies the custom simulated device pool configurations (e.g. `examples/scenarios/basic-gpu.yaml`).
 7. **Exposes Endpoint**: Retrieves the LoadBalancer IP of the Cilium Gateway and outputs the live dashboard URL.
+
+The public chart defaults remain on GHCR and do not render image pull secrets. The showcase override is intentionally applied only by `task demo:up` after `scripts/remote-build.sh` reconciles the DOCR secret in both `draforge-ci` and `draforge-system`.
 
 ---
 

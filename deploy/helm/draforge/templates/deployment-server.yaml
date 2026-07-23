@@ -28,7 +28,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: server
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}"
+          image: {{ include "draforge.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.server.image.repository "tag" .Values.server.image.tag "digest" .Values.server.image.digest "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.server.image.pullPolicy }}
           ports:
             - containerPort: 8080

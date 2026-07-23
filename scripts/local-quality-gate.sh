@@ -22,6 +22,8 @@ pnpm --dir web lint
 pnpm --dir web build
 helm lint deploy/helm/draforge
 helm template draforge deploy/helm/draforge >/tmp/draforge-helm-template.yaml
+scripts/verify-chart-images.sh
+scripts/test-chart-image-verifier.sh
 terraform -chdir=infra/terraform/environments/showcase init -backend=false
 terraform -chdir=infra/terraform/environments/showcase fmt -check
 terraform -chdir=infra/terraform/environments/showcase validate

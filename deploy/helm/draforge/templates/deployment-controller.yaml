@@ -28,7 +28,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: controller
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}"
+          image: {{ include "draforge.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.controller.image.repository "tag" .Values.controller.image.tag "digest" .Values.controller.image.digest "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
           ports:
             - name: runtime

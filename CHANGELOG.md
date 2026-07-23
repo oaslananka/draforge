@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restored live SSE graph streaming through the full middleware chain while preserving ordinary request timeouts and non-blocking subscriber delivery.
 - Preserved namespace-qualified ResourceClaim identity across dashboard selection, graph navigation, and explain API requests, including duplicate claim names across namespaces.
 - Repaired the remote DOKS E2E harness with tagged test execution, result verification, run-scoped read-only RBAC, failure artifacts, and cancellation-safe cleanup.
+- Aligned Helm defaults with the public GHCR server, controller, and sim-driver images; added appVersion tags, digest pinning, a DOCR showcase override, and multi-arch release verification.
 
 ---
 

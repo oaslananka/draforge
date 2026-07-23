@@ -112,6 +112,18 @@ jobs:
       - name: Helm template smoke test
         run: helm template draforge deploy/helm/draforge
 
+      - name: Lint chart and showcase image scripts
+        run: shellcheck scripts/verify-chart-images.sh scripts/test-chart-image-verifier.sh scripts/remote-build.sh scripts/test-remote-build.sh
+
+      - name: Verify chart image contract
+        run: scripts/verify-chart-images.sh
+
+      - name: Test multi-arch image verifier
+        run: scripts/test-chart-image-verifier.sh
+
+      - name: Test DOCR showcase integration
+        run: scripts/test-remote-build.sh
+
       - name: Package Helm Chart
         run: |
           mkdir -p charts

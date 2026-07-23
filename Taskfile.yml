@@ -96,6 +96,12 @@ tasks:
     cmds:
       - helm lint deploy/helm/draforge
 
+  helm:verify-images:
+    desc: Verify public, digest-pinned, and DOKS showcase image references
+    cmds:
+      - scripts/verify-chart-images.sh
+      - scripts/test-chart-image-verifier.sh
+
   infra:preflight:
     desc: Validate Terraform showcase tools and static configuration
     cmds:
@@ -159,7 +165,7 @@ tasks:
       - '{{.BASH_BIN}} scripts/remote-build.sh server'
       - '{{.BASH_BIN}} scripts/remote-build.sh controller'
       - '{{.BASH_BIN}} scripts/remote-build.sh sim-driver'
-      - helm upgrade --install draforge deploy/helm/draforge -n draforge-system --create-namespace
+      - helm upgrade --install draforge deploy/helm/draforge -n draforge-system --create-namespace -f deploy/helm/draforge/values-showcase-docr.yaml
       - kubectl apply -f examples/scenarios/basic-gpu.yaml
 
   demo:down:

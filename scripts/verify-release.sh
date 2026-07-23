@@ -9,6 +9,9 @@ CHARTS_DIR=${CHARTS_DIR:-"charts"}
 
 echo "==> Verifying DRAForge release artifacts..."
 
+echo "==> Verifying Helm chart image contract..."
+scripts/verify-chart-images.sh
+
 fail() {
   echo "❌ ERROR: $1" >&2
   exit 1
@@ -44,7 +47,7 @@ echo "✅ All core binaries accounted for in checksums.txt"
 # 3. SBOM Presence
 echo "==> Checking SBOM presence..."
 if ls "$DIST_DIR"/*.sbom 1> /dev/null 2>&1 || ls "$DIST_DIR"/*.sbom.json 1> /dev/null 2>&1; then
-  sbom_count=$(ls "$DIST_DIR"/*.sbom "$DIST_DIR"/*.sbom.json 2>/dev/null | wc -l || true)
+  sbom_count=$(find "$DIST_DIR" -maxdepth 1 -type f \( -name '*.sbom' -o -name '*.sbom.json' \) -print | wc -l)
   echo "✅ Found $sbom_count SBOM file(s)"
 else
   warn "No SBOM files found in $DIST_DIR/ (expected for --skip=sbom or snapshot dry-runs)"
@@ -54,7 +57,7 @@ fi
 echo "==> Checking Helm chart packages..."
 if [ -d "$CHARTS_DIR" ]; then
   if ls "$CHARTS_DIR"/draforge-*.tgz 1> /dev/null 2>&1; then
-    chart_count=$(ls "$CHARTS_DIR"/draforge-*.tgz 2>/dev/null | wc -l || true)
+    chart_count=$(find "$CHARTS_DIR" -maxdepth 1 -type f -name 'draforge-*.tgz' -print | wc -l)
     echo "✅ Found $chart_count Helm chart package(s)"
   else
     warn "No Helm chart packages found in $CHARTS_DIR/ (expected if Helm package step was skipped)"

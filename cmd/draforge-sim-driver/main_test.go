@@ -7,6 +7,7 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSimDriverHelpOutput(t *testing.T) {
@@ -16,6 +17,9 @@ func TestSimDriverHelpOutput(t *testing.T) {
 
 	cdiDir := fs.String("cdi-dir", "/var/lib/kubelet/device-plugins/cdi", "Directory to write CDI spec JSONs")
 	kubeconfig := fs.String("kubeconfig", "", "Path to kubeconfig file")
+	outputMode := fs.String("output-mode", "node", "CDI output mode: demo or node")
+	healthAddr := fs.String("health-addr", ":8083", "Address for liveness and readiness endpoints")
+	refreshInterval := fs.Duration("refresh-interval", 3*time.Second, "Interval between CDI refresh attempts")
 
 	err := fs.Parse([]string{"--help"})
 	if !errors.Is(err, flag.ErrHelp) {
@@ -26,14 +30,19 @@ func TestSimDriverHelpOutput(t *testing.T) {
 	if !strings.Contains(output, "cdi-dir") {
 		t.Errorf("help output should contain 'cdi-dir', got: %q", output)
 	}
-	if !strings.Contains(output, "kubeconfig") {
-		t.Errorf("help output should contain 'kubeconfig', got: %q", output)
+	for _, flagName := range []string{"kubeconfig", "output-mode", "health-addr", "refresh-interval"} {
+		if !strings.Contains(output, flagName) {
+			t.Errorf("help output should contain %q, got: %q", flagName, output)
+		}
 	}
 	if !strings.Contains(output, "Usage") {
 		t.Errorf("help output should contain 'Usage', got: %q", output)
 	}
 	_ = cdiDir
 	_ = kubeconfig
+	_ = outputMode
+	_ = healthAddr
+	_ = refreshInterval
 }
 
 func TestSimDriverCDIDirDefault(t *testing.T) {
@@ -109,5 +118,20 @@ func TestCDISpecStructure(t *testing.T) {
 	}
 	if len(spec.Devices) != 1 {
 		t.Errorf("expected 1 device, got %d", len(spec.Devices))
+	}
+}
+
+func TestParseOutputMode(t *testing.T) {
+	for _, value := range []string{"demo", "node"} {
+		mode, err := parseOutputMode(value)
+		if err != nil {
+			t.Fatalf("parse %q: %v", value, err)
+		}
+		if string(mode) != value {
+			t.Fatalf("parsed mode = %q, want %q", mode, value)
+		}
+	}
+	if _, err := parseOutputMode("fallback"); err == nil {
+		t.Fatal("expected invalid output mode to fail")
 	}
 }

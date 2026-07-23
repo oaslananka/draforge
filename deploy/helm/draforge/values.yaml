@@ -91,7 +91,10 @@ controller:
       type: RuntimeDefault
 
 nodePlugin:
-  outputMode: "demo" # Must be either "demo" or "node"
+  outputMode: "demo" # Demo uses emptyDir; node writes to the host kubelet CDI directory.
+  refreshInterval: 3s
+  health:
+    port: 8083
   image:
     repository: oaslananka/draforge-sim-driver
     tag: ""

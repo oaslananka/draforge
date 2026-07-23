@@ -47,6 +47,10 @@ The DRAForge web dashboard is intentionally **read-only**, but read-only data ca
 - The repository is configured with Dependabot for dependency updates and expects
   GitHub secret scanning to be enabled on the repository.
 
+### Host-Integrated CDI Mode
+
+`nodePlugin.outputMode=node` writes to a kubelet hostPath and is disabled by default. The container uses UID 0 only to access the root-owned CDI directory; it remains non-privileged with no Linux capabilities, no privilege escalation, a read-only root filesystem, and RuntimeDefault seccomp. Use node mode only on controlled nodes. Demo mode remains non-root and host-isolated.
+
 ### Cloud Demo Risks
 - The Terraform showcase deployment provisions billable DigitalOcean resources.
 - `task demo:up` and `task demo:down` manage cloud infrastructure — review

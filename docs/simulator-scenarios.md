@@ -47,6 +47,26 @@ done
 
 Create a focused YAML file in `examples/scenarios/` using the `SimulatedDevicePool` CRD. Give the resource and file a clear diagnostic intent, keep the scope small, and update the catalog table above.
 
+## CDI Output Modes
+
+The Helm chart deliberately separates two node-plugin modes:
+
+| Mode | Storage | Source of devices | Failure behavior |
+|---|---|---|---|
+| `demo` (default) | Pod-local `emptyDir` | Two explicit static demo devices | A write failure reports not-ready; no host path is used. |
+| `node` | `/var/lib/kubelet/device-plugins/cdi` hostPath | Allocated ResourceClaim results matching the node | Kubernetes or CDI write failures report not-ready and preserve the last-known-good file. |
+
+Enable host-integrated output only on a disposable or controlled node:
+
+```bash
+helm upgrade --install draforge deploy/helm/draforge \
+  --namespace draforge-system \
+  --create-namespace \
+  --set nodePlugin.outputMode=node
+```
+
+The generated file is mode `0644`, owned by the writing process, and replaced atomically. The DaemonSet exposes process liveness at `/healthz` and dependency/output readiness at `/readyz` on container port `8083`.
+
 ## E2E Tests
 
 End-to-end tests require a live cluster and the `DRAFORGE_E2E=1` environment variable:

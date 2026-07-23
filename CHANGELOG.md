@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Aligned Helm defaults with the public GHCR server, controller, and sim-driver images; added appVersion tags, digest pinning, a DOCR showcase override, and multi-arch release verification.
 - Added opt-in, namespace/pod-restricted controller metrics ingress and an optional ServiceMonitor while keeping controller ingress closed by default.
 - Added dependency-aware Kubernetes readiness, signal-driven graceful API shutdown, bounded force-close behavior, and cancellation-safe SSE cleanup for server and controller runtimes.
+- Hardened sim-driver CDI output with explicit demo/node modes, atomic fsync-and-rename updates, fully qualified device identity, last-known-good preservation, and API/CDI-aware readiness.
 
 ---
 

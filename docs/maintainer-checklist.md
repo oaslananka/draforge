@@ -40,6 +40,7 @@
 - [ ] Dashboard access verified (read-only, no mutation)
 - [ ] Public URL does not expose admin or debug endpoints
 - [ ] Default Helm render contains no Gateway, HTTPRoute, or Ingress
+- [ ] `scripts/verify-sim-driver-cdi.sh` passes for non-root demo and fail-closed host-integrated node modes
 - [ ] Secure public route terminates TLS and targets the identity proxy Service, not DRAForge directly
 - [ ] `docs/assets/` screenshots updated if UI changed
 - [ ] Cleanup verified: `task demo:down` tears down all resources

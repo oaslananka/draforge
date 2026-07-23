@@ -104,4 +104,8 @@ assert_contains "$ROOT_DIR/.gitignore" "artifacts/install-e2e*/"
 assert_contains "$ROOT_DIR/.dockerignore" "artifacts"
 assert_contains "$ROOT_DIR/.dockerignore" "web/node_modules"
 
+assert_contains "$ROOT_DIR/build/package/Dockerfile.server" "FROM golang:1.26.5 AS backend-builder"
+assert_contains "$ROOT_DIR/build/package/Dockerfile.controller" "FROM golang:1.26.5 AS builder"
+assert_contains "$ROOT_DIR/build/package/Dockerfile.sim-driver" "FROM golang:1.26.5 AS builder"
+
 echo "Install-level E2E policy verified."

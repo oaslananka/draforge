@@ -37,30 +37,81 @@ type matrixEntry struct {
 }
 
 func TestKubernetesVersionPolicy(t *testing.T) {
-	data := readFixture(t, "kubernetes-versions.json")
 	var policy versionPolicy
-	if err := json.Unmarshal(data, &policy); err != nil {
+	if err := json.Unmarshal(readFixture(t, "kubernetes-versions.json"), &policy); err != nil {
 		t.Fatalf("decode Kubernetes version policy: %v", err)
 	}
-	if !strings.HasPrefix(policy.KindVersion, "v") {
-		t.Fatalf("kindVersion must be an explicit v-prefixed release, got %q", policy.KindVersion)
+
+	validateKindVersion(t, policy.KindVersion)
+	validateNetworkPolicyProvider(t, policy.NetworkPolicyProvider)
+	validateProfiles(t, policy.Profiles)
+}
+
+func TestInstallResourceFixturesUseTypedDRAIdentity(t *testing.T) {
+	objects := decodeDocuments(t, readFixture(t, "resources.yaml"))
+	byKind := indexByKind(t, objects)
+
+	deviceClass := typedObject[resourcev1.DeviceClass](t, byKind, "DeviceClass")
+	validateDeviceClass(t, deviceClass)
+
+	claim := typedObject[resourcev1.ResourceClaim](t, byKind, "ResourceClaim")
+	validateResourceClaim(t, claim, deviceClass.Name)
+	validateSimulatorPool(t, byKind["SimulatedDevicePool"], claim.Namespace)
+}
+
+func TestClaimConsumerFixtureReferencesExistingClaim(t *testing.T) {
+	objects := decodeDocuments(t, readFixture(t, "workload.yaml"))
+	pod := typedObject[corev1.Pod](t, indexByKind(t, objects), "Pod")
+
+	validateConsumerIdentity(t, pod)
+	validateConsumerPodSecurity(t, pod)
+	validateConsumerContainer(t, pod)
+}
+
+func TestNetworkPolicyProbeFixturesAreIsolatedAndHardened(t *testing.T) {
+	objects := decodeDocuments(t, readFixture(t, "network-policy-probes.yaml"))
+	if len(objects) != 2 {
+		t.Fatalf("expected two NetworkPolicy probe Pods, got %d", len(objects))
 	}
 
-	if policy.NetworkPolicyProvider.Name != "calico" {
-		t.Fatalf("install E2E must use a NetworkPolicy-capable CNI, got %q", policy.NetworkPolicyProvider.Name)
-	}
-	if !strings.HasPrefix(policy.NetworkPolicyProvider.Version, "v3.") {
-		t.Fatalf("Calico version must be explicitly pinned, got %q", policy.NetworkPolicyProvider.Version)
-	}
-	if !strings.Contains(policy.NetworkPolicyProvider.ManifestURL, "/"+policy.NetworkPolicyProvider.Version+"/manifests/calico.yaml") {
-		t.Fatalf("Calico manifest URL does not match version %q: %q", policy.NetworkPolicyProvider.Version, policy.NetworkPolicyProvider.ManifestURL)
-	}
-	if len(policy.NetworkPolicyProvider.SHA256) != 64 {
-		t.Fatalf("Calico manifest must have a SHA-256 digest, got %q", policy.NetworkPolicyProvider.SHA256)
-	}
+	pods := decodeProbePods(t, objects)
+	allowed := requiredProbePod(t, pods, "network-policy-allowed")
+	denied := requiredProbePod(t, pods, "network-policy-denied")
 
-	pullRequest := policy.Profiles["pull-request"]
-	full := policy.Profiles["full"]
+	validateAllowedProbe(t, allowed)
+	validateDeniedProbe(t, denied)
+	validateProbeHardening(t, allowed)
+	validateProbeHardening(t, denied)
+}
+
+func validateKindVersion(t *testing.T, version string) {
+	t.Helper()
+	if !strings.HasPrefix(version, "v") {
+		t.Fatalf("kindVersion must be an explicit v-prefixed release, got %q", version)
+	}
+}
+
+func validateNetworkPolicyProvider(t *testing.T, provider networkPolicyProvider) {
+	t.Helper()
+	if provider.Name != "calico" {
+		t.Fatalf("install E2E must use a NetworkPolicy-capable CNI, got %q", provider.Name)
+	}
+	if !strings.HasPrefix(provider.Version, "v3.") {
+		t.Fatalf("Calico version must be explicitly pinned, got %q", provider.Version)
+	}
+	expectedURL := "https://raw.githubusercontent.com/projectcalico/calico/" + provider.Version + "/manifests/calico.yaml"
+	if provider.ManifestURL != expectedURL {
+		t.Fatalf("NetworkPolicy manifest URL %q must equal %q", provider.ManifestURL, expectedURL)
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(provider.SHA256) {
+		t.Fatalf("NetworkPolicy manifest SHA-256 is not pinned: %q", provider.SHA256)
+	}
+}
+
+func validateProfiles(t *testing.T, profiles map[string][]matrixEntry) {
+	t.Helper()
+	pullRequest := profiles["pull-request"]
+	full := profiles["full"]
 	if len(pullRequest) != 1 {
 		t.Fatalf("pull-request profile must contain exactly one target, got %d", len(pullRequest))
 	}
@@ -79,30 +130,27 @@ func TestKubernetesVersionPolicy(t *testing.T) {
 			t.Fatalf("pull-request target %q must also be present in the full profile", entry.NodeImage)
 		}
 	}
+}
 
-	provider := policy.NetworkPolicyProvider
-	if provider.Name != "calico" || !strings.HasPrefix(provider.Version, "v") {
-		t.Fatalf("unexpected NetworkPolicy provider %#v", provider)
+func validateMatrixEntry(t *testing.T, entry matrixEntry) {
+	t.Helper()
+	if !strings.HasPrefix(entry.Kubernetes, "v1.") {
+		t.Fatalf("invalid Kubernetes version %q", entry.Kubernetes)
 	}
-	expectedURL := "https://raw.githubusercontent.com/projectcalico/calico/" + provider.Version + "/manifests/calico.yaml"
-	if provider.ManifestURL != expectedURL {
-		t.Fatalf("NetworkPolicy manifest URL %q must equal %q", provider.ManifestURL, expectedURL)
-	}
-	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(provider.SHA256) {
-		t.Fatalf("NetworkPolicy manifest SHA-256 is not pinned: %q", provider.SHA256)
+	if !strings.Contains(entry.NodeImage, entry.Kubernetes+"@sha256:") {
+		t.Fatalf("node image %q must be digest-pinned to Kubernetes %s", entry.NodeImage, entry.Kubernetes)
 	}
 }
 
-func TestInstallResourceFixturesUseTypedDRAIdentity(t *testing.T) {
-	objects := decodeDocuments(t, readFixture(t, "resources.yaml"))
-	byKind := indexByKind(t, objects)
-
-	deviceClass := typedObject[resourcev1.DeviceClass](t, byKind, "DeviceClass")
+func validateDeviceClass(t *testing.T, deviceClass *resourcev1.DeviceClass) {
+	t.Helper()
 	if deviceClass.Name != "draforge-e2e-gpu" {
 		t.Fatalf("unexpected DeviceClass name %q", deviceClass.Name)
 	}
+}
 
-	claim := typedObject[resourcev1.ResourceClaim](t, byKind, "ResourceClaim")
+func validateResourceClaim(t *testing.T, claim *resourcev1.ResourceClaim, deviceClassName string) {
+	t.Helper()
 	if claim.Namespace != "draforge-e2e" || claim.Name != "e2e-gpu-claim" {
 		t.Fatalf("unexpected claim identity %s/%s", claim.Namespace, claim.Name)
 	}
@@ -110,12 +158,17 @@ func TestInstallResourceFixturesUseTypedDRAIdentity(t *testing.T) {
 		t.Fatalf("claim must contain one exact device request: %#v", claim.Spec.Devices.Requests)
 	}
 	exact := claim.Spec.Devices.Requests[0].Exactly
-	if exact.DeviceClassName != deviceClass.Name || exact.Count != 1 {
-		t.Fatalf("claim request must select one %q device: %#v", deviceClass.Name, exact)
+	if exact.DeviceClassName != deviceClassName || exact.Count != 1 {
+		t.Fatalf("claim request must select one %q device: %#v", deviceClassName, exact)
 	}
+}
 
-	pool := byKind["SimulatedDevicePool"]
-	if pool.GetNamespace() != claim.Namespace || pool.GetName() != "e2e-gpu-pool" {
+func validateSimulatorPool(t *testing.T, pool *unstructured.Unstructured, namespace string) {
+	t.Helper()
+	if pool == nil {
+		t.Fatal("fixture is missing SimulatedDevicePool")
+	}
+	if pool.GetNamespace() != namespace || pool.GetName() != "e2e-gpu-pool" {
 		t.Fatalf("unexpected simulator pool identity %s/%s", pool.GetNamespace(), pool.GetName())
 	}
 	driver, found, err := unstructured.NestedString(pool.Object, "spec", "driverName")
@@ -124,11 +177,8 @@ func TestInstallResourceFixturesUseTypedDRAIdentity(t *testing.T) {
 	}
 }
 
-func TestClaimConsumerFixtureReferencesExistingClaim(t *testing.T) {
-	objects := decodeDocuments(t, readFixture(t, "workload.yaml"))
-	byKind := indexByKind(t, objects)
-	pod := typedObject[corev1.Pod](t, byKind, "Pod")
-
+func validateConsumerIdentity(t *testing.T, pod *corev1.Pod) {
+	t.Helper()
 	if pod.Namespace != "draforge-e2e" || pod.Name != "e2e-claim-consumer" {
 		t.Fatalf("unexpected consumer Pod identity %s/%s", pod.Namespace, pod.Name)
 	}
@@ -138,22 +188,31 @@ func TestClaimConsumerFixtureReferencesExistingClaim(t *testing.T) {
 	if got := *pod.Spec.ResourceClaims[0].ResourceClaimName; got != "e2e-gpu-claim" {
 		t.Fatalf("consumer Pod references claim %q", got)
 	}
+}
+
+func validateConsumerPodSecurity(t *testing.T, pod *corev1.Pod) {
+	t.Helper()
 	if pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken {
 		t.Fatal("consumer Pod must disable service-account token automount")
 	}
-	if pod.Spec.SecurityContext == nil || pod.Spec.SecurityContext.RunAsNonRoot == nil || !*pod.Spec.SecurityContext.RunAsNonRoot {
+	securityContext := pod.Spec.SecurityContext
+	if securityContext == nil || securityContext.RunAsNonRoot == nil || !*securityContext.RunAsNonRoot {
 		t.Fatal("consumer Pod must enforce runAsNonRoot")
 	}
-	if pod.Spec.SecurityContext.RunAsUser == nil || *pod.Spec.SecurityContext.RunAsUser != 1000 {
+	if securityContext.RunAsUser == nil || *securityContext.RunAsUser != 1000 {
 		t.Fatal("consumer Pod must use the chart-compatible numeric UID 1000")
 	}
+}
+
+func validateConsumerContainer(t *testing.T, pod *corev1.Pod) {
+	t.Helper()
 	if len(pod.Spec.Containers) != 1 || len(pod.Spec.Containers[0].Resources.Claims) != 1 {
 		t.Fatalf("consumer container must request the Pod claim: %#v", pod.Spec.Containers)
 	}
-	if got := pod.Spec.Containers[0].Resources.Claims[0].Name; got != pod.Spec.ResourceClaims[0].Name {
+	container := pod.Spec.Containers[0]
+	if got := container.Resources.Claims[0].Name; got != pod.Spec.ResourceClaims[0].Name {
 		t.Fatalf("container claim %q does not match Pod claim %q", got, pod.Spec.ResourceClaims[0].Name)
 	}
-	container := pod.Spec.Containers[0]
 	if container.SecurityContext == nil || container.SecurityContext.ReadOnlyRootFilesystem == nil || !*container.SecurityContext.ReadOnlyRootFilesystem {
 		t.Fatal("consumer container must use a read-only root filesystem")
 	}
@@ -162,12 +221,8 @@ func TestClaimConsumerFixtureReferencesExistingClaim(t *testing.T) {
 	}
 }
 
-func TestNetworkPolicyProbeFixturesAreIsolatedAndHardened(t *testing.T) {
-	objects := decodeDocuments(t, readFixture(t, "network-policy-probes.yaml"))
-	if len(objects) != 2 {
-		t.Fatalf("expected two NetworkPolicy probe Pods, got %d", len(objects))
-	}
-
+func decodeProbePods(t *testing.T, objects []*unstructured.Unstructured) map[string]corev1.Pod {
+	t.Helper()
 	pods := make(map[string]corev1.Pod, len(objects))
 	for _, object := range objects {
 		if object.GetKind() != "Pod" {
@@ -179,55 +234,59 @@ func TestNetworkPolicyProbeFixturesAreIsolatedAndHardened(t *testing.T) {
 		}
 		pods[pod.Name] = pod
 	}
+	return pods
+}
 
-	allowed, allowedFound := pods["network-policy-allowed"]
-	denied, deniedFound := pods["network-policy-denied"]
-	if !allowedFound || !deniedFound {
-		t.Fatalf("missing allowed or denied NetworkPolicy probe: %#v", pods)
+func requiredProbePod(t *testing.T, pods map[string]corev1.Pod, name string) corev1.Pod {
+	t.Helper()
+	pod, found := pods[name]
+	if !found {
+		t.Fatalf("missing NetworkPolicy probe %q", name)
 	}
-	if allowed.Namespace != "draforge-system" || allowed.Labels["draforge.oaslananka/metrics-client"] != "true" {
-		t.Fatalf("allowed probe must match the controller metrics policy: %#v", allowed.ObjectMeta)
-	}
-	if denied.Namespace != "draforge-e2e" {
-		t.Fatalf("denied probe must originate outside the system namespace, got %q", denied.Namespace)
-	}
-	if _, exists := denied.Labels["draforge.oaslananka/metrics-client"]; exists {
-		t.Fatal("denied probe must not carry the controller metrics client label")
-	}
+	return pod
+}
 
-	for _, pod := range []corev1.Pod{allowed, denied} {
-		if pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken {
-			t.Fatalf("probe %s must disable service-account token automount", pod.Name)
-		}
-		if pod.Spec.SecurityContext == nil || pod.Spec.SecurityContext.RunAsNonRoot == nil || !*pod.Spec.SecurityContext.RunAsNonRoot {
-			t.Fatalf("probe %s must enforce runAsNonRoot", pod.Name)
-		}
-		if pod.Spec.SecurityContext.RunAsUser == nil || *pod.Spec.SecurityContext.RunAsUser != 1000 {
-			t.Fatalf("probe %s must use the chart-compatible numeric UID 1000", pod.Name)
-		}
-		if len(pod.Spec.Containers) != 1 {
-			t.Fatalf("probe %s must contain one container", pod.Name)
-		}
-		container := pod.Spec.Containers[0]
-		if container.ImagePullPolicy != corev1.PullNever {
-			t.Fatalf("probe %s must use a preloaded local image", pod.Name)
-		}
-		if container.SecurityContext == nil || container.SecurityContext.ReadOnlyRootFilesystem == nil || !*container.SecurityContext.ReadOnlyRootFilesystem {
-			t.Fatalf("probe %s must use a read-only root filesystem", pod.Name)
-		}
-		if container.Resources.Requests.StorageEphemeral().IsZero() || container.Resources.Limits.StorageEphemeral().IsZero() {
-			t.Fatalf("probe %s must bound ephemeral storage", pod.Name)
-		}
+func validateAllowedProbe(t *testing.T, pod corev1.Pod) {
+	t.Helper()
+	if pod.Namespace != "draforge-system" || pod.Labels["draforge.oaslananka/metrics-client"] != "true" {
+		t.Fatalf("allowed probe must match the controller metrics policy: %#v", pod.ObjectMeta)
 	}
 }
 
-func validateMatrixEntry(t *testing.T, entry matrixEntry) {
+func validateDeniedProbe(t *testing.T, pod corev1.Pod) {
 	t.Helper()
-	if !strings.HasPrefix(entry.Kubernetes, "v1.") {
-		t.Fatalf("invalid Kubernetes version %q", entry.Kubernetes)
+	if pod.Namespace != "draforge-e2e" {
+		t.Fatalf("denied probe must originate outside the system namespace, got %q", pod.Namespace)
 	}
-	if !strings.Contains(entry.NodeImage, entry.Kubernetes+"@sha256:") {
-		t.Fatalf("node image %q must be digest-pinned to Kubernetes %s", entry.NodeImage, entry.Kubernetes)
+	if _, exists := pod.Labels["draforge.oaslananka/metrics-client"]; exists {
+		t.Fatal("denied probe must not carry the controller metrics client label")
+	}
+}
+
+func validateProbeHardening(t *testing.T, pod corev1.Pod) {
+	t.Helper()
+	if pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken {
+		t.Fatalf("probe %s must disable service-account token automount", pod.Name)
+	}
+	securityContext := pod.Spec.SecurityContext
+	if securityContext == nil || securityContext.RunAsNonRoot == nil || !*securityContext.RunAsNonRoot {
+		t.Fatalf("probe %s must enforce runAsNonRoot", pod.Name)
+	}
+	if securityContext.RunAsUser == nil || *securityContext.RunAsUser != 1000 {
+		t.Fatalf("probe %s must use the chart-compatible numeric UID 1000", pod.Name)
+	}
+	if len(pod.Spec.Containers) != 1 {
+		t.Fatalf("probe %s must contain one container", pod.Name)
+	}
+	container := pod.Spec.Containers[0]
+	if container.ImagePullPolicy != corev1.PullNever {
+		t.Fatalf("probe %s must use a preloaded local image", pod.Name)
+	}
+	if container.SecurityContext == nil || container.SecurityContext.ReadOnlyRootFilesystem == nil || !*container.SecurityContext.ReadOnlyRootFilesystem {
+		t.Fatalf("probe %s must use a read-only root filesystem", pod.Name)
+	}
+	if container.Resources.Requests.StorageEphemeral().IsZero() || container.Resources.Limits.StorageEphemeral().IsZero() {
+		t.Fatalf("probe %s must bound ephemeral storage", pod.Name)
 	}
 }
 

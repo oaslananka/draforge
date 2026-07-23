@@ -13,9 +13,11 @@ ARTIFACT_DIR=${DRAFORGE_INSTALL_E2E_ARTIFACT_DIR:-$ROOT_DIR/artifacts/install-e2
 mkdir -p "$ARTIFACT_DIR"
 
 capture() {
-  local file=$1
+  local file
+  file=$1
   shift
   "$@" > "$ARTIFACT_DIR/$file" 2>&1 || true
+  return 0
 }
 
 capture helm-manifest.yaml helm get manifest "$RELEASE_NAME" -n "$SYSTEM_NAMESPACE"

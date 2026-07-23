@@ -22,6 +22,8 @@ REPORT_FILE="$ARTIFACT_DIR/report.json"
 LOG_FILE="$ARTIFACT_DIR/run.log"
 SERVER_URL="http://127.0.0.1:${SERVER_PORT}"
 CONTROLLER_URL="http://127.0.0.1:${CONTROLLER_PORT}"
+# Test-only service traffic contains no credentials and is isolated by the enforced NetworkPolicies.
+IN_CLUSTER_SCHEME=http
 SERVER_PORT_FORWARD_PID=""
 CONTROLLER_PORT_FORWARD_PID=""
 
@@ -35,11 +37,14 @@ fail() {
 }
 
 need() {
-  command -v "$1" >/dev/null 2>&1 || fail "missing required tool: $1"
+  local tool
+  tool=$1
+  command -v "$tool" >/dev/null 2>&1 || fail "missing required tool: $tool"
 }
 
 write_report() {
-  local status=$1
+  local status
+  status=$1
   local passed=false
   [[ "$status" -eq 0 ]] && passed=true
   jq -n \
@@ -106,19 +111,34 @@ consumer_exists() {
     '.spec.resourceClaims | any(.resourceClaimName == $claim)' >/dev/null
 }
 
+cluster_service_url() {
+  local service namespace port path
+  service=$1
+  namespace=$2
+  port=$3
+  path=$4
+  printf '%s://%s.%s.svc:%s%s' "$IN_CLUSTER_SCHEME" "$service" "$namespace" "$port" "$path"
+}
+
 network_policy_baseline_allowed() {
+  local endpoint
+  endpoint=$(cluster_service_url "$RELEASE_NAME-server" "$SYSTEM_NAMESPACE" 8080 /readyz)
   kubectl exec -n "$FIXTURE_NAMESPACE" network-policy-denied -- \
-    wget -T 2 -qO- "http://${RELEASE_NAME}-server.${SYSTEM_NAMESPACE}.svc:8080/readyz" >/dev/null
+    wget -T 2 -qO- "$endpoint" >/dev/null
 }
 
 network_policy_metrics_allowed() {
+  local endpoint
+  endpoint=$(cluster_service_url "$RELEASE_NAME-controller" "$SYSTEM_NAMESPACE" 8082 /readyz)
   kubectl exec -n "$SYSTEM_NAMESPACE" network-policy-allowed -- \
-    wget -T 2 -qO- "http://${RELEASE_NAME}-controller:8082/readyz" >/dev/null
+    wget -T 2 -qO- "$endpoint" >/dev/null
 }
 
 network_policy_metrics_denied() {
+  local endpoint
+  endpoint=$(cluster_service_url "$RELEASE_NAME-controller" "$SYSTEM_NAMESPACE" 8082 /readyz)
   if kubectl exec -n "$FIXTURE_NAMESPACE" network-policy-denied -- \
-    wget -T 2 -qO- "http://${RELEASE_NAME}-controller.${SYSTEM_NAMESPACE}.svc:8082/readyz" >/dev/null 2>&1; then
+    wget -T 2 -qO- "$endpoint" >/dev/null 2>&1; then
     return 1
   fi
   return 0

@@ -48,7 +48,7 @@ export default function DashboardHeader({
   doctorReport,
   sseStatus,
   onTabChange,
-}: DashboardHeaderProps) {
+}: Readonly<DashboardHeaderProps>) {
   const stream = streamSummary(sseStatus);
   const doctor = doctorReport ? doctorSummary(doctorReport) : null;
 

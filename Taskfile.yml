@@ -101,6 +101,11 @@ tasks:
     cmds:
       - scripts/verify-workload-security.sh
 
+  security:verify-frontend-dependencies:
+    desc: Verify frontend peer, local adapter, and Docker install policy
+    cmds:
+      - scripts/verify-frontend-dependency-policy.sh
+
   helm:lint:
     desc: Lint Helm charts
     cmds:

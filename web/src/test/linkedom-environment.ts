@@ -99,19 +99,12 @@ class TestRange {
   }
 
   selectNodeContents(node: Node) {
-    const length = node.nodeType === 3
-      ? node.textContent?.length ?? 0
-      : node.childNodes.length;
+    let length = node.childNodes.length;
+    if (node.nodeType === 3) {
+      length = node.textContent?.length ?? 0;
+    }
     this.setStart(node, 0);
     this.setEnd(node, length);
-  }
-
-  collapse(toStart = false) {
-    if (toStart) {
-      this.setEnd(this.startContainer, this.startOffset);
-    } else {
-      this.setStart(this.endContainer, this.endOffset);
-    }
   }
 
   cloneRange() {
@@ -127,9 +120,18 @@ class TestRange {
     return 0;
   }
 
-  detach() {}
+  detach() {
+    this.setStart(this.document.body, 0);
+    this.setEnd(this.document.body, 0);
+  }
 
-  deleteContents() {}
+  deleteContents() {
+    if (this.startContainer === this.endContainer && this.startContainer.nodeType === 3) {
+      const text = this.startContainer.textContent ?? '';
+      this.startContainer.textContent = text.slice(0, this.startOffset) + text.slice(this.endOffset);
+    }
+    this.setEnd(this.startContainer, this.startOffset);
+  }
 
   extractContents() {
     return this.document.createDocumentFragment();
@@ -189,7 +191,8 @@ class TestSelection {
   }
 
   get type() {
-    return this.rangeCount === 0 ? 'None' : this.isCollapsed ? 'Caret' : 'Range';
+    if (this.rangeCount === 0) return 'None';
+    return this.isCollapsed ? 'Caret' : 'Range';
   }
 
   addRange(range: Range) {

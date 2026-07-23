@@ -32,10 +32,10 @@ export default function App() {
 
   if (data.initialLoading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '20px' }} role="status">
+      <output style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '20px' }}>
         <div className="spinner" />
         <h2 className="glow-text">Loading DRAForge Platform...</h2>
-      </div>
+      </output>
     );
   }
 

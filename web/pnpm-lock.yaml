@@ -6,6 +6,7 @@ settings:
 
 overrides:
   brace-expansion@<1.1.16: 1.1.16
+  cssom: link:./vendor/cssom
 
 importers:
 
@@ -60,6 +61,8 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(vite@6.4.3)
+
+  vendor/cssom: {}
 
 packages:
 
@@ -793,9 +796,6 @@ packages:
 
   css.escape@1.5.1:
     resolution: {integrity: sha512-YUifsXXuknHlUsmlgyY0PKzgPOr7/FjCePfHNt0jxm83wHZi44VDMQ7/fGNkjY3/jV1MC+1CmZbaHzugyeRtpg==}
-
-  cssom@0.5.0:
-    resolution: {integrity: sha512-iKuQcq+NdHqlAcwUY0o/HL69XQrUaQdMjmStJ8JFmUaiiQErlhrmuigkg/CU4E2J0IyUKUrMAgl36TvN67MqTw==}
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
@@ -2053,8 +2053,6 @@ snapshots:
 
   css.escape@1.5.1: {}
 
-  cssom@0.5.0: {}
-
   csstype@3.2.3: {}
 
   debug@4.4.3:
@@ -2319,7 +2317,7 @@ snapshots:
   linkedom@0.18.13:
     dependencies:
       css-select: 7.0.0
-      cssom: 0.5.0
+      cssom: link:vendor/cssom
       html-escaper: 3.0.3
       htmlparser2: 10.1.0
       uhyphen: 0.2.0

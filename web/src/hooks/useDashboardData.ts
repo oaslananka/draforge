@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import {
   fetchClaims,
   fetchDevices,
@@ -19,26 +20,26 @@ import type {
 export type DashboardSection = 'summary' | 'pools' | 'devices' | 'claims' | 'doctor';
 
 export interface DashboardLoadingState {
-  summary: boolean;
-  pools: boolean;
-  devices: boolean;
-  claims: boolean;
-  doctor: boolean;
+  readonly summary: boolean;
+  readonly pools: boolean;
+  readonly devices: boolean;
+  readonly claims: boolean;
+  readonly doctor: boolean;
 }
 
 export type DashboardErrorState = Partial<Record<DashboardSection, string>>;
 
 export interface DashboardDataState {
-  summary: Summary | null;
-  versionInfo: VersionInfo | null;
-  pools: DevicePool[];
-  devices: Device[];
-  claims: ResourceClaimInfo[];
-  doctorReport: DoctorReport | null;
-  loading: DashboardLoadingState;
-  errors: DashboardErrorState;
-  initialLoading: boolean;
-  globalError: string;
+  readonly summary: Summary | null;
+  readonly versionInfo: VersionInfo | null;
+  readonly pools: readonly DevicePool[];
+  readonly devices: readonly Device[];
+  readonly claims: readonly ResourceClaimInfo[];
+  readonly doctorReport: DoctorReport | null;
+  readonly loading: DashboardLoadingState;
+  readonly errors: DashboardErrorState;
+  readonly initialLoading: boolean;
+  readonly globalError: string;
 }
 
 const initialLoadingState: DashboardLoadingState = {
@@ -49,8 +50,67 @@ const initialLoadingState: DashboardLoadingState = {
   doctor: true,
 };
 
+type StateSetter<T> = Dispatch<SetStateAction<T>>;
+type ActiveCheck = () => boolean;
+
+interface SectionLoadOptions<T> {
+  readonly section: DashboardSection;
+  readonly request: () => Promise<T>;
+  readonly apply: (value: T) => void;
+  readonly fallback: string;
+  readonly isActive: ActiveCheck;
+  readonly setErrors: StateSetter<DashboardErrorState>;
+  readonly setLoading: StateSetter<DashboardLoadingState>;
+}
+
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function markSectionFinished(
+  section: DashboardSection,
+  setLoading: StateSetter<DashboardLoadingState>,
+) {
+  setLoading((current) => ({ ...current, [section]: false }));
+}
+
+function reportSectionError(
+  section: DashboardSection,
+  message: string,
+  setErrors: StateSetter<DashboardErrorState>,
+) {
+  setErrors((current) => ({ ...current, [section]: message }));
+}
+
+async function loadSection<T>(options: SectionLoadOptions<T>) {
+  try {
+    const value = await options.request();
+    if (options.isActive()) options.apply(value);
+  } catch (error: unknown) {
+    if (options.isActive()) {
+      reportSectionError(
+        options.section,
+        errorMessage(error, options.fallback),
+        options.setErrors,
+      );
+    }
+  } finally {
+    if (options.isActive()) {
+      markSectionFinished(options.section, options.setLoading);
+    }
+  }
+}
+
+async function loadVersion(
+  isActive: ActiveCheck,
+  apply: (value: VersionInfo) => void,
+) {
+  try {
+    const value = await fetchVersion();
+    if (isActive()) apply(value);
+  } catch {
+    // Build metadata is optional and has a stable dev fallback in the footer.
+  }
 }
 
 export default function useDashboardData(): DashboardDataState {
@@ -65,37 +125,16 @@ export default function useDashboardData(): DashboardDataState {
 
   useEffect(() => {
     let active = true;
-
-    const settle = <T,>(
-      section: DashboardSection,
-      request: Promise<T>,
-      apply: (value: T) => void,
-      fallback: string,
-    ) => request
-      .then((value) => {
-        if (active) apply(value);
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setErrors((current) => ({
-          ...current,
-          [section]: errorMessage(error, fallback),
-        }));
-      })
-      .finally(() => {
-        if (!active) return;
-        setLoading((current) => ({ ...current, [section]: false }));
-      });
+    const isActive = () => active;
+    const common = { isActive, setErrors, setLoading };
 
     void Promise.allSettled([
-      settle('summary', fetchSummary(), setSummary, 'Failed to load summary'),
-      fetchVersion().then((value) => {
-        if (active) setVersionInfo(value);
-      }).catch(() => undefined),
-      settle('pools', fetchPools(), setPools, 'Failed to load device pools'),
-      settle('devices', fetchDevices(), setDevices, 'Failed to load devices'),
-      settle('claims', fetchClaims(), setClaims, 'Failed to load ResourceClaims'),
-      settle('doctor', fetchDoctor(), setDoctorReport, 'Failed to load diagnostics'),
+      loadSection({ section: 'summary', request: fetchSummary, apply: setSummary, fallback: 'Failed to load summary', ...common }),
+      loadVersion(isActive, setVersionInfo),
+      loadSection({ section: 'pools', request: fetchPools, apply: setPools, fallback: 'Failed to load device pools', ...common }),
+      loadSection({ section: 'devices', request: fetchDevices, apply: setDevices, fallback: 'Failed to load devices', ...common }),
+      loadSection({ section: 'claims', request: fetchClaims, apply: setClaims, fallback: 'Failed to load ResourceClaims', ...common }),
+      loadSection({ section: 'doctor', request: fetchDoctor, apply: setDoctorReport, fallback: 'Failed to load diagnostics', ...common }),
     ]);
 
     return () => {

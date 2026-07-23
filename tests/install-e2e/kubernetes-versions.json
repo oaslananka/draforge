@@ -1,0 +1,27 @@
+{
+  "kindVersion": "v0.32.0",
+  "profiles": {
+    "pull-request": [
+      {
+        "kubernetes": "v1.35.5",
+        "nodeImage": "kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95"
+      }
+    ],
+    "full": [
+      {
+        "kubernetes": "v1.35.5",
+        "nodeImage": "kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95"
+      },
+      {
+        "kubernetes": "v1.36.1",
+        "nodeImage": "kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5"
+      }
+    ]
+  },
+  "networkPolicyProvider": {
+    "name": "calico",
+    "version": "v3.32.1",
+    "manifestUrl": "https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/calico.yaml",
+    "sha256": "a1df919d9721cf667accdc3e72848911b0cb25cfab7d2478ad0c996302c95744"
+  }
+}

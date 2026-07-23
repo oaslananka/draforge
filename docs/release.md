@@ -61,6 +61,20 @@ task release:verify
 
 ---
 
+## Required install E2E gate
+
+The tagged release workflow calls `.github/workflows/e2e-matrix.yml` with the `full` profile before GoReleaser starts. The full profile installs and verifies the complete chart on the Kubernetes versions pinned in `tests/install-e2e/kubernetes-versions.json`. The `goreleaser` job depends on this gate, so release candidates and final releases do not publish when any required cluster target fails.
+
+Run the same matrix locally before creating a tag:
+
+```bash
+task e2e:install-kind-full
+```
+
+Failure artifacts from GitHub Actions include rendered manifests, effective values, Kubernetes resources, events, component logs, API payloads, metrics, and SSE output.
+
+---
+
 ## Tagged release flow
 
 ### 1. Prepare the release

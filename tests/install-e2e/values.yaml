@@ -1,0 +1,34 @@
+global:
+  imageRegistry: docker.io
+
+server:
+  image:
+    repository: draforge-e2e/server
+    tag: local
+    pullPolicy: Never
+
+controller:
+  image:
+    repository: draforge-e2e/controller
+    tag: local
+    pullPolicy: Never
+  metrics:
+    networkPolicy:
+      enabled: true
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: draforge-system
+      podSelector:
+        matchLabels:
+          draforge.oaslananka/metrics-client: "true"
+
+nodePlugin:
+  image:
+    repository: draforge-e2e/sim-driver
+    tag: local
+    pullPolicy: Never
+  outputMode: demo
+
+networkPolicies:
+  enabled: true
+  allowAllEgress: false

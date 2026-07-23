@@ -137,6 +137,23 @@ tasks:
     cmds:
       - scripts/verify-sim-driver-cdi.sh
 
+  e2e:install-contract:
+    desc: Test install-level E2E orchestration without creating a cluster
+    cmds:
+      - '{{.BASH_BIN}} scripts/verify-install-e2e-policy.sh'
+      - '{{.BASH_BIN}} scripts/test-install-e2e-cni.sh'
+      - '{{.BASH_BIN}} scripts/test-install-e2e-harness.sh'
+
+  e2e:install-kind:
+    desc: Build, install, and verify the complete stack on the pull-request kind baseline
+    cmds:
+      - '{{.BASH_BIN}} scripts/kind-install-e2e.sh pull-request'
+
+  e2e:install-kind-full:
+    desc: Run the complete install E2E against each full compatibility target
+    cmds:
+      - '{{.BASH_BIN}} scripts/kind-install-e2e-matrix.sh full'
+
   infra:preflight:
     desc: Validate Terraform showcase tools and static configuration
     cmds:

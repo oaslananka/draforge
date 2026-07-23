@@ -45,11 +45,34 @@ jobs:
       - name: Compile tagged E2E package
         run: go test -tags=e2e ./tests/e2e/... -run '^$'
 
-      - name: Lint remote E2E shell scripts
-        run: shellcheck scripts/remote-e2e.sh scripts/run-remote-e2e-tests.sh scripts/test-remote-e2e-harness.sh
+      - name: Lint E2E shell scripts
+        run: |
+          shellcheck \
+            scripts/remote-e2e.sh \
+            scripts/run-remote-e2e-tests.sh \
+            scripts/test-remote-e2e-harness.sh \
+            scripts/e2e-matrix.sh \
+            scripts/install-e2e-cni.sh \
+            scripts/build-install-e2e-images.sh \
+            scripts/run-install-e2e.sh \
+            scripts/collect-install-e2e-artifacts.sh \
+            scripts/kind-install-e2e.sh \
+            scripts/kind-install-e2e-matrix.sh \
+            scripts/test-install-e2e-cni.sh \
+            scripts/test-install-e2e-harness.sh \
+            scripts/verify-install-e2e-policy.sh
 
       - name: Test remote E2E orchestration
         run: bash scripts/test-remote-e2e-harness.sh
+
+      - name: Verify install-level E2E policy
+        run: scripts/verify-install-e2e-policy.sh
+
+      - name: Test install-level E2E CNI installer
+        run: bash scripts/test-install-e2e-cni.sh
+
+      - name: Test install-level E2E orchestration
+        run: bash scripts/test-install-e2e-harness.sh
 
       - name: Run race detector with coverage
         run: go test -race -coverprofile=coverage.out ./...
@@ -111,6 +134,18 @@ jobs:
 
       - name: Helm template smoke test
         run: helm template draforge deploy/helm/draforge
+
+      - name: Helm template install E2E profile
+        run: |
+          helm template draforge deploy/helm/draforge \
+            --namespace draforge-system \
+            --values tests/install-e2e/values.yaml \
+            > /tmp/draforge-install-e2e.yaml
+          grep -Fq 'name: draforge-server-policy' /tmp/draforge-install-e2e.yaml
+          grep -Fq 'name: draforge-controller-policy' /tmp/draforge-install-e2e.yaml
+          grep -Fq 'docker.io/draforge-e2e/server:local' /tmp/draforge-install-e2e.yaml
+          grep -Fq 'docker.io/draforge-e2e/controller:local' /tmp/draforge-install-e2e.yaml
+          grep -Fq 'docker.io/draforge-e2e/sim-driver:local' /tmp/draforge-install-e2e.yaml
 
       - name: Lint chart and deployment contract scripts
         run: shellcheck scripts/verify-chart-images.sh scripts/test-chart-image-verifier.sh scripts/verify-controller-metrics-policy.sh scripts/verify-runtime-lifecycle.sh scripts/verify-dashboard-exposure.sh scripts/verify-sim-driver-cdi.sh scripts/verify-github-action-pins.sh scripts/verify-workload-security.sh scripts/verify-frontend-dependency-policy.sh scripts/remote-build.sh scripts/test-remote-build.sh

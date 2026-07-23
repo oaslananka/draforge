@@ -1,0 +1,8 @@
+.git
+artifacts
+bin
+charts
+coverage.out
+dist
+web/node_modules
+web/dist

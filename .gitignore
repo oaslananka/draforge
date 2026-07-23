@@ -24,6 +24,7 @@ web/node_modules/
 tfplan*
 *.sbom.json
 artifacts/remote-e2e*/
+artifacts/install-e2e*/
 dist/
 bin/
 *.exe

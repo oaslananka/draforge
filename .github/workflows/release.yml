@@ -10,7 +10,16 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  install-e2e:
+    name: Full install E2E gate
+    uses: ./.github/workflows/e2e-matrix.yml
+    with:
+      profile: full
+    permissions:
+      contents: read
+
   goreleaser:
+    needs: install-e2e
     name: Run GoReleaser & Signing
     if: ${{ github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops' }}
     runs-on: ubuntu-latest

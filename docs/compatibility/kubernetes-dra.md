@@ -1,8 +1,8 @@
 # Kubernetes DRA Compatibility
 
-> **Last updated:** 2026-06-24  
-> **Kubernetes reference:** v1.32 through v1.36  
-> **DRAForge version:** 0.1.0
+> **Last updated:** 2026-07-23
+> **Kubernetes reference:** v1.35 through v1.36
+> **DRAForge version:** 0.2.0
 
 ---
 
@@ -36,13 +36,12 @@ transition targets and must be validated per distribution.
 
 | Distribution | Version | Test status |
 | --- | --- | --- |
-| GitHub Actions / static CI | n/a | Helm template, web build, Go test through CI |
-| kind | v1.32+ | Automated CI matrix |
-| DOKS | v1.34+ | Manual showcase target |
-| v1.35+ conformant clusters | v1.35-v1.36 | Target for release-readiness E2E |
+| GitHub Actions / static CI | n/a | Go, web, Helm, Terraform, workflow, and E2E harness contracts |
+| kind pull-request gate | v1.35.5 | Complete chart install and scenario-to-dashboard verification on every pull request |
+| kind full gate | v1.35.5 and v1.36.1 | Weekly, manual, release-candidate, and final-release matrix |
+| DOKS | distribution-supported v1 API | Manual approved smoke target on an existing cluster |
 
-The repository now runs an automated CI E2E matrix testing core paths
-for supported Kubernetes versions via kind.
+`tests/install-e2e/kubernetes-versions.json` is the source of truth for the pinned kind and Kubernetes node-image matrix. The full install suite verifies the chart CRD, server, controller, sim-driver, Services, RBAC, NetworkPolicies, scenario, ResourceClaim allocation, consumer Pod association, API, explain output, metrics, readiness, graph, and SSE identity.
 
 
 ---
@@ -91,7 +90,7 @@ explicitly supports them.
 | CDI output | Partial | The simulator can produce CDI-oriented output, but Helm deployment modes must clearly separate demo and host-integrated operation |
 | Helm CRD packaging | Supported | The SimulatedDevicePool CRD is packaged under chart `crds/` for Helm install |
 | RBAC least privilege | Partial | Current chart still needs narrower controller permissions |
-| Real-cluster E2E coverage | Partial | Automated matrix tests run across v1.32-v1.36 in CI using kind |
+| Install-level E2E coverage | Supported | Reduced v1.35 gate on pull requests; full v1.35-v1.36 gate on schedule and releases |
 
 ---
 
@@ -268,7 +267,9 @@ true:
 - The doctor command must distinguish missing APIs from empty clusters.
 - The simulator and explain engine must clearly mark unsupported DRA features as
   unsupported rather than silently approximating them.
-- Real-cluster E2E tests cover v1.32+ clusters using kind in CI.
+- The reduced install-level kind gate must pass on every pull request.
+- The full v1.35-v1.36 install matrix must pass before release candidates or final releases publish artifacts.
+- API and SSE assertions must preserve the same namespace-qualified claim and complete allocation identity.
 
 ---
 

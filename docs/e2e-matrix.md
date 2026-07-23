@@ -1,38 +1,96 @@
-# End-to-End (E2E) Testing
+# End-to-End Testing
 
-This document outlines the strategy and workflows for End-to-End (E2E) testing of DRAForge across different Kubernetes environments.
+DRAForge has two distinct cluster test paths:
 
-## CI-Safe Local E2E Matrix
+1. **Install-level kind E2E** installs the complete Helm release and is required for pull requests, scheduled compatibility checks, and tagged releases.
+2. **Manual DOKS smoke E2E** verifies the tagged Go smoke package on an approved existing DigitalOcean Kubernetes cluster.
 
-We use GitHub Actions to run a matrix of tests across supported Kubernetes versions using `kind` (Kubernetes in Docker). This allows us to test real-cluster API interactions (like Dynamic Resource Allocation) without requiring cloud secrets or provisioning billable infrastructure.
+The kind path does not require cloud credentials or billable infrastructure.
 
-### Supported Kubernetes Versions
-The matrix tests against the following Kubernetes versions:
-- `v1.32.x`
-- `v1.33.x`
-- `v1.34.x`
-- `v1.35.x`
-- `v1.36.x`
+## Compatibility source of truth
 
-### Running the Local E2E Matrix Locally
-You can run the same tests locally using `kind`. Make sure the DRA feature gate is enabled.
+`tests/install-e2e/kubernetes-versions.json` defines the pinned kind version, Kubernetes node images, and two profiles:
+
+| Profile | Targets | Use |
+| --- | --- | --- |
+| `pull-request` | Kubernetes v1.35.5 | Reduced gate on every pull request |
+| `full` | Kubernetes v1.35.5 and v1.36.1 | Weekly schedule, manual full runs, release candidates, and final releases |
+
+The node images are digest-pinned. The same policy pins the NetworkPolicy provider, manifest URL, and SHA-256. Update the JSON policy and this document together when the supported Kubernetes baseline or CNI changes. `scripts/e2e-matrix.sh` converts the policy to the GitHub Actions matrix; workflow YAML must not duplicate the version list.
+
+## What the install-level suite verifies
+
+`.github/workflows/e2e-matrix.yml` creates a kind cluster with Dynamic Resource Allocation enabled and the default CNI disabled, installs the digest-verified Calico manifest from the compatibility policy, builds the local server, controller, and sim-driver images, loads them into kind, and runs `scripts/run-install-e2e.sh`. This ensures NetworkPolicy assertions execute on an enforcing data plane rather than merely checking that policy objects exist.
+
+The verifier:
+
+- installs the chart CRD and the complete Helm release;
+- waits for the server, controller, and node-plugin workloads to become ready;
+- installs a hash-verified Calico CNI and proves controller metrics NetworkPolicy allow/deny behavior;
+- checks positive and negative RBAC decisions for all three service accounts;
+- applies a namespace-scoped simulator pool, DeviceClass, ResourceClaim, and claim-consuming Pod;
+- waits for the controller to publish a ResourceSlice and allocate the claim;
+- confirms the discovery API retains namespace, driver, pool, device, node, and consumer Pod identity;
+- verifies summary, graph, explain, server metrics, controller metrics, readiness, and SSE output;
+- fails when a core component is missing, an API assertion is broken, or namespace-qualified API/SSE identity diverges.
+
+The deterministic contract suites run before the heavier kind job. `scripts/test-install-e2e-cni.sh` verifies the pinned CNI download, SHA-256 check, rollout waits, and fail-closed hash mismatch path. `scripts/test-install-e2e-harness.sh` exercises success, missing-component, broken-API, enforced NetworkPolicy allow/deny, and matrix-policy paths without creating a cluster.
+
+## Pull-request and release behavior
+
+Every pull request to `main` receives the reduced v1.35 install gate. A weekly schedule runs the full matrix. The release workflow calls the same reusable workflow with `profile: full`; the GoReleaser publishing job declares `needs: install-e2e`, so a release candidate or final release cannot publish after a failed or skipped required install test.
+
+## Running locally
+
+Required tools:
+
+- Docker with daemon access;
+- kind at the version declared in `tests/install-e2e/kubernetes-versions.json`;
+- kubectl, Helm, jq, curl, Go, Node.js, and pnpm.
+
+Run the fast orchestration contract:
+
 ```bash
-# Create a kind cluster with DRA enabled
-kind create cluster --image kindest/node:v1.35.0 --name draforge-e2e --config - <<KIND_CONFIG
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-featureGates:
-  DynamicResourceAllocation: true
-KIND_CONFIG
-
-task build
-kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
-DRAFORGE_E2E=1 go test -tags=e2e ./tests/e2e/ -v
+task e2e:install-contract
 ```
 
-## Manual Cloud E2E (DOKS)
+Run the pull-request baseline on kind:
 
-The manual `E2E Tests` workflow runs the tagged smoke package on an **existing** DOKS cluster. It does not create or destroy the cluster, node pools, VPC, or registry.
+```bash
+task e2e:install-kind
+# equivalent:
+scripts/kind-install-e2e.sh pull-request
+```
+
+Run every full-matrix target sequentially:
+
+```bash
+task e2e:install-kind-full
+# equivalent:
+scripts/kind-install-e2e-matrix.sh full
+```
+
+The local entry point deletes its kind cluster after the run. Preserve a failed cluster for investigation with:
+
+```bash
+DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 scripts/kind-install-e2e.sh pull-request
+```
+
+Artifacts are written under `artifacts/install-e2e/`. The directory contains the run report, API and SSE payloads, metrics, Helm manifests and values, Kubernetes resources, events, descriptions, and component logs.
+
+## Failure artifacts in GitHub Actions
+
+Failed matrix entries upload a seven-day artifact named `install-e2e-<kubernetes-version>-<run-id>`. Diagnostics are collected with `if: always()` before upload, including:
+
+- rendered Helm manifests and effective values;
+- server, controller, and node-plugin logs, including previous-container logs when available;
+- ResourceClaims, ResourceSlices, DeviceClasses, simulator resources, NetworkPolicies, and RBAC;
+- cluster events and Pod descriptions;
+- discovery, graph, explain, metrics, and SSE payloads produced before the failure.
+
+## Manual DOKS smoke E2E
+
+The manual `E2E Tests` workflow runs the tagged Go smoke package on an **existing** DOKS cluster. It does not create or destroy the cluster, node pools, VPC, or registry.
 
 ### Required secret and approvals
 
@@ -43,15 +101,15 @@ The manual `E2E Tests` workflow runs the tagged smoke package on an **existing**
 
 ### Cost impact
 
-The workflow reconciles the shared `draforge-ci` Namespace, ResourceQuota, and LimitRange, then creates one short-lived Job, ServiceAccount, read-only ClusterRole, and ClusterRoleBinding for the run. It does not add DigitalOcean infrastructure, but the existing DOKS worker nodes remain billable while the cluster exists. The shared namespace controls remain after cleanup and do not create separate DigitalOcean charges. Review the cost-control runbook before execution and destroy unused showcase infrastructure separately.
+The workflow reconciles the shared `draforge-ci` Namespace, ResourceQuota, and LimitRange, then creates one short-lived Job, ServiceAccount, read-only ClusterRole, and ClusterRoleBinding for the run. It does not create DigitalOcean infrastructure, but the existing DOKS worker nodes remain billable while the cluster exists. The shared namespace controls remain after cleanup and do not create separate DigitalOcean charges.
 
 ### Running the workflow
 
-1. Confirm the target cluster already exists and exposes the `resource.k8s.io` APIs required by the smoke test.
-2. Go to **GitHub Actions → E2E Tests → Run workflow**.
+1. Confirm the target cluster exists and serves the required `resource.k8s.io/v1` APIs.
+2. Open **GitHub Actions → E2E Tests → Run workflow**.
 3. Enter the exact confirmation phrase `run-e2e-doks`.
-4. Enter the existing cluster name and optionally a 7–40 character commit SHA.
-5. Approve the `e2e-doks` environment deployment.
+4. Enter the existing cluster name and, optionally, a 7–40 character commit SHA.
+5. Approve the protected `e2e-doks` environment deployment.
 
 The remote Job runs:
 
@@ -59,16 +117,6 @@ The remote Job runs:
 DRAFORGE_E2E=1 go test -count=1 -json -tags=e2e ./tests/e2e/...
 ```
 
-A run succeeds only when `TestSmoke` executes and passes. The harness fails on build-tag mistakes, `no packages to test`, zero executed tests, an all-skipped result, cluster connection failure, or a failed DRA API availability check.
+A run succeeds only when `TestSmoke` executes and passes. The harness rejects build-tag mistakes, `no packages to test`, zero executed tests, all-skipped output, cluster connection failure, and failed DRA API availability checks.
 
-Run-scoped Job and RBAC resources are deleted by both the script trap and the workflow cleanup job. Cleanup is attempted after success, failure, and cancellation. The shared `draforge-ci` Namespace, ResourceQuota, and LimitRange are intentionally retained for later remote jobs.
-
-## Log Collection
-
-During E2E testing, logs are collected for debugging purposes:
-1. The **E2E Matrix** workflow uploads cluster diagnostics when a matrix entry fails.
-2. The **Manual Cloud E2E** workflow always uploads a seven-day `remote-e2e-<run-id>` artifact containing the Job and Pod YAML, clone and runner logs, namespace events, and `go-test.json` when available.
-3. For local debugging, use standard `kubectl logs` commands:
-   ```bash
-   kubectl logs -n draforge-system -l app.kubernetes.io/name=draforge-controller
-   ```
+Run-scoped Job and RBAC resources are deleted by both the script trap and the workflow cleanup job. Cleanup is attempted after success, failure, and cancellation. The shared `draforge-ci` namespace controls are intentionally retained for later runs. Every run uploads a seven-day `remote-e2e-<run-id>` artifact containing Job and Pod YAML, clone and runner logs, namespace events, and `go-test.json` when available.

@@ -16,6 +16,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const claimRequestsFieldPath = ".spec.devices.requests"
+
 // evaluateCEL parses and evaluates simple CEL expressions against device attributes and capacities.
 func evaluateCEL(expression string, attributes map[string]string, capacities map[string]int64) (bool, error) {
 	if strings.TrimSpace(expression) == "" {
@@ -82,32 +84,31 @@ func matchesAnyRequestedClass(device model.Device, classes []*resourcev1.DeviceC
 	if noClassRequested {
 		return true, nil
 	}
-	if len(classes) == 0 {
-		return false, nil
-	}
 	var lastError error
 	for _, deviceClass := range classes {
-		matches := true
-		for _, selector := range deviceClass.Spec.Selectors {
-			if selector.CEL == nil {
-				continue
-			}
-			passed, err := evaluateCEL(selector.CEL.Expression, device.Attributes, device.Capacities)
-			if err != nil {
-				lastError = err
-				matches = false
-				break
-			}
-			if !passed {
-				matches = false
-				break
-			}
+		matches, err := matchesDeviceClass(device, deviceClass)
+		if err != nil {
+			lastError = err
+			continue
 		}
 		if matches {
 			return true, nil
 		}
 	}
 	return false, lastError
+}
+
+func matchesDeviceClass(device model.Device, deviceClass *resourcev1.DeviceClass) (bool, error) {
+	for _, selector := range deviceClass.Spec.Selectors {
+		if selector.CEL == nil {
+			continue
+		}
+		passed, err := evaluateCEL(selector.CEL.Expression, device.Attributes, device.Capacities)
+		if err != nil || !passed {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 func allocationMatchesDevice(allocation model.ClaimAllocation, device model.Device) bool {
@@ -201,7 +202,7 @@ func appendAdvancedFeatureReason(root *model.ReasonNode, claim *resourcev1.Resou
 		Message:    "Claim uses advanced v1.36 features (e.g. Tolerations, Capacity) which are only partially modeled.",
 		Confidence: "informational",
 		SourceType: "ResourceClaim",
-		FieldPath:  ".spec.devices.requests",
+		FieldPath:  claimRequestsFieldPath,
 	})
 }
 
@@ -238,9 +239,9 @@ func resolveRequestedClasses(ctx context.Context, clientset kubernetes.Interface
 		root.Children = append(root.Children, model.ReasonNode{
 			Message:    fmt.Sprintf("Claim requests DeviceClasses: %s", strings.Join(classNames, ", ")),
 			Confidence: "confirmed",
-			Evidence:   fmt.Sprintf("Preserved %d request alternatives from .spec.devices.requests.", len(classNames)),
+			Evidence:   fmt.Sprintf("Preserved %d request alternatives from %s.", len(classNames), claimRequestsFieldPath),
 			SourceType: "ResourceClaim",
-			FieldPath:  ".spec.devices.requests",
+			FieldPath:  claimRequestsFieldPath,
 		})
 	}
 
@@ -275,7 +276,7 @@ func appendMissingClassReason(root *model.ReasonNode, result *model.ExplainResul
 		Confidence: "confirmed",
 		Evidence:   "DeviceClass list query returned no match for this request alternative.",
 		SourceType: "DeviceClass",
-		FieldPath:  ".spec.devices.requests",
+		FieldPath:  claimRequestsFieldPath,
 	})
 	result.Remedy = append(result.Remedy, fmt.Sprintf("Create the missing DeviceClass '%s' in the cluster.", className))
 }

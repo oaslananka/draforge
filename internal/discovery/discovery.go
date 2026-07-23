@@ -240,47 +240,11 @@ func discoverSlices(ctx context.Context, clientset kubernetes.Interface) ([]mode
 
 	poolMap := make(map[string]*model.DevicePool)
 	devices := make([]model.Device, 0)
-	for i := range sliceList.Items {
-		slice := &sliceList.Items[i]
-		driverName := slice.Spec.Driver
-		nodeName := ""
-		if slice.Spec.NodeName != nil {
-			nodeName = *slice.Spec.NodeName
-		}
-		poolName := slice.Spec.Pool.Name
-		key := poolIdentity(driverName, poolName, nodeName)
-		health := slice.Labels["draforge.oaslananka/health"]
-		if health == "" {
-			health = "healthy"
-		}
-
-		pool, exists := poolMap[key]
-		if !exists {
-			pool = &model.DevicePool{
-				Name:        poolName,
-				DriverName:  driverName,
-				NodeName:    nodeName,
-				DeviceType:  "unknown",
-				Health:      health,
-				IsSynthetic: hasSyntheticLabel(slice.Labels),
-				Labels:      slice.Labels,
-			}
-			poolMap[key] = pool
-		} else {
-			pool.IsSynthetic = pool.IsSynthetic || hasSyntheticLabel(slice.Labels)
-			if health != "healthy" {
-				pool.Health = health
-			}
-		}
-
-		for _, specification := range slice.Spec.Devices {
-			device := mapDevice(slice, specification, driverName, poolName, nodeName, health)
-			devices = append(devices, device)
-			pool.DeviceCount++
-			if device.Type != "unknown" {
-				pool.DeviceType = device.Type
-			}
-		}
+	for index := range sliceList.Items {
+		slice := &sliceList.Items[index]
+		driverName, poolName, nodeName, health := sliceIdentity(slice)
+		pool := ensurePool(poolMap, slice, driverName, poolName, nodeName, health)
+		devices = append(devices, mapSliceDevices(slice, pool, driverName, poolName, nodeName, health)...)
 	}
 
 	pools := make([]model.DevicePool, 0, len(poolMap))
@@ -288,6 +252,55 @@ func discoverSlices(ctx context.Context, clientset kubernetes.Interface) ([]mode
 		pools = append(pools, *pool)
 	}
 	return pools, devices, true, nil
+}
+
+func sliceIdentity(slice *resourcev1.ResourceSlice) (driverName, poolName, nodeName, health string) {
+	driverName = slice.Spec.Driver
+	poolName = slice.Spec.Pool.Name
+	if slice.Spec.NodeName != nil {
+		nodeName = *slice.Spec.NodeName
+	}
+	health = slice.Labels["draforge.oaslananka/health"]
+	if health == "" {
+		health = "healthy"
+	}
+	return driverName, poolName, nodeName, health
+}
+
+func ensurePool(poolMap map[string]*model.DevicePool, slice *resourcev1.ResourceSlice, driverName, poolName, nodeName, health string) *model.DevicePool {
+	key := poolIdentity(driverName, poolName, nodeName)
+	pool, exists := poolMap[key]
+	if !exists {
+		pool = &model.DevicePool{
+			Name:        poolName,
+			DriverName:  driverName,
+			NodeName:    nodeName,
+			DeviceType:  "unknown",
+			Health:      health,
+			IsSynthetic: hasSyntheticLabel(slice.Labels),
+			Labels:      slice.Labels,
+		}
+		poolMap[key] = pool
+		return pool
+	}
+	pool.IsSynthetic = pool.IsSynthetic || hasSyntheticLabel(slice.Labels)
+	if health != "healthy" {
+		pool.Health = health
+	}
+	return pool
+}
+
+func mapSliceDevices(slice *resourcev1.ResourceSlice, pool *model.DevicePool, driverName, poolName, nodeName, health string) []model.Device {
+	devices := make([]model.Device, 0, len(slice.Spec.Devices))
+	for _, specification := range slice.Spec.Devices {
+		device := mapDevice(slice, specification, driverName, poolName, nodeName, health)
+		devices = append(devices, device)
+		pool.DeviceCount++
+		if device.Type != "unknown" {
+			pool.DeviceType = device.Type
+		}
+	}
+	return devices
 }
 
 func mapDevice(slice *resourcev1.ResourceSlice, specification resourcev1.Device, driverName, poolName, nodeName, health string) model.Device {

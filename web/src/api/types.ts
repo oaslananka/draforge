@@ -32,7 +32,7 @@ export interface ClaimRequestAlternative {
 
 export interface ClaimRequest {
   name: string;
-  mode: 'Exactly' | 'FirstAvailable' | 'Unknown' | string;
+  mode: 'Exactly' | 'FirstAvailable' | 'Unknown';
   alternatives: ClaimRequestAlternative[];
 }
 
@@ -52,13 +52,13 @@ export interface ResourceClaimInfo {
   allocations?: ClaimAllocation[];
   ownerPodName?: string;
   createdAt?: string;
-  /** @deprecated Use requests. */
+  /** Legacy compatibility projection; prefer requests. */
   deviceClassName?: string;
-  /** @deprecated Use allocations. */
+  /** Legacy compatibility projection; prefer allocations. */
   allocatedDevice?: string;
-  /** @deprecated Use allocations. */
+  /** Legacy compatibility projection; prefer allocations. */
   allocatedNode?: string;
-  /** @deprecated Use allocations. */
+  /** Legacy compatibility projection; prefer allocations. */
   allocatedDriver?: string;
 }
 

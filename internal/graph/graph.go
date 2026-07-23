@@ -17,6 +17,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const classNodePrefix = "class/"
+
 // GraphBuilder manages construction and formatting of the resource graph.
 // It uses internal dedup maps to guarantee deterministic, O(1) deduplicated output.
 type GraphBuilder struct {
@@ -181,7 +183,7 @@ func (gb *GraphBuilder) addDevices(devices []model.Device, driverFilter string) 
 
 func (gb *GraphBuilder) addClasses(classSet map[string]struct{}) {
 	for className := range classSet {
-		gb.addNode("class/"+className, "DeviceClass", className, map[string]interface{}{"status": "available"})
+		gb.addNode(classNodePrefix+className, "DeviceClass", className, map[string]interface{}{"status": "available"})
 	}
 }
 
@@ -215,9 +217,9 @@ func (gb *GraphBuilder) addClaim(claim model.ResourceClaimInfo, devices []model.
 func (gb *GraphBuilder) addClaimClasses(claimID string, classNames []string, classSet map[string]struct{}) {
 	for _, className := range classNames {
 		if _, exists := classSet[className]; !exists {
-			gb.addNode("class/"+className, "DeviceClass", className+" (MISSING)", map[string]interface{}{"status": "missing"})
+			gb.addNode(classNodePrefix+className, "DeviceClass", className+" (MISSING)", map[string]interface{}{"status": "missing"})
 		}
-		gb.addEdge(claimID, "class/"+className, "uses-class")
+		gb.addEdge(claimID, classNodePrefix+className, "uses-class")
 	}
 }
 

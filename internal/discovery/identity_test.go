@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/oaslananka/draforge/pkg/model"
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,7 +15,14 @@ import (
 )
 
 func TestDiscoverDRAPreservesAllRequestsAndAllocations(t *testing.T) {
-	claim := &resourcev1.ResourceClaim{
+	claims := discoverClaimsForTest(t, multiRequestClaim())
+	claim := claims[0]
+	assertRequestCollections(t, claim)
+	assertAllocationCollections(t, claim)
+}
+
+func multiRequestClaim() *resourcev1.ResourceClaim {
+	return &resourcev1.ResourceClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "multi", Namespace: "team-a"},
 		Spec: resourcev1.ResourceClaimSpec{Devices: resourcev1.DeviceClaim{Requests: []resourcev1.DeviceRequest{
 			{
@@ -41,53 +49,74 @@ func TestDiscoverDRAPreservesAllRequestsAndAllocations(t *testing.T) {
 			}},
 		}},
 	}
+}
 
-	client := fake.NewSimpleClientset(claim)
-	_, _, claims, err := DiscoverDRA(context.Background(), client)
+func discoverClaimsForTest(t *testing.T, claim *resourcev1.ResourceClaim) []model.ResourceClaimInfo {
+	t.Helper()
+	_, _, claims, err := DiscoverDRA(context.Background(), fake.NewSimpleClientset(claim))
 	if err != nil {
 		t.Fatalf("DiscoverDRA: %v", err)
 	}
 	if len(claims) != 1 {
 		t.Fatalf("claims = %d, want 1", len(claims))
 	}
-	got := claims[0]
-	if len(got.Requests) != 2 {
-		t.Fatalf("requests = %#v, want two top-level requests", got.Requests)
+	return claims
+}
+
+func assertRequestCollections(t *testing.T, claim model.ResourceClaimInfo) {
+	t.Helper()
+	if len(claim.Requests) != 2 {
+		t.Fatalf("requests = %#v, want two top-level requests", claim.Requests)
 	}
-	if got.Requests[0].Name != "gpu" || got.Requests[0].Mode != "Exactly" || len(got.Requests[0].Alternatives) != 1 {
-		t.Fatalf("exact request not preserved: %#v", got.Requests[0])
+	exact := claim.Requests[0]
+	if exact.Name != "gpu" || exact.Mode != "Exactly" || len(exact.Alternatives) != 1 {
+		t.Fatalf("exact request not preserved: %#v", exact)
 	}
-	if got.Requests[0].Alternatives[0].DeviceClassName != "gpu-class" || got.Requests[0].Alternatives[0].Count != 2 {
-		t.Fatalf("exact request details not preserved: %#v", got.Requests[0].Alternatives[0])
+	if exact.Alternatives[0].DeviceClassName != "gpu-class" || exact.Alternatives[0].Count != 2 {
+		t.Fatalf("exact request details not preserved: %#v", exact.Alternatives[0])
 	}
-	if got.Requests[1].Mode != "FirstAvailable" || len(got.Requests[1].Alternatives) != 2 {
-		t.Fatalf("firstAvailable request not preserved: %#v", got.Requests[1])
+	firstAvailable := claim.Requests[1]
+	if firstAvailable.Mode != "FirstAvailable" || len(firstAvailable.Alternatives) != 2 {
+		t.Fatalf("firstAvailable request not preserved: %#v", firstAvailable)
 	}
 	classes := []string{
-		got.Requests[0].Alternatives[0].DeviceClassName,
-		got.Requests[1].Alternatives[0].DeviceClassName,
-		got.Requests[1].Alternatives[1].DeviceClassName,
+		exact.Alternatives[0].DeviceClassName,
+		firstAvailable.Alternatives[0].DeviceClassName,
+		firstAvailable.Alternatives[1].DeviceClassName,
 	}
 	if !reflect.DeepEqual(classes, []string{"gpu-class", "fpga-class", "nic-class"}) {
 		t.Fatalf("classes = %v", classes)
 	}
-	if len(got.Allocations) != 3 {
-		t.Fatalf("allocations = %#v, want all three results", got.Allocations)
+}
+
+func assertAllocationCollections(t *testing.T, claim model.ResourceClaimInfo) {
+	t.Helper()
+	if len(claim.Allocations) != 3 {
+		t.Fatalf("allocations = %#v, want all three results", claim.Allocations)
 	}
-	if got.Allocations[2].Request != "accelerator/nic" || got.Allocations[2].DriverName != "driver-b.example" || got.Allocations[2].PoolName != "shared" || got.Allocations[2].DeviceName != "dev-0" {
-		t.Fatalf("allocation identity lost: %#v", got.Allocations[2])
+	allocation := claim.Allocations[2]
+	if allocation.Request != "accelerator/nic" || allocation.DriverName != "driver-b.example" || allocation.PoolName != "shared" || allocation.DeviceName != "dev-0" {
+		t.Fatalf("allocation identity lost: %#v", allocation)
 	}
-	for _, allocation := range got.Allocations {
-		if allocation.NodeName != "" {
-			t.Fatalf("missing node identity must remain unknown, got %#v", allocation)
+	for _, result := range claim.Allocations {
+		if result.NodeName != "" {
+			t.Fatalf("missing node identity must remain unknown, got %#v", result)
 		}
 	}
-	if got.AllocatedNode != "" {
-		t.Fatalf("legacy allocatedNode must not fall back to pool name: %q", got.AllocatedNode)
+	if claim.AllocatedNode != "" {
+		t.Fatalf("legacy allocatedNode must not fall back to pool name: %q", claim.AllocatedNode)
 	}
 }
 
 func TestDiscoverDRADistinguishesDriversPoolsAndClusterScopedDevices(t *testing.T) {
+	pools, devices := discoverIdentityFixtures(t)
+	assertIdentityCounts(t, pools, devices)
+	assertDeviceIdentities(t, devices)
+	assertPoolIdentities(t, pools)
+}
+
+func discoverIdentityFixtures(t *testing.T) ([]model.DevicePool, []model.Device) {
+	t.Helper()
 	node := "node-a"
 	objects := []runtime.Object{
 		resourceSlice("slice-a", "driver-a.example", "shared", &node, "dev-0", map[string]string{
@@ -97,42 +126,62 @@ func TestDiscoverDRADistinguishesDriversPoolsAndClusterScopedDevices(t *testing.
 		resourceSlice("slice-c", "driver-a.example", "shared", nil, "dev-cluster", nil),
 		resourceSlice("sim-looking-name", "ordinary.example", "sim-pool", &node, "dev-real", nil),
 	}
-
 	pools, devices, _, err := DiscoverDRA(context.Background(), fake.NewSimpleClientset(objects...))
 	if err != nil {
 		t.Fatalf("DiscoverDRA: %v", err)
 	}
+	return pools, devices
+}
+
+func assertIdentityCounts(t *testing.T, pools []model.DevicePool, devices []model.Device) {
+	t.Helper()
 	if len(pools) != 4 {
 		t.Fatalf("pools = %d, want four driver/pool/node identities: %#v", len(pools), pools)
 	}
 	if len(devices) != 4 {
 		t.Fatalf("devices = %d, want 4", len(devices))
 	}
+}
 
-	seenIDs := map[string]bool{}
+func assertDeviceIdentities(t *testing.T, devices []model.Device) {
+	t.Helper()
+	seenIDs := make(map[string]struct{}, len(devices))
 	for _, device := range devices {
-		if seenIDs[device.ID] {
+		if _, exists := seenIDs[device.ID]; exists {
 			t.Fatalf("duplicate device ID %q", device.ID)
 		}
-		seenIDs[device.ID] = true
-		if device.Name == "dev-cluster" && device.NodeName != "" {
-			t.Fatalf("cluster-scoped device node = %q, want unknown", device.NodeName)
-		}
-		if device.Name == "dev-real" && device.IsSynthetic {
-			t.Fatalf("name substring must not mark device synthetic: %#v", device)
-		}
+		seenIDs[device.ID] = struct{}{}
+		assertDeviceScopeAndOrigin(t, device)
 	}
+}
 
+func assertDeviceScopeAndOrigin(t *testing.T, device model.Device) {
+	t.Helper()
+	if device.Name == "dev-cluster" && device.NodeName != "" {
+		t.Fatalf("cluster-scoped device node = %q, want unknown", device.NodeName)
+	}
+	if device.Name == "dev-real" && device.IsSynthetic {
+		t.Fatalf("name substring must not mark device synthetic: %#v", device)
+	}
+}
+
+func assertPoolIdentities(t *testing.T, pools []model.DevicePool) {
+	t.Helper()
 	for _, pool := range pools {
-		if pool.Name == "shared" && pool.DriverName == "driver-a.example" && pool.NodeName == node && !pool.IsSynthetic {
-			t.Fatal("explicit simulator label was not preserved on pool")
-		}
-		if pool.Name == "sim-pool" && pool.IsSynthetic {
-			t.Fatalf("pool name substring must not mark pool synthetic: %#v", pool)
-		}
+		assertPoolOrigin(t, pool)
 		if pool.DeviceCount != 1 {
 			t.Fatalf("pool %#v counted devices from another driver/node", pool)
 		}
+	}
+}
+
+func assertPoolOrigin(t *testing.T, pool model.DevicePool) {
+	t.Helper()
+	if pool.Name == "shared" && pool.DriverName == "driver-a.example" && pool.NodeName == "node-a" && !pool.IsSynthetic {
+		t.Fatal("explicit simulator label was not preserved on pool")
+	}
+	if pool.Name == "sim-pool" && pool.IsSynthetic {
+		t.Fatalf("pool name substring must not mark pool synthetic: %#v", pool)
 	}
 }
 

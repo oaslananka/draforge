@@ -8,7 +8,7 @@ export function claimClassNames(claim: ResourceClaimInfo): string[] {
     }
   }
   if (classes.size === 0 && claim.deviceClassName) classes.add(claim.deviceClassName);
-  return [...classes].sort();
+  return [...classes].sort((left, right) => left.localeCompare(right));
 }
 
 export function effectiveClaimAllocations(claim: ResourceClaimInfo): ClaimAllocation[] {

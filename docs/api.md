@@ -25,6 +25,19 @@ All endpoints are prefixed with `/api/` (except for `/metrics`, `/healthz`, and 
 | `/healthz` | GET | Stable | Process liveness endpoint; independent from transient Kubernetes API outages. |
 | `/readyz` | GET | Stable | Bounded Kubernetes API dependency readiness with failure grace and credential-safe JSON reasons. |
 
+### ResourceClaim collection contract (v0.3)
+
+`GET /api/claims`, `discover -o json`, graph claim metadata, and SSE graph snapshots expose complete DRA request and allocation identity. The v0.3 payload adds these fields to each `ResourceClaimInfo` object:
+
+- `requests[]`: every top-level request, its mode (`Exactly` or `FirstAvailable`), and every alternative's name, `deviceClassName`, `allocationMode`, and count.
+- `allocations[]`: every allocation result with `request`, `driverName`, `poolName`, `deviceName`, and optional `nodeName`.
+
+Allocation identity is the tuple `<driver>/<pool>/<device>` plus a node only when the claim's `NodeSelector` identifies one exact node. Pool names are never treated as node names. Cluster-scoped or ambiguous allocations therefore omit `nodeName` instead of inventing one.
+
+The legacy `deviceClassName`, `allocatedDevice`, `allocatedDriver`, and `allocatedNode` fields remain as deprecated projections of the first request/allocation for pre-v0.3 clients. They may be removed in v1.0; new clients must consume the collections. This is an additive minor-version change under the API Change Policy below.
+
+`GET /api/devices` now derives `id` from the complete driver, node, pool, and device tuple using a deterministic length-encoded representation. Graph pool/device/allocation IDs use the same collision-safe principle. Clients must treat these IDs as opaque stable identifiers rather than parse their textual encoding. This replaces the former slice-name-based device ID and is the documented v0.3 identity migration.
+
 ### Health endpoint contract
 
 `/healthz` returns HTTP `200` while the process and HTTP handler are alive. It does not contact Kubernetes and should be used for liveness probes.

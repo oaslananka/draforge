@@ -59,28 +59,81 @@ func evaluateCEL(expression string, attributes map[string]string, capacities map
 	return false, fmt.Errorf("CEL expression did not evaluate to a boolean")
 }
 
+func formatAllocations(allocations []model.ClaimAllocation) string {
+	if len(allocations) == 0 {
+		return "none"
+	}
+	formatted := make([]string, 0, len(allocations))
+	for _, allocation := range allocations {
+		request := allocation.Request
+		if request == "" {
+			request = "unknown-request"
+		}
+		node := allocation.NodeName
+		if node == "" {
+			node = "unknown-node"
+		}
+		formatted = append(formatted, fmt.Sprintf("%s: %s/%s/%s on %s", request, allocation.DriverName, allocation.PoolName, allocation.DeviceName, node))
+	}
+	return strings.Join(formatted, "; ")
+}
+
+func matchesAnyRequestedClass(device model.Device, classes []*resourcev1.DeviceClass, noClassRequested bool) (bool, error) {
+	if noClassRequested {
+		return true, nil
+	}
+	if len(classes) == 0 {
+		return false, nil
+	}
+	var lastError error
+	for _, deviceClass := range classes {
+		matches := true
+		for _, selector := range deviceClass.Spec.Selectors {
+			if selector.CEL == nil {
+				continue
+			}
+			passed, err := evaluateCEL(selector.CEL.Expression, device.Attributes, device.Capacities)
+			if err != nil {
+				lastError = err
+				matches = false
+				break
+			}
+			if !passed {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return true, nil
+		}
+	}
+	return false, lastError
+}
+
+func allocationMatchesDevice(allocation model.ClaimAllocation, device model.Device) bool {
+	if allocation.DeviceName != device.Name {
+		return false
+	}
+	if allocation.DriverName != "" && allocation.DriverName != device.DriverName {
+		return false
+	}
+	if allocation.PoolName != "" && allocation.PoolName != device.PoolName {
+		return false
+	}
+	return allocation.NodeName == "" || allocation.NodeName == device.NodeName
+}
+
 // ExplainClaim analyzes a ResourceClaim and returns an explanation tree.
 func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace, claimName string) (*model.ExplainResult, error) {
-	// 1. Fetch live DRA resources
 	_, devices, claims, err := discovery.DiscoverDRA(ctx, clientset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover cluster state: %w", err)
 	}
-
-	// 2. Fetch actual ResourceClaim from API to check ReservedFor status
 	liveClaim, err := clientset.ResourceV1().ResourceClaims(namespace).Get(ctx, claimName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ResourceClaim %s/%s: %w", namespace, claimName, err)
 	}
-
-	var target *model.ResourceClaimInfo
-	for _, c := range claims {
-		if c.Name == claimName && c.Namespace == namespace {
-			target = &c
-			break
-		}
-	}
-
+	target := findClaim(claims, namespace, claimName)
 	if target == nil {
 		return nil, fmt.Errorf("ResourceClaim %s/%s not found", namespace, claimName)
 	}
@@ -91,231 +144,267 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 		Allocated:  target.Status == "Allocated",
 		Remedy:     []string{},
 	}
-
 	if result.Allocated {
-		var consumers []string
-		for _, ref := range liveClaim.Status.ReservedFor {
-			consumers = append(consumers, ref.Name)
-		}
-		consumerList := "none"
-		if len(consumers) > 0 {
-			consumerList = strings.Join(consumers, ", ")
-		}
-
-		result.ReasonTree = model.ReasonNode{
-			Message:    "ResourceClaim successfully allocated.",
-			Confidence: "confirmed",
-			Evidence:   fmt.Sprintf("Claim status is Allocated. Bound to device %s on node %s. Reserved for consumers: %s", target.AllocatedDevice, target.AllocatedNode, consumerList),
-			SourceType: "ResourceClaim",
-			FieldPath:  ".status.allocation",
-		}
+		result.ReasonTree = allocatedReason(*target, liveClaim)
 		return result, nil
 	}
+	result.ReasonTree = pendingReason(ctx, clientset, *target, liveClaim, devices, claims, result)
+	return result, nil
+}
 
-	// Explain Pending Claim
-	rootNode := model.ReasonNode{
+func findClaim(claims []model.ResourceClaimInfo, namespace, claimName string) *model.ResourceClaimInfo {
+	for index := range claims {
+		if claims[index].Name == claimName && claims[index].Namespace == namespace {
+			return &claims[index]
+		}
+	}
+	return nil
+}
+
+func allocatedReason(target model.ResourceClaimInfo, liveClaim *resourcev1.ResourceClaim) model.ReasonNode {
+	return model.ReasonNode{
+		Message:    "ResourceClaim successfully allocated.",
+		Confidence: "confirmed",
+		Evidence: fmt.Sprintf(
+			"Claim status is Allocated. Allocations: %s. Reserved for consumers: %s",
+			formatAllocations(target.EffectiveAllocations()),
+			formatConsumers(liveClaim.Status.ReservedFor),
+		),
+		SourceType: "ResourceClaim",
+		FieldPath:  ".status.allocation.devices.results",
+	}
+}
+
+func pendingReason(ctx context.Context, clientset kubernetes.Interface, target model.ResourceClaimInfo, liveClaim *resourcev1.ResourceClaim, devices []model.Device, claims []model.ResourceClaimInfo, result *model.ExplainResult) model.ReasonNode {
+	root := model.ReasonNode{
 		Message:    "Claim could not be allocated.",
 		Confidence: "confirmed",
 		Evidence:   "Claim status is Pending.",
 		SourceType: "ResourceClaim",
 		FieldPath:  ".status.allocation",
 	}
+	appendAdvancedFeatureReason(&root, liveClaim)
+	appendNodeSelectorReason(&root, liveClaim)
+	requestedClasses := resolveRequestedClasses(ctx, clientset, target, &root, result)
+	stats := evaluateCandidates(devices, claims, requestedClasses, len(target.RequestedClassNames()) == 0)
+	appendCandidateReason(&root, result, len(devices), stats)
+	appendEventReasons(ctx, clientset, liveClaim.Namespace, liveClaim.Name, &root)
+	appendConsumerReason(&root, result, liveClaim.Status.ReservedFor)
+	return root
+}
 
-	// Check for advanced features in the claim
-	hasAdvancedFeatures := false
-	for _, req := range liveClaim.Spec.Devices.Requests {
-		if req.Exactly != nil {
-			if len(req.Exactly.Tolerations) > 0 || req.Exactly.Capacity != nil {
-				hasAdvancedFeatures = true
-			}
+func appendAdvancedFeatureReason(root *model.ReasonNode, claim *resourcev1.ResourceClaim) {
+	if !usesAdvancedFeatures(claim) {
+		return
+	}
+	root.Children = append(root.Children, model.ReasonNode{
+		Message:    "Claim uses advanced v1.36 features (e.g. Tolerations, Capacity) which are only partially modeled.",
+		Confidence: "informational",
+		SourceType: "ResourceClaim",
+		FieldPath:  ".spec.devices.requests",
+	})
+}
+
+func usesAdvancedFeatures(claim *resourcev1.ResourceClaim) bool {
+	for _, request := range claim.Spec.Devices.Requests {
+		if request.Exactly != nil && (len(request.Exactly.Tolerations) > 0 || request.Exactly.Capacity != nil) {
+			return true
 		}
-		for _, subReq := range req.FirstAvailable {
-			if len(subReq.Tolerations) > 0 || subReq.Capacity != nil {
-				hasAdvancedFeatures = true
+		for _, alternative := range request.FirstAvailable {
+			if len(alternative.Tolerations) > 0 || alternative.Capacity != nil {
+				return true
 			}
 		}
 	}
-	if hasAdvancedFeatures {
-		rootNode.Children = append(rootNode.Children, model.ReasonNode{
-			Message:    "Claim uses advanced v1.36 features (e.g. Tolerations, Capacity) which are only partially modeled.",
-			Confidence: "informational",
+	return false
+}
+
+func appendNodeSelectorReason(root *model.ReasonNode, claim *resourcev1.ResourceClaim) {
+	if claim.Status.Allocation == nil || claim.Status.Allocation.NodeSelector == nil {
+		return
+	}
+	root.Children = append(root.Children, model.ReasonNode{
+		Message:    "Node selector computed, pending final allocation",
+		Confidence: "confirmed",
+		Evidence:   "Claim has an active node selector indicating preliminary scheduling.",
+		SourceType: "ResourceClaim",
+		FieldPath:  ".status.allocation.nodeSelector",
+	})
+}
+
+func resolveRequestedClasses(ctx context.Context, clientset kubernetes.Interface, target model.ResourceClaimInfo, root *model.ReasonNode, result *model.ExplainResult) []*resourcev1.DeviceClass {
+	classNames := target.RequestedClassNames()
+	if len(classNames) > 0 {
+		root.Children = append(root.Children, model.ReasonNode{
+			Message:    fmt.Sprintf("Claim requests DeviceClasses: %s", strings.Join(classNames, ", ")),
+			Confidence: "confirmed",
+			Evidence:   fmt.Sprintf("Preserved %d request alternatives from .spec.devices.requests.", len(classNames)),
 			SourceType: "ResourceClaim",
 			FieldPath:  ".spec.devices.requests",
 		})
 	}
 
-	if liveClaim.Status.Allocation != nil && liveClaim.Status.Allocation.NodeSelector != nil {
-		rootNode.Children = append(rootNode.Children, model.ReasonNode{
-			Message:    "Node selector computed, pending final allocation",
-			Confidence: "confirmed",
-			Evidence:   "Claim has an active node selector indicating preliminary scheduling.",
-			SourceType: "ResourceClaim",
-			FieldPath:  ".status.allocation.nodeSelector",
-		})
+	available := listDeviceClasses(ctx, clientset)
+	requested := make([]*resourcev1.DeviceClass, 0, len(classNames))
+	for _, className := range classNames {
+		if deviceClass, exists := available[className]; exists {
+			requested = append(requested, deviceClass)
+			continue
+		}
+		appendMissingClassReason(root, result, className)
 	}
+	return requested
+}
 
-	// Check DeviceClass existence
-	classExists := false
-	classNames, err := clientset.ResourceV1().DeviceClasses().List(ctx, metav1.ListOptions{})
-	var deviceClass *resourcev1.DeviceClass
-	if err == nil {
-		for _, cls := range classNames.Items {
-			if cls.Name == target.DeviceClassName {
-				classExists = true
-				deviceClass = &cls
-				break
+func listDeviceClasses(ctx context.Context, clientset kubernetes.Interface) map[string]*resourcev1.DeviceClass {
+	available := make(map[string]*resourcev1.DeviceClass)
+	classList, err := clientset.ResourceV1().DeviceClasses().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return available
+	}
+	for index := range classList.Items {
+		deviceClass := &classList.Items[index]
+		available[deviceClass.Name] = deviceClass
+	}
+	return available
+}
+
+func appendMissingClassReason(root *model.ReasonNode, result *model.ExplainResult, className string) {
+	root.Children = append(root.Children, model.ReasonNode{
+		Message:    fmt.Sprintf("Requested DeviceClass '%s' does not exist in the cluster.", className),
+		Confidence: "confirmed",
+		Evidence:   "DeviceClass list query returned no match for this request alternative.",
+		SourceType: "DeviceClass",
+		FieldPath:  ".spec.devices.requests",
+	})
+	result.Remedy = append(result.Remedy, fmt.Sprintf("Create the missing DeviceClass '%s' in the cluster.", className))
+}
+
+type candidateStats struct {
+	selectorPassed    int
+	capacityMatched   int
+	unhealthy         int
+	selectorErrors    int
+	lastSelectorError error
+}
+
+func evaluateCandidates(devices []model.Device, claims []model.ResourceClaimInfo, requestedClasses []*resourcev1.DeviceClass, noClassRequested bool) candidateStats {
+	var stats candidateStats
+	for _, device := range devices {
+		passed, selectorErr := matchesAnyRequestedClass(device, requestedClasses, noClassRequested)
+		if selectorErr != nil {
+			stats.selectorErrors++
+			stats.lastSelectorError = selectorErr
+		}
+		if !passed {
+			continue
+		}
+		stats.selectorPassed++
+		if device.Status != "" && device.Status != "healthy" {
+			stats.unhealthy++
+			continue
+		}
+		if deviceAllocated(device, claims) {
+			continue
+		}
+		stats.capacityMatched++
+	}
+	return stats
+}
+
+func deviceAllocated(device model.Device, claims []model.ResourceClaimInfo) bool {
+	for _, claim := range claims {
+		if claim.Status != "Allocated" {
+			continue
+		}
+		for _, allocation := range claim.EffectiveAllocations() {
+			if allocationMatchesDevice(allocation, device) {
+				return true
 			}
 		}
 	}
+	return false
+}
 
-	if !classExists {
-		child := model.ReasonNode{
-			Message:    fmt.Sprintf("Requested DeviceClass '%s' does not exist in the cluster.", target.DeviceClassName),
-			Confidence: "confirmed",
-			Evidence:   "DeviceClass list query returned no matches.",
-			SourceType: "DeviceClass",
-			FieldPath:  ".spec.deviceClassName",
-		}
-		rootNode.Children = append(rootNode.Children, child)
-		result.Remedy = append(result.Remedy, fmt.Sprintf("Create the missing DeviceClass '%s' in the cluster.", target.DeviceClassName))
-	}
-
-	// Evaluate candidate devices & drivers matching selectors
-	selectorPassed := 0
-	capacityMatched := 0
-	unhealthyCount := 0
-	selectorFailedErrorCount := 0
-	var lastSelectorError error
-
-	for _, d := range devices {
-		// Evaluated against selectors in DeviceClass
-		passedSelector := true
-		if deviceClass != nil {
-			for _, sel := range deviceClass.Spec.Selectors {
-				if sel.CEL != nil {
-					passed, evalErr := evaluateCEL(sel.CEL.Expression, d.Attributes, d.Capacities)
-					if evalErr != nil {
-						selectorFailedErrorCount++
-						lastSelectorError = evalErr
-						passedSelector = false
-						break
-					}
-					if !passed {
-						passedSelector = false
-						break
-					}
-				}
-			}
-		}
-
-		if !passedSelector {
-			continue
-		}
-		selectorPassed++
-
-		// Health Check
-		if d.Status != "" && d.Status != "healthy" {
-			unhealthyCount++
-			continue
-		}
-
-		// Capacity / Availability check (check if already allocated)
-		isAllocated := false
-		for _, c := range claims {
-			if c.Status == "Allocated" && c.AllocatedDevice == d.Name && c.AllocatedNode == d.NodeName {
-				isAllocated = true
-				break
-			}
-		}
-
-		if isAllocated {
-			continue
-		}
-		capacityMatched++
-	}
-
-	totalDevices := len(devices)
+func appendCandidateReason(root *model.ReasonNode, result *model.ExplainResult, totalDevices int, stats candidateStats) {
 	if totalDevices == 0 {
-		rootNode.Children = append(rootNode.Children, model.ReasonNode{
+		root.Children = append(root.Children, model.ReasonNode{
 			Message:    "No devices discovered in the cluster.",
 			Confidence: "confirmed",
 			Evidence:   "ResourceSlice query returned 0 devices.",
 			SourceType: "ResourceSlice",
 		})
 		result.Remedy = append(result.Remedy, "Register a DRA driver or deploy a SimulatedDevicePool scenario.")
-	} else {
-		summaryNode := model.ReasonNode{
-			Message:    fmt.Sprintf("%d candidate devices evaluated", totalDevices),
-			Confidence: "inferred",
-			Evidence:   fmt.Sprintf("Evaluated %d devices: %d rejected due to selector mismatch.", totalDevices, totalDevices-selectorPassed),
-			SourceType: "ResourceSlice",
-			Children:   []model.ReasonNode{},
-		}
-
-		falseSelectorCount := totalDevices - selectorPassed - selectorFailedErrorCount
-		if falseSelectorCount > 0 {
-			summaryNode.Children = append(summaryNode.Children, model.ReasonNode{
-				Message:    fmt.Sprintf("%d rejected because selector evaluated to false", falseSelectorCount),
-				Confidence: "confirmed",
-				SourceType: "DeviceClass",
-			})
-		}
-
-		if unhealthyCount > 0 {
-			summaryNode.Children = append(summaryNode.Children, model.ReasonNode{
-				Message:    fmt.Sprintf("%d rejected because device health status was unhealthy or degraded", unhealthyCount),
-				Confidence: "confirmed",
-				SourceType: "ResourceSlice",
-			})
-		}
-
-		unavailableCapacityCount := selectorPassed - unhealthyCount - capacityMatched
-		if unavailableCapacityCount > 0 {
-			summaryNode.Children = append(summaryNode.Children, model.ReasonNode{
-				Message:    fmt.Sprintf("%d rejected because requested capacity (already allocated) was unavailable", unavailableCapacityCount),
-				Confidence: "inferred",
-				SourceType: "ResourceSlice",
-			})
-		}
-
-		if selectorFailedErrorCount > 0 {
-			summaryNode.Children = append(summaryNode.Children, model.ReasonNode{
-				Message:    fmt.Sprintf("%d rejected because selector expression failed or was unsupported", selectorFailedErrorCount),
-				Confidence: "confirmed",
-				Evidence:   lastSelectorError.Error(),
-				SourceType: "DeviceClass",
-			})
-		}
-
-		rootNode.Children = append(rootNode.Children, summaryNode)
-
-		if unhealthyCount > 0 {
-			result.Remedy = append(result.Remedy, "Inspect and resolve health/degradation states for the unhealthy simulated devices.")
-		}
-		if capacityMatched == 0 && totalDevices > 0 && unhealthyCount == 0 {
-			result.Remedy = append(result.Remedy, "Release existing allocations or increase device counts in the pool.")
-		}
+		return
 	}
 
-	// 3. Incorporate cluster Events referencing the claim/pod
-	eventsList, err := clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
-	if err == nil {
-		for _, ev := range eventsList.Items {
-			if ev.InvolvedObject.Name == claimName && ev.InvolvedObject.Kind == "ResourceClaim" {
-				redactedMsg := redaction.RedactString(ev.Message)
-				rootNode.Children = append(rootNode.Children, model.ReasonNode{
-					Message:    fmt.Sprintf("Cluster Event: %s", ev.Reason),
-					Confidence: "probable",
-					Evidence:   fmt.Sprintf("[%s] %s", ev.Type, redactedMsg),
-					SourceType: "Event",
-				})
-			}
-		}
+	summary := candidateSummary(totalDevices, stats)
+	root.Children = append(root.Children, summary)
+	if stats.unhealthy > 0 {
+		result.Remedy = append(result.Remedy, "Inspect and resolve health/degradation states for the unhealthy simulated devices.")
 	}
+	if stats.capacityMatched == 0 && stats.unhealthy == 0 {
+		result.Remedy = append(result.Remedy, "Release existing allocations or increase device counts in the pool.")
+	}
+}
 
-	// 4. Check for delayed allocation (WaitForFirstConsumer)
-	if len(liveClaim.Status.ReservedFor) == 0 {
-		rootNode.Children = append(rootNode.Children, model.ReasonNode{
+func candidateSummary(totalDevices int, stats candidateStats) model.ReasonNode {
+	summary := model.ReasonNode{
+		Message:    fmt.Sprintf("%d candidate devices evaluated", totalDevices),
+		Confidence: "inferred",
+		Evidence:   fmt.Sprintf("Evaluated %d devices: %d rejected due to selector mismatch.", totalDevices, totalDevices-stats.selectorPassed),
+		SourceType: "ResourceSlice",
+		Children:   []model.ReasonNode{},
+	}
+	falseSelectors := totalDevices - stats.selectorPassed - stats.selectorErrors
+	if falseSelectors > 0 {
+		summary.Children = append(summary.Children, model.ReasonNode{
+			Message: fmt.Sprintf("%d rejected because selector evaluated to false", falseSelectors), Confidence: "confirmed", SourceType: "DeviceClass",
+		})
+	}
+	if stats.unhealthy > 0 {
+		summary.Children = append(summary.Children, model.ReasonNode{
+			Message: fmt.Sprintf("%d rejected because device health status was unhealthy or degraded", stats.unhealthy), Confidence: "confirmed", SourceType: "ResourceSlice",
+		})
+	}
+	unavailable := stats.selectorPassed - stats.unhealthy - stats.capacityMatched
+	if unavailable > 0 {
+		summary.Children = append(summary.Children, model.ReasonNode{
+			Message: fmt.Sprintf("%d rejected because requested capacity (already allocated) was unavailable", unavailable), Confidence: "inferred", SourceType: "ResourceSlice",
+		})
+	}
+	if stats.selectorErrors > 0 {
+		summary.Children = append(summary.Children, model.ReasonNode{
+			Message:    fmt.Sprintf("%d rejected because selector expression failed or was unsupported", stats.selectorErrors),
+			Confidence: "confirmed",
+			Evidence:   stats.lastSelectorError.Error(),
+			SourceType: "DeviceClass",
+		})
+	}
+	return summary
+}
+
+func appendEventReasons(ctx context.Context, clientset kubernetes.Interface, namespace, claimName string, root *model.ReasonNode) {
+	events, err := clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return
+	}
+	for _, event := range events.Items {
+		if event.InvolvedObject.Name != claimName || event.InvolvedObject.Kind != "ResourceClaim" {
+			continue
+		}
+		root.Children = append(root.Children, model.ReasonNode{
+			Message:    fmt.Sprintf("Cluster Event: %s", event.Reason),
+			Confidence: "probable",
+			Evidence:   fmt.Sprintf("[%s] %s", event.Type, redaction.RedactString(event.Message)),
+			SourceType: "Event",
+		})
+	}
+}
+
+func appendConsumerReason(root *model.ReasonNode, result *model.ExplainResult, references []resourcev1.ResourceClaimConsumerReference) {
+	if len(references) == 0 {
+		root.Children = append(root.Children, model.ReasonNode{
 			Message:    "Claim uses delayed allocation, waiting for first consumer pod.",
 			Confidence: "confirmed",
 			Evidence:   "status.reservedFor is empty, no active pod has claimed this resource.",
@@ -323,20 +412,24 @@ func ExplainClaim(ctx context.Context, clientset kubernetes.Interface, namespace
 			FieldPath:  ".status.reservedFor",
 		})
 		result.Remedy = append(result.Remedy, "Deploy a Pod referencing this ResourceClaim to trigger allocation.")
-	} else {
-		var consumers []string
-		for _, ref := range liveClaim.Status.ReservedFor {
-			consumers = append(consumers, ref.Name)
-		}
-		rootNode.Children = append(rootNode.Children, model.ReasonNode{
-			Message:    "Claim has active consumers but allocation is pending.",
-			Confidence: "confirmed",
-			Evidence:   fmt.Sprintf("Reserved for consumers: %s", strings.Join(consumers, ", ")),
-			SourceType: "ResourceClaim",
-			FieldPath:  ".status.reservedFor",
-		})
+		return
 	}
+	root.Children = append(root.Children, model.ReasonNode{
+		Message:    "Claim has active consumers but allocation is pending.",
+		Confidence: "confirmed",
+		Evidence:   fmt.Sprintf("Reserved for consumers: %s", formatConsumers(references)),
+		SourceType: "ResourceClaim",
+		FieldPath:  ".status.reservedFor",
+	})
+}
 
-	result.ReasonTree = rootNode
-	return result, nil
+func formatConsumers(references []resourcev1.ResourceClaimConsumerReference) string {
+	if len(references) == 0 {
+		return "none"
+	}
+	consumers := make([]string, 0, len(references))
+	for _, reference := range references {
+		consumers = append(consumers, reference.Name)
+	}
+	return strings.Join(consumers, ", ")
 }

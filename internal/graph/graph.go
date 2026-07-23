@@ -47,10 +47,6 @@ func graphID(kind string, parts ...string) string {
 	return strings.Join(encoded, "/")
 }
 
-func poolLookupKey(nodeName, poolName string) string {
-	return nodeName + "\x00" + poolName
-}
-
 func poolGraphID(driverName, nodeName, poolName string) string {
 	return graphID("pool", driverName, nodeName, poolName)
 }
@@ -59,8 +55,12 @@ func deviceGraphID(driverName, nodeName, poolName, deviceName string) string {
 	return graphID("device", driverName, nodeName, poolName, deviceName)
 }
 
-func missingDeviceGraphID(driverName, nodeName, deviceName string) string {
-	return graphID("device", "missing", driverName, nodeName, deviceName)
+func missingDeviceGraphID(driverName, nodeName, poolName, deviceName string) string {
+	return graphID("device", "missing", driverName, nodeName, poolName, deviceName)
+}
+
+func allocationGraphID(namespace, claimName string, index int, allocation model.ClaimAllocation) string {
+	return graphID("allocation", namespace, claimName, fmt.Sprintf("%d", index), allocation.Request, allocation.DriverName, allocation.NodeName, allocation.PoolName, allocation.DeviceName)
 }
 
 func mermaidID(raw string) string {
@@ -80,188 +80,216 @@ func mermaidID(raw string) string {
 
 // BuildGraph queries the cluster and builds nodes and edges representing the live relationships.
 func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Interface, namespaceFilter, driverFilter string) (*model.ResourceGraph, error) {
-	gb.nodes = []model.GraphNode{}
-	gb.edges = []model.GraphEdge{}
-	gb.nodeIDs = make(map[string]struct{})
-	gb.edgeIDs = make(map[string]struct{})
+	gb.reset()
 
-	// 1. Fetch live objects
 	pools, devices, claims, err := discovery.DiscoverDRA(ctx, clientset)
 	if err != nil {
 		return nil, err
 	}
+	classSet := discoverClassSet(ctx, clientset)
 
+	gb.addNamespaces(claims, namespaceFilter)
+	gb.addPools(pools, driverFilter)
+	gb.addDevices(devices, driverFilter)
+	gb.addClasses(classSet)
+	gb.addClaims(claims, devices, classSet, namespaceFilter, driverFilter)
+	gb.sort()
+
+	return &model.ResourceGraph{Nodes: gb.nodes, Edges: gb.edges}, nil
+}
+
+func (gb *GraphBuilder) reset() {
+	gb.nodes = []model.GraphNode{}
+	gb.edges = []model.GraphEdge{}
+	gb.nodeIDs = make(map[string]struct{})
+	gb.edgeIDs = make(map[string]struct{})
+}
+
+func discoverClassSet(ctx context.Context, clientset kubernetes.Interface) map[string]struct{} {
+	classSet := make(map[string]struct{})
 	classes, err := clientset.ResourceV1().DeviceClasses().List(ctx, metav1.ListOptions{})
-	var classList []string
-	if err == nil {
-		for _, c := range classes.Items {
-			classList = append(classList, c.Name)
-		}
+	if err != nil {
+		return classSet
 	}
-
-	// Pre-compute pool lookup maps for driver filtering and stable graph IDs.
-	poolDriverByLookup := make(map[string]string, len(pools))
-	poolIDByLookup := make(map[string]string, len(pools))
-	for _, p := range pools {
-		key := poolLookupKey(p.NodeName, p.Name)
-		poolDriverByLookup[key] = p.DriverName
-		poolIDByLookup[key] = poolGraphID(p.DriverName, p.NodeName, p.Name)
+	for _, deviceClass := range classes.Items {
+		classSet[deviceClass.Name] = struct{}{}
 	}
+	return classSet
+}
 
-	// 2. Add Namespace nodes (deduplicated)
-	nsMap := make(map[string]bool)
-	for _, c := range claims {
-		if namespaceFilter != "" && c.Namespace != namespaceFilter {
+func (gb *GraphBuilder) addNamespaces(claims []model.ResourceClaimInfo, namespaceFilter string) {
+	namespaces := make(map[string]struct{})
+	for _, claim := range claims {
+		if !matchesNamespace(claim, namespaceFilter) {
 			continue
 		}
-		nsMap[c.Namespace] = true
+		namespaces[claim.Namespace] = struct{}{}
 	}
-
-	for ns := range nsMap {
-		gb.addNode("ns/"+ns, "Namespace", ns, nil)
+	for namespace := range namespaces {
+		gb.addNode("ns/"+namespace, "Namespace", namespace, nil)
 	}
+}
 
-	// 3. Add Driver and Pool nodes
-	driverMap := make(map[string]bool)
-	for _, p := range pools {
-		if driverFilter != "" && p.DriverName != driverFilter {
+func (gb *GraphBuilder) addPools(pools []model.DevicePool, driverFilter string) {
+	drivers := make(map[string]struct{})
+	for _, pool := range pools {
+		if !matchesDriver(pool.DriverName, driverFilter) {
 			continue
 		}
-		driverMap[p.DriverName] = true
-
-		poolID := poolGraphID(p.DriverName, p.NodeName, p.Name)
-		gb.addNode(poolID, "ResourcePool", p.Name, map[string]interface{}{
-			"driver":    p.DriverName,
-			"node":      p.NodeName,
-			"synthetic": p.IsSynthetic,
-			"health":    p.Health,
+		drivers[pool.DriverName] = struct{}{}
+		poolID := poolGraphID(pool.DriverName, pool.NodeName, pool.Name)
+		gb.addNode(poolID, "ResourcePool", pool.Name, map[string]interface{}{
+			"driver":    pool.DriverName,
+			"node":      pool.NodeName,
+			"synthetic": pool.IsSynthetic,
+			"health":    pool.Health,
 		})
-
-		// Edge: Pool -> Node (if node-local)
-		if p.NodeName != "" {
-			gb.addEdge(poolID, "node/"+p.NodeName, "located-on")
-			gb.addNode("node/"+p.NodeName, "Node", p.NodeName, nil)
+		if pool.NodeName != "" {
+			gb.addNode("node/"+pool.NodeName, "Node", pool.NodeName, nil)
+			gb.addEdge(poolID, "node/"+pool.NodeName, "located-on")
 		}
-
-		// Edge: Pool -> Driver
-		gb.addEdge(poolID, "driver/"+p.DriverName, "managed-by")
+		gb.addEdge(poolID, "driver/"+pool.DriverName, "managed-by")
 	}
-
-	for drv := range driverMap {
-		gb.addNode("driver/"+drv, "Driver", drv, nil)
+	for driver := range drivers {
+		gb.addNode("driver/"+driver, "Driver", driver, nil)
 	}
+}
 
-	// 4. Add Device nodes
-	for _, d := range devices {
-		poolKey := poolLookupKey(d.NodeName, d.PoolName)
-		poolDriver := d.DriverName
-		if poolDriver == "" {
-			poolDriver = poolDriverByLookup[poolKey]
-		}
-
-		// Driver filter: use pool-driver relationship, not substring match.
-		if driverFilter != "" && poolDriver != driverFilter {
+func (gb *GraphBuilder) addDevices(devices []model.Device, driverFilter string) {
+	for _, device := range devices {
+		if !matchesDriver(device.DriverName, driverFilter) {
 			continue
 		}
-
-		devID := deviceGraphID(poolDriver, d.NodeName, d.PoolName, d.Name)
-		gb.addNode(devID, "Device", d.Name, map[string]interface{}{
-			"type":      d.Type,
-			"node":      d.NodeName,
-			"synthetic": d.IsSynthetic,
-			"status":    d.Status,
+		deviceID := deviceGraphID(device.DriverName, device.NodeName, device.PoolName, device.Name)
+		gb.addNode(deviceID, "Device", device.Name, map[string]interface{}{
+			"driver":    device.DriverName,
+			"pool":      device.PoolName,
+			"type":      device.Type,
+			"node":      device.NodeName,
+			"synthetic": device.IsSynthetic,
+			"status":    device.Status,
 		})
-
-		// Edge: Device -> Pool
-		if d.PoolName != "" {
-			poolNodeID := poolGraphID(poolDriver, d.NodeName, d.PoolName)
-			if poolDriver == "" {
-				poolNodeID = poolIDByLookup[poolKey]
-			}
-			if poolNodeID != "" {
-				gb.addEdge(devID, poolNodeID, "part-of-pool")
-			}
+		if device.PoolName != "" {
+			gb.addEdge(deviceID, poolGraphID(device.DriverName, device.NodeName, device.PoolName), "part-of-pool")
 		}
-
-		// Edge: Device -> Node
-		if d.NodeName != "" {
-			gb.addEdge(devID, "node/"+d.NodeName, "located-on")
-			gb.addNode("node/"+d.NodeName, "Node", d.NodeName, nil)
+		if device.NodeName != "" {
+			gb.addNode("node/"+device.NodeName, "Node", device.NodeName, nil)
+			gb.addEdge(deviceID, "node/"+device.NodeName, "located-on")
 		}
 	}
+}
 
-	// 5. Add DeviceClass nodes
-	for _, cName := range classList {
-		gb.addNode("class/"+cName, "DeviceClass", cName, nil)
+func (gb *GraphBuilder) addClasses(classSet map[string]struct{}) {
+	for className := range classSet {
+		gb.addNode("class/"+className, "DeviceClass", className, map[string]interface{}{"status": "available"})
 	}
+}
 
-	// 6. Add Claim and Pod nodes
-	for _, c := range claims {
-		if namespaceFilter != "" && c.Namespace != namespaceFilter {
+func (gb *GraphBuilder) addClaims(claims []model.ResourceClaimInfo, devices []model.Device, classSet map[string]struct{}, namespaceFilter, driverFilter string) {
+	for _, claim := range claims {
+		if !matchesNamespace(claim, namespaceFilter) {
 			continue
 		}
-
-		claimID := "claim/" + c.Namespace + "/" + c.Name
-		gb.addNode(claimID, "ResourceClaim", c.Name, map[string]interface{}{
-			"namespace": c.Namespace,
-			"status":    c.Status,
-			"class":     c.DeviceClassName,
-		})
-
-		// Edge: Claim -> Namespace
-		gb.addEdge(claimID, "ns/"+c.Namespace, "belongs-to")
-
-		// Edge: Claim -> DeviceClass
-		if c.DeviceClassName != "" {
-			gb.addEdge(claimID, "class/"+c.DeviceClassName, "uses-class")
-		}
-
-		// Edge: Claim -> Allocated Device
-		if c.AllocatedDevice != "" {
-			foundDevice := false
-			for _, dev := range devices {
-				poolKey := poolLookupKey(dev.NodeName, dev.PoolName)
-				poolDriver := dev.DriverName
-				if poolDriver == "" {
-					poolDriver = poolDriverByLookup[poolKey]
-				}
-				if dev.Name == c.AllocatedDevice && (c.AllocatedNode == "" || dev.NodeName == c.AllocatedNode) && (c.AllocatedDriver == "" || poolDriver == c.AllocatedDriver) {
-					gb.addEdge(claimID, deviceGraphID(poolDriver, dev.NodeName, dev.PoolName, dev.Name), "allocates")
-					foundDevice = true
-					break
-				}
-			}
-			// Missing edge check: if allocated device is missing, link to virtual ID
-			if !foundDevice {
-				missingDevID := missingDeviceGraphID(c.AllocatedDriver, c.AllocatedNode, c.AllocatedDevice)
-				gb.addNode(missingDevID, "Device", c.AllocatedDevice+" (MISSING)", map[string]interface{}{
-					"status": "missing",
-				})
-				gb.addEdge(claimID, missingDevID, "allocates-missing")
-			}
-		}
-
-		// Edge: Pod -> Claim
-		if c.OwnerPodName != "" {
-			podID := "pod/" + c.Namespace + "/" + c.OwnerPodName
-			gb.addNode(podID, "Pod", c.OwnerPodName, map[string]interface{}{
-				"namespace": c.Namespace,
-			})
-			gb.addEdge(podID, claimID, "claims")
-			gb.addEdge(podID, "ns/"+c.Namespace, "belongs-to")
-
-			// Edge: Pod -> Node (if allocated/running)
-			if c.AllocatedNode != "" {
-				gb.addEdge(podID, "node/"+c.AllocatedNode, "runs-on")
-				gb.addNode("node/"+c.AllocatedNode, "Node", c.AllocatedNode, nil)
-			}
-		}
+		gb.addClaim(claim, devices, classSet, driverFilter)
 	}
+}
 
-	// 7. Stable sort for deterministic output ordering.
-	sort.Slice(gb.nodes, func(i, j int) bool {
-		return gb.nodes[i].ID < gb.nodes[j].ID
+func (gb *GraphBuilder) addClaim(claim model.ResourceClaimInfo, devices []model.Device, classSet map[string]struct{}, driverFilter string) {
+	claimID := "claim/" + claim.Namespace + "/" + claim.Name
+	classNames := claim.RequestedClassNames()
+	gb.addNode(claimID, "ResourceClaim", claim.Name, map[string]interface{}{
+		"namespace":       claim.Namespace,
+		"status":          claim.Status,
+		"classes":         classNames,
+		"requestCount":    len(claim.Requests),
+		"allocationCount": len(claim.Allocations),
+		"requests":        claim.Requests,
+		"allocations":     claim.Allocations,
 	})
+	gb.addEdge(claimID, "ns/"+claim.Namespace, "belongs-to")
+	gb.addClaimClasses(claimID, classNames, classSet)
+	gb.addClaimAllocations(claimID, claim, devices, driverFilter)
+	gb.addClaimOwner(claimID, claim)
+}
+
+func (gb *GraphBuilder) addClaimClasses(claimID string, classNames []string, classSet map[string]struct{}) {
+	for _, className := range classNames {
+		if _, exists := classSet[className]; !exists {
+			gb.addNode("class/"+className, "DeviceClass", className+" (MISSING)", map[string]interface{}{"status": "missing"})
+		}
+		gb.addEdge(claimID, "class/"+className, "uses-class")
+	}
+}
+
+func (gb *GraphBuilder) addClaimAllocations(claimID string, claim model.ResourceClaimInfo, devices []model.Device, driverFilter string) {
+	for index, allocation := range claim.EffectiveAllocations() {
+		if !matchesDriver(allocation.DriverName, driverFilter) {
+			continue
+		}
+		gb.addClaimAllocation(claimID, claim, index, allocation, devices)
+	}
+}
+
+func (gb *GraphBuilder) addClaimAllocation(claimID string, claim model.ResourceClaimInfo, index int, allocation model.ClaimAllocation, devices []model.Device) {
+	allocationID := allocationGraphID(claim.Namespace, claim.Name, index, allocation)
+	label := allocation.Request
+	if label == "" {
+		label = allocation.DeviceName
+	}
+	gb.addNode(allocationID, "Allocation", label, map[string]interface{}{
+		"request": allocation.Request,
+		"driver":  allocation.DriverName,
+		"pool":    allocation.PoolName,
+		"device":  allocation.DeviceName,
+		"node":    allocation.NodeName,
+	})
+	gb.addEdge(claimID, allocationID, "has-allocation")
+
+	deviceID, found := allocatedDeviceID(devices, allocation)
+	if found {
+		gb.addEdge(allocationID, deviceID, "resolves-to")
+		gb.addEdge(claimID, deviceID, "allocates")
+		return
+	}
+	gb.addMissingAllocation(claimID, allocationID, allocation)
+}
+
+func (gb *GraphBuilder) addMissingAllocation(claimID, allocationID string, allocation model.ClaimAllocation) {
+	missingID := missingDeviceGraphID(allocation.DriverName, allocation.NodeName, allocation.PoolName, allocation.DeviceName)
+	gb.addNode(missingID, "Device", allocation.DeviceName+" (MISSING)", map[string]interface{}{
+		"status": "missing",
+		"driver": allocation.DriverName,
+		"pool":   allocation.PoolName,
+		"node":   allocation.NodeName,
+	})
+	gb.addEdge(allocationID, missingID, "resolves-to-missing")
+	gb.addEdge(claimID, missingID, "allocates-missing")
+}
+
+func (gb *GraphBuilder) addClaimOwner(claimID string, claim model.ResourceClaimInfo) {
+	if claim.OwnerPodName == "" {
+		return
+	}
+	podID := "pod/" + claim.Namespace + "/" + claim.OwnerPodName
+	gb.addNode(podID, "Pod", claim.OwnerPodName, map[string]interface{}{"namespace": claim.Namespace})
+	gb.addEdge(podID, claimID, "claims")
+	gb.addEdge(podID, "ns/"+claim.Namespace, "belongs-to")
+	for _, nodeName := range claimAllocationNodes(claim) {
+		gb.addNode("node/"+nodeName, "Node", nodeName, nil)
+		gb.addEdge(podID, "node/"+nodeName, "runs-on")
+	}
+}
+
+func matchesNamespace(claim model.ResourceClaimInfo, namespaceFilter string) bool {
+	return namespaceFilter == "" || claim.Namespace == namespaceFilter
+}
+
+func matchesDriver(driverName, driverFilter string) bool {
+	return driverFilter == "" || driverName == driverFilter
+}
+
+func (gb *GraphBuilder) sort() {
+	sort.Slice(gb.nodes, func(i, j int) bool { return gb.nodes[i].ID < gb.nodes[j].ID })
 	sort.Slice(gb.edges, func(i, j int) bool {
 		if gb.edges[i].From != gb.edges[j].From {
 			return gb.edges[i].From < gb.edges[j].From
@@ -271,11 +299,44 @@ func (gb *GraphBuilder) BuildGraph(ctx context.Context, clientset kubernetes.Int
 		}
 		return gb.edges[i].Type < gb.edges[j].Type
 	})
+}
 
-	return &model.ResourceGraph{
-		Nodes: gb.nodes,
-		Edges: gb.edges,
-	}, nil
+func allocatedDeviceID(devices []model.Device, allocation model.ClaimAllocation) (string, bool) {
+	matches := make([]model.Device, 0, 1)
+	for _, device := range devices {
+		if device.Name != allocation.DeviceName || device.DriverName != allocation.DriverName {
+			continue
+		}
+		if allocation.PoolName != "" && device.PoolName != allocation.PoolName {
+			continue
+		}
+		if allocation.NodeName != "" && device.NodeName != allocation.NodeName {
+			continue
+		}
+		matches = append(matches, device)
+	}
+	if len(matches) != 1 {
+		return "", false
+	}
+	device := matches[0]
+	return deviceGraphID(device.DriverName, device.NodeName, device.PoolName, device.Name), true
+}
+
+func claimAllocationNodes(claim model.ResourceClaimInfo) []string {
+	seen := make(map[string]struct{})
+	nodes := make([]string, 0)
+	for _, allocation := range claim.EffectiveAllocations() {
+		if allocation.NodeName == "" {
+			continue
+		}
+		if _, exists := seen[allocation.NodeName]; exists {
+			continue
+		}
+		seen[allocation.NodeName] = struct{}{}
+		nodes = append(nodes, allocation.NodeName)
+	}
+	sort.Strings(nodes)
+	return nodes
 }
 
 // addNode adds a node if it does not already exist (O(1) dedup via map).
@@ -338,6 +399,8 @@ func ToDOT(g *model.ResourceGraph) string {
 			if n.Metadata != nil && n.Metadata["status"] == "missing" {
 				color = "red"
 			}
+		case "Allocation":
+			color = "orange"
 		case "Driver":
 			color = "purple"
 		}

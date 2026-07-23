@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/oaslananka/draforge/pkg/model"
 	"github.com/spf13/cobra"
 )
 
@@ -282,6 +283,31 @@ func TestExplainOutputJSON(t *testing.T) {
 	if err == nil {
 		if !json.Valid([]byte(out)) {
 			t.Errorf("explain -o json output is not valid JSON: %q", out)
+		}
+	}
+}
+
+func TestClaimFormattingPreservesAllClassesAndAllocations(t *testing.T) {
+	claim := model.ResourceClaimInfo{
+		Requests: []model.ClaimRequest{
+			{Name: "gpu", Mode: "Exactly", Alternatives: []model.ClaimRequestAlternative{{DeviceClassName: "gpu-class"}}},
+			{Name: "accelerator", Mode: "FirstAvailable", Alternatives: []model.ClaimRequestAlternative{{DeviceClassName: "nic-class"}, {DeviceClassName: "fpga-class"}}},
+		},
+		Allocations: []model.ClaimAllocation{
+			{Request: "gpu", DriverName: "driver-a.example", PoolName: "shared", DeviceName: "dev-0", NodeName: "node-a"},
+			{Request: "accelerator/nic", DriverName: "driver-b.example", PoolName: "shared", DeviceName: "dev-0"},
+		},
+	}
+	if got, want := formatClaimClasses(claim), "fpga-class,gpu-class,nic-class"; got != want {
+		t.Fatalf("formatClaimClasses = %q, want %q", got, want)
+	}
+	allocations := formatClaimAllocations(claim)
+	for _, want := range []string{
+		"gpu=driver-a.example/shared/dev-0@node-a",
+		"accelerator/nic=driver-b.example/shared/dev-0@unknown-node",
+	} {
+		if !strings.Contains(allocations, want) {
+			t.Fatalf("formatClaimAllocations missing %q: %q", want, allocations)
 		}
 	}
 }

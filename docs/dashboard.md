@@ -22,7 +22,7 @@ An authenticated dashboard reader can observe resource names and namespaces, nod
 | `/api/summary` | GET | Cluster-wide counts (pools, devices, claims, doctor status) |
 | `/api/pools` | GET | Simulated device pools |
 | `/api/devices` | GET | Discovered devices |
-| `/api/claims` | GET | ResourceClaims and their allocation status |
+| `/api/claims` | GET | ResourceClaims with every request/class alternative and complete allocation identity |
 | `/api/graph` | GET | Snapshot of the resource relationship graph |
 | `/api/doctor` | GET | Diagnostics check results (PASS/WARN/FAIL) |
 | `/api/explain?claim=X&namespace=default` | GET | Allocation explanation tree for a claim |
@@ -47,7 +47,8 @@ When no DRA resources are discovered, the dashboard shows clear messages:
 
 - **Pools tab**: "No DRA resources discovered yet."
 - **Devices tab**: "No DRA resources discovered yet."
-- **Claims tab**: "No ResourceClaims found in the current cluster."
+- **Claims tab**: lists every requested DeviceClass and every `<request>=<driver>/<pool>/<device>@<node>` allocation identity. Missing node identity is shown as `unknown-node` rather than inferred from a pool name. Empty state: "No ResourceClaims found in the current cluster."
+- **Graph tab**: represents each allocation result as its own orange `Allocation` node between the claim and resolved device, so repeated allocations to the same device identity remain visible.
 - **Graph tab**: "No resource relationships to display. Deploy a SimulatedDevicePool scenario to populate the graph."
 - **Doctor tab**: "Unable to load DRAForge diagnostics." (on error)
 

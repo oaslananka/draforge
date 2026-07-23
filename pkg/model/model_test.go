@@ -4,6 +4,7 @@ package model
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -440,5 +441,43 @@ func TestDeviceStatusValues(t *testing.T) {
 	d.Status = "pending"
 	if d.Status != "pending" {
 		t.Errorf("expected pending, got %q", d.Status)
+	}
+}
+
+func TestResourceClaimInfoCollectionHelpersAndJSON(t *testing.T) {
+	claim := ResourceClaimInfo{
+		Name:      "multi",
+		Namespace: "team-a",
+		Status:    "Allocated",
+		Requests: []ClaimRequest{
+			{Name: "gpu", Mode: "Exactly", Alternatives: []ClaimRequestAlternative{{Name: "gpu", DeviceClassName: "gpu-class", AllocationMode: "ExactCount", Count: 2}}},
+			{Name: "accelerator", Mode: "FirstAvailable", Alternatives: []ClaimRequestAlternative{
+				{Name: "nic", DeviceClassName: "nic-class", AllocationMode: "ExactCount", Count: 1},
+				{Name: "fpga", DeviceClassName: "fpga-class", AllocationMode: "ExactCount", Count: 1},
+			}},
+		},
+		Allocations: []ClaimAllocation{
+			{Request: "gpu", DriverName: "driver-a.example", PoolName: "shared", DeviceName: "dev-0", NodeName: "node-a"},
+			{Request: "accelerator/nic", DriverName: "driver-b.example", PoolName: "shared", DeviceName: "dev-0"},
+		},
+	}
+
+	if got := claim.RequestedClassNames(); !reflect.DeepEqual(got, []string{"fpga-class", "gpu-class", "nic-class"}) {
+		t.Fatalf("RequestedClassNames = %v", got)
+	}
+	if got := claim.EffectiveAllocations(); !reflect.DeepEqual(got, claim.Allocations) {
+		t.Fatalf("EffectiveAllocations = %#v", got)
+	}
+
+	data, err := json.Marshal(claim)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded ResourceClaimInfo
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !reflect.DeepEqual(decoded.Requests, claim.Requests) || !reflect.DeepEqual(decoded.Allocations, claim.Allocations) {
+		t.Fatalf("collection round trip lost identity: %#v", decoded)
 	}
 }

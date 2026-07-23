@@ -23,16 +23,43 @@ export interface DevicePool {
   labels?: Record<string, string>;
 }
 
+export interface ClaimRequestAlternative {
+  name?: string;
+  deviceClassName: string;
+  allocationMode: string;
+  count?: number;
+}
+
+export interface ClaimRequest {
+  name: string;
+  mode: 'Exactly' | 'FirstAvailable' | 'Unknown' | string;
+  alternatives: ClaimRequestAlternative[];
+}
+
+export interface ClaimAllocation {
+  request: string;
+  driverName: string;
+  poolName: string;
+  deviceName: string;
+  nodeName?: string;
+}
+
 export interface ResourceClaimInfo {
   name: string;
   namespace: string;
-  deviceClassName: string;
   status: string;
+  requests?: ClaimRequest[];
+  allocations?: ClaimAllocation[];
   ownerPodName?: string;
-  allocatedDevice?: string;
-  allocatedNode?: string;
-  allocatedDriver?: string;
   createdAt?: string;
+  /** @deprecated Use requests. */
+  deviceClassName?: string;
+  /** @deprecated Use allocations. */
+  allocatedDevice?: string;
+  /** @deprecated Use allocations. */
+  allocatedNode?: string;
+  /** @deprecated Use allocations. */
+  allocatedDriver?: string;
 }
 
 export interface GraphNode {

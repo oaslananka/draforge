@@ -3,6 +3,7 @@
 package model
 
 import (
+	"sort"
 	"time"
 )
 
@@ -33,17 +34,85 @@ type DevicePool struct {
 	Labels      map[string]string `json:"labels"`
 }
 
+// ClaimRequestAlternative represents one concrete class/count choice in a claim request.
+type ClaimRequestAlternative struct {
+	Name            string `json:"name,omitempty"`
+	DeviceClassName string `json:"deviceClassName"`
+	AllocationMode  string `json:"allocationMode"`
+	Count           int64  `json:"count,omitempty"`
+}
+
+// ClaimRequest preserves an Exactly request or every FirstAvailable alternative.
+type ClaimRequest struct {
+	Name         string                    `json:"name"`
+	Mode         string                    `json:"mode"`
+	Alternatives []ClaimRequestAlternative `json:"alternatives"`
+}
+
+// ClaimAllocation identifies one allocated device result without collapsing driver or pool identity.
+type ClaimAllocation struct {
+	Request    string `json:"request"`
+	DriverName string `json:"driverName"`
+	PoolName   string `json:"poolName"`
+	DeviceName string `json:"deviceName"`
+	NodeName   string `json:"nodeName,omitempty"`
+}
+
 // ResourceClaimInfo represents the state of a ResourceClaim.
 type ResourceClaimInfo struct {
-	Name            string    `json:"name"`
-	Namespace       string    `json:"namespace"`
-	DeviceClassName string    `json:"deviceClassName"`
-	Status          string    `json:"status"`       // pending, allocated, deallocating
-	OwnerPodName    string    `json:"ownerPodName"` // Pod using the claim
-	AllocatedDevice string    `json:"allocatedDevice,omitempty"`
-	AllocatedNode   string    `json:"allocatedNode,omitempty"`
-	AllocatedDriver string    `json:"allocatedDriver,omitempty"`
-	CreatedAt       time.Time `json:"createdAt"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Status    string `json:"status"` // pending, allocated, deallocating
+
+	Requests     []ClaimRequest    `json:"requests"`
+	Allocations  []ClaimAllocation `json:"allocations"`
+	OwnerPodName string            `json:"ownerPodName"` // Pod using the claim
+	CreatedAt    time.Time         `json:"createdAt"`
+
+	// Legacy compatibility projections of the first request/allocation.
+	// New consumers must use Requests and Allocations; removal is planned for v1.0.
+	DeviceClassName string `json:"deviceClassName"`
+	AllocatedDevice string `json:"allocatedDevice,omitempty"`
+	AllocatedNode   string `json:"allocatedNode,omitempty"`
+	AllocatedDriver string `json:"allocatedDriver,omitempty"`
+}
+
+// RequestedClassNames returns every distinct requested class in stable order.
+func (claim ResourceClaimInfo) RequestedClassNames() []string {
+	seen := make(map[string]struct{})
+	classNames := make([]string, 0)
+	for _, request := range claim.Requests {
+		for _, alternative := range request.Alternatives {
+			if alternative.DeviceClassName == "" {
+				continue
+			}
+			if _, exists := seen[alternative.DeviceClassName]; exists {
+				continue
+			}
+			seen[alternative.DeviceClassName] = struct{}{}
+			classNames = append(classNames, alternative.DeviceClassName)
+		}
+	}
+	if len(classNames) == 0 && claim.DeviceClassName != "" {
+		classNames = append(classNames, claim.DeviceClassName)
+	}
+	sort.Strings(classNames)
+	return classNames
+}
+
+// EffectiveAllocations returns complete allocations, falling back to deprecated fields for old callers.
+func (claim ResourceClaimInfo) EffectiveAllocations() []ClaimAllocation {
+	if len(claim.Allocations) > 0 {
+		return claim.Allocations
+	}
+	if claim.AllocatedDevice == "" {
+		return nil
+	}
+	return []ClaimAllocation{{
+		DriverName: claim.AllocatedDriver,
+		DeviceName: claim.AllocatedDevice,
+		NodeName:   claim.AllocatedNode,
+	}}
 }
 
 // GraphNode represents a vertex in the resource graph.

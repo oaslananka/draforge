@@ -57,6 +57,34 @@ var runServeCommand = func(ctx context.Context, kubeconfigPath string, options s
 	return srv.Start(ctx)
 }
 
+func formatClaimClasses(claim model.ResourceClaimInfo) string {
+	classNames := claim.RequestedClassNames()
+	if len(classNames) == 0 {
+		return "-"
+	}
+	return strings.Join(classNames, ",")
+}
+
+func formatClaimAllocations(claim model.ResourceClaimInfo) string {
+	allocations := claim.EffectiveAllocations()
+	if len(allocations) == 0 {
+		return "Pending"
+	}
+	formatted := make([]string, 0, len(allocations))
+	for _, allocation := range allocations {
+		request := allocation.Request
+		if request == "" {
+			request = "request"
+		}
+		node := allocation.NodeName
+		if node == "" {
+			node = "unknown-node"
+		}
+		formatted = append(formatted, fmt.Sprintf("%s=%s/%s/%s@%s", request, allocation.DriverName, allocation.PoolName, allocation.DeviceName, node))
+	}
+	return strings.Join(formatted, ";")
+}
+
 func main() {
 	os.Exit(run())
 }
@@ -149,10 +177,10 @@ func NewRootCommand() *cobra.Command {
 				data, _ := json.MarshalIndent(claims, "", "  ")
 				cmd.Println(string(data))
 			} else {
-				cmd.Printf("%-25s %-15s %-15s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASS", "STATUS")
-				cmd.Println(strings.Repeat("-", 75))
-				for _, c := range claims {
-					cmd.Printf("%-25s %-15s %-15s %-15s\n", c.Name, c.Namespace, c.DeviceClassName, c.Status)
+				cmd.Printf("%-25s %-15s %-35s %-55s %-15s\n", "CLAIM NAME", "NAMESPACE", "CLASSES", "ALLOCATIONS", "STATUS")
+				cmd.Println(strings.Repeat("-", 150))
+				for _, claim := range claims {
+					cmd.Printf("%-25s %-15s %-35s %-55s %-15s\n", claim.Name, claim.Namespace, formatClaimClasses(claim), formatClaimAllocations(claim), claim.Status)
 				}
 			}
 			return nil

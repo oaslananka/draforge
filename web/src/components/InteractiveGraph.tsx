@@ -203,7 +203,8 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
     switch (type) {
       case 'Pod': case 'ResourceClaim': return '#10b981';
       case 'Device': return '#3b82f6';
-      case 'Pool': return '#8b5cf6';
+      case 'Allocation': return '#f97316';
+      case 'ResourcePool': return '#8b5cf6';
       case 'Driver': return '#6366f1';
       case 'Node': return '#06b6d4';
       case 'DeviceClass': return '#ec4899';
@@ -215,7 +216,8 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
     switch (type) {
       case 'Pod': return 22;
       case 'Node': return 26;
-      case 'Pool': return 20;
+      case 'ResourcePool': return 20;
+      case 'Allocation': return 14;
       case 'Device': return 16;
       default: return 18;
     }

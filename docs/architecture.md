@@ -49,7 +49,7 @@ A **DeviceClass** defines the parameters for selecting and configuring a device.
 A **ResourceClaim** represents a pod's request for resource allocation. The claim specifies which `DeviceClass` it requires and outlines details of the request (e.g. "exactly 1 GPU" or "first-available GPU with memory > 80Gi").
 
 ### 4. Pod Claim Binding
-When a Pod is scheduled, its `spec.resourceClaims` reference the `ResourceClaim`. The scheduler and the DRA driver collaborate to allocate a specific device from a `ResourceSlice` to the claim. Once allocated, the claim status is updated with the device identifier, pool details, and a node selector binding the pod to the node where the hardware resides.
+When a Pod is scheduled, its `spec.resourceClaims` reference the `ResourceClaim`. One claim may contain multiple `Exactly` requests or `FirstAvailable` alternatives and may receive multiple allocation results. DRAForge preserves every request and every `<request, driver, pool, device, node>` result. A node is recorded only when the allocation `NodeSelector` identifies one exact node; cluster-scoped and ambiguous results remain explicitly unknown.
 
 ---
 

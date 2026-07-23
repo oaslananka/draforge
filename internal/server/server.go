@@ -168,7 +168,7 @@ func (s *Server) newHTTPServer(requestCtx context.Context) *http.Server {
 
 // Start launches the HTTP server and handles graceful shutdown.
 func (s *Server) Start(ctx context.Context) error {
-	requestCtx, cancelRequests := context.WithCancel(context.Background())
+	requestCtx, cancelRequests := context.WithCancel(ctx)
 	defer cancelRequests()
 
 	go s.startSSEBroadcaster(requestCtx)
@@ -193,7 +193,7 @@ func runHTTPServer(ctx context.Context, httpServer httpServerLifecycle, shutdown
 	case <-ctx.Done():
 		fmt.Println("Shutting down API Server gracefully...")
 		cancelRequests()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			if errors.Is(err, http.ErrServerClosed) {

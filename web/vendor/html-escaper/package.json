@@ -1,0 +1,12 @@
+{
+  "name": "html-escaper",
+  "version": "3.0.3-draforge.1",
+  "private": true,
+  "type": "module",
+  "main": "./index.cjs",
+  "module": "./index.js",
+  "exports": {
+    "import": "./index.js",
+    "require": "./index.cjs"
+  }
+}

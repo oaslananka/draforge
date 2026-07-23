@@ -20,6 +20,119 @@ interface InteractiveGraphProps {
   readonly onSelectClaim: (claim: ClaimIdentity) => void;
 }
 
+type GraphNode = ResourceGraph['nodes'][number];
+
+type RelatedNode = Readonly<{
+  node: GraphNode;
+  direction: 'incoming' | 'outgoing';
+  relationship: string;
+}>;
+
+function nodeColor(graphData: ResourceGraph | null, type: string, id: string) {
+  if (type === 'Device' && id.includes('missing')) return '#ef4444';
+  if (type === 'ResourceClaim') {
+    const claim = graphData?.nodes.find((node) => node.id === id);
+    if (claim?.metadata?.status === 'Pending') return '#f59e0b';
+  }
+  switch (type) {
+    case 'Pod':
+    case 'ResourceClaim':
+      return '#10b981';
+    case 'Device':
+      return '#3b82f6';
+    case 'Allocation':
+      return '#f97316';
+    case 'ResourcePool':
+      return '#8b5cf6';
+    case 'Driver':
+      return '#6366f1';
+    case 'Node':
+      return '#06b6d4';
+    case 'DeviceClass':
+      return '#ec4899';
+    default:
+      return '#6b7280';
+  }
+}
+
+function relatedNodes(graphData: ResourceGraph | null, nodeId: string): RelatedNode[] {
+  if (!graphData) return [];
+  const nodesByID = new Map(graphData.nodes.map((node) => [node.id, node]));
+  const related: RelatedNode[] = [];
+
+  for (const edge of graphData.edges) {
+    if (edge.from === nodeId) {
+      const node = nodesByID.get(edge.to);
+      if (node) related.push({ node, direction: 'outgoing', relationship: edge.type });
+      continue;
+    }
+    if (edge.to === nodeId) {
+      const node = nodesByID.get(edge.from);
+      if (node) related.push({ node, direction: 'incoming', relationship: edge.type });
+    }
+  }
+  return related;
+}
+
+type RelationshipsProps = Readonly<{
+  graphData: ResourceGraph | null;
+  nodeId: string;
+  nodes: readonly NodePosition[];
+  onSelectNode: (node: NodePosition) => void;
+}>;
+
+function Relationships({ graphData, nodeId, nodes, onSelectNode }: RelationshipsProps) {
+  const relationships = relatedNodes(graphData, nodeId);
+  if (relationships.length === 0) return null;
+
+  const selectRelatedNode = (id: string) => {
+    const found = nodes.find((candidate) => candidate.id === id);
+    if (found) onSelectNode(found);
+  };
+
+  return (
+    <div style={{ marginTop: '15px', borderTop: '1px solid var(--border-light)', paddingTop: '15px' }}>
+      <h5 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Relationships</h5>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {relationships.map((relation) => (
+          <div
+            key={`${relation.direction}/${relation.relationship}/${relation.node.id}`}
+            style={{
+              fontSize: '0.8rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'var(--bg-tertiary)',
+              padding: '6px 10px',
+              borderRadius: '6px',
+            }}
+          >
+            <span style={{ color: 'var(--text-muted)' }}>
+              {relation.direction === 'incoming' ? '← ' : '→ '}
+              {relation.relationship}
+            </span>
+            <button
+              type="button"
+              style={{
+                color: nodeColor(graphData, relation.node.type, relation.node.id),
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                background: 'transparent',
+                border: 0,
+                padding: 0,
+              }}
+              onClick={() => selectRelatedNode(relation.node.id)}
+            >
+              {relation.node.label}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function InteractiveGraph({ graphData, onSelectClaim }: InteractiveGraphProps) {
   const width = 800;
   const height = 500;
@@ -193,25 +306,6 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
 
   const handleResetZoom = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
-  const getNodeColor = (type: string, id: string) => {
-    if (type === 'Device' && id.includes('missing')) return '#ef4444';
-    const safeNodes = graphData?.nodes ?? [];
-    if (type === 'ResourceClaim') {
-      const claim = safeNodes.find(n => n.id === id);
-      if (claim?.metadata && typeof claim.metadata === 'object' && (claim.metadata as Record<string, unknown>).status === 'Pending') return '#f59e0b';
-    }
-    switch (type) {
-      case 'Pod': case 'ResourceClaim': return '#10b981';
-      case 'Device': return '#3b82f6';
-      case 'Allocation': return '#f97316';
-      case 'ResourcePool': return '#8b5cf6';
-      case 'Driver': return '#6366f1';
-      case 'Node': return '#06b6d4';
-      case 'DeviceClass': return '#ec4899';
-      default: return '#6b7280';
-    }
-  };
-
   const getNodeRadius = (type: string) => {
     switch (type) {
       case 'Pod': return 22;
@@ -257,7 +351,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
     <div style={{ display: 'flex', gap: '20px', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="badge badge-success" style={{ border: 'none', cursor: 'pointer' }} onClick={handleResetZoom}>Reset View</button>
+          <button type="button" className="badge badge-success" style={{ border: 'none', cursor: 'pointer' }} onClick={handleResetZoom}>Reset View</button>
         </div>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Use mouse wheel to zoom, drag background to pan.</span>
       </div>
@@ -332,7 +426,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
 
               {nodes.map(node => {
                 const radius = getNodeRadius(node.type);
-                const color = getNodeColor(node.type, node.id);
+                const color = nodeColor(graphData, node.type, node.id);
                 const isHovered = hoveredNodeId === node.id || (hoveredEdge?.from === node.id || hoveredEdge?.to === node.id);
                 const opacity = hoveredNodeId && !isHovered ? 0.3 : 1;
 
@@ -340,8 +434,17 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                   <g
                     key={node.id}
                     transform={`translate(${node.x}, ${node.y})`}
-                    onMouseDown={(e) => handleNodeMouseDown(e, node)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${node.type} ${node.label}`}
+                    onMouseDown={(event) => handleNodeMouseDown(event, node)}
                     onClick={() => setSelectedNode(node)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedNode(node);
+                      }
+                    }}
                     onMouseEnter={() => setHoveredNodeId(node.id)}
                     onMouseLeave={() => setHoveredNodeId(null)}
                     style={{ cursor: 'pointer', opacity }}
@@ -384,7 +487,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
             {selectedNode ? (
               <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div>
-                  <span className="badge badge-success" style={{ background: getNodeColor(selectedNode.type, selectedNode.id), color: 'white', borderColor: 'transparent' }}>{selectedNode.type}</span>
+                  <span className="badge badge-success" style={{ background: nodeColor(graphData, selectedNode.type, selectedNode.id), color: 'white', borderColor: 'transparent' }}>{selectedNode.type}</span>
                   <h4 style={{ fontSize: '1.2rem', marginTop: '6px' }}>{selectedNode.label}</h4>
                 </div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -392,6 +495,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                 </div>
                 {selectedNode.type === 'ResourceClaim' && (
                   <button
+                    type="button"
                     className="badge badge-warning"
                     onClick={() => {
                       const claim = claimIdentityFromGraphNode(selectedNode);
@@ -404,72 +508,12 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                     Diagnose Allocation
                   </button>
                 )}
-                {(() => {
-                  const getRelatedNodes = (nodeId: string) => {
-                    if (!graphData) return [];
-                    const related = [];
-                    const edges = graphData.edges ?? [];
-                    const graphNodes = graphData.nodes ?? [];
-
-                    for (const edge of edges) {
-                      if (edge.from === nodeId) {
-                        const targetNode = graphNodes.find(n => n.id === edge.to);
-                        if (targetNode) {
-                          related.push({ node: targetNode, type: 'outgoing', relType: edge.type });
-                        }
-                      } else if (edge.to === nodeId) {
-                        const sourceNode = graphNodes.find(n => n.id === edge.from);
-                        if (sourceNode) {
-                          related.push({ node: sourceNode, type: 'incoming', relType: edge.type });
-                        }
-                      }
-                    }
-                    return related;
-                  };
-
-                  const related = getRelatedNodes(selectedNode.id);
-                  if (related.length === 0) return null;
-                  return (
-                    <div style={{ marginTop: '15px', borderTop: '1px solid var(--border-light)', paddingTop: '15px' }}>
-                      <h5 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Relationships</h5>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {related.map((rel, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              fontSize: '0.8rem',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              background: 'var(--bg-tertiary)',
-                              padding: '6px 10px',
-                              borderRadius: '6px'
-                            }}
-                          >
-                            <span style={{ color: 'var(--text-muted)' }}>
-                              {rel.type === 'incoming' ? '← ' : '→ '}
-                              {rel.relType}
-                            </span>
-                            <span
-                              style={{
-                                color: getNodeColor(rel.node.type, rel.node.id),
-                                fontWeight: 'bold',
-                                cursor: 'pointer',
-                                textDecoration: 'underline'
-                              }}
-                              onClick={() => {
-                                const found = nodes.find(n => n.id === rel.node.id);
-                                if (found) setSelectedNode(found);
-                              }}
-                            >
-                              {rel.node.label}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
+                <Relationships
+                  graphData={graphData}
+                  nodeId={selectedNode.id}
+                  nodes={nodes}
+                  onSelectNode={setSelectedNode}
+                />
               </div>
             ) : (
               <p style={{ color: 'var(--text-muted)', marginTop: '15px' }}>Click a node in the graph to inspect details.</p>

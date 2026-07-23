@@ -1,0 +1,12 @@
+{
+  "name": "uhyphen",
+  "version": "0.2.0-draforge.1",
+  "private": true,
+  "type": "module",
+  "main": "./index.cjs",
+  "module": "./index.js",
+  "exports": {
+    "import": "./index.js",
+    "require": "./index.cjs"
+  }
+}

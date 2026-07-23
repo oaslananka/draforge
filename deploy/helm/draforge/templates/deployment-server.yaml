@@ -30,6 +30,10 @@ spec:
         - name: server
           image: {{ include "draforge.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.server.image.repository "tag" .Values.server.image.tag "digest" .Values.server.image.digest "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          args:
+            - --readiness-timeout={{ .Values.server.lifecycle.readinessTimeout }}
+            - --readiness-grace-period={{ .Values.server.lifecycle.readinessGracePeriod }}
+            - --shutdown-timeout={{ .Values.server.lifecycle.shutdownTimeout }}
           ports:
             - containerPort: 8080
               name: http

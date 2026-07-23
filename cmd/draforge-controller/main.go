@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/oaslananka/draforge/internal/cluster"
+	"github.com/oaslananka/draforge/internal/health"
 	"github.com/oaslananka/draforge/internal/simulator"
 )
 
@@ -25,8 +26,14 @@ var (
 func main() {
 	var kubeconfig string
 	var metricsAddr string
+	var readinessTimeout time.Duration
+	var readinessGracePeriod time.Duration
+	var shutdownTimeout time.Duration
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Absolute path to the kubeconfig file")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8082", "Address for controller health and metrics endpoints")
+	flag.DurationVar(&readinessTimeout, "readiness-timeout", health.DefaultReadinessTimeout, "Maximum duration of one Kubernetes API readiness check")
+	flag.DurationVar(&readinessGracePeriod, "readiness-grace-period", health.DefaultReadinessGracePeriod, "Grace period for transient Kubernetes API readiness failures")
+	flag.DurationVar(&shutdownTimeout, "shutdown-timeout", 5*time.Second, "Maximum graceful runtime server shutdown duration")
 	flag.Parse()
 
 	// 1. Initialize cluster clients
@@ -44,7 +51,8 @@ func main() {
 	// 2. Initialize Reconciler
 	reconciler := simulator.NewReconciler(clientset, dynamicClient)
 
-	runtimeServer := newRuntimeServer(metricsAddr, reconciler)
+	readiness := health.NewKubernetesReadinessProbe(clientset, readinessTimeout, readinessGracePeriod)
+	runtimeServer := newRuntimeServer(metricsAddr, reconciler, readiness)
 	go func() {
 		fmt.Printf("Controller runtime server listening on %s...\n", metricsAddr)
 		if err := runtimeServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -62,7 +70,7 @@ func main() {
 	// Keep running until signal received
 	<-ctx.Done()
 
-	ctx2, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx2, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := runtimeServer.Shutdown(ctx2); err != nil {
 		fmt.Printf("Controller runtime server stop error: %v\n", err)

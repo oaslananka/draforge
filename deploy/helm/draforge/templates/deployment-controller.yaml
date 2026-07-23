@@ -30,6 +30,10 @@ spec:
         - name: controller
           image: {{ include "draforge.image" (dict "registry" .Values.global.imageRegistry "repository" .Values.controller.image.repository "tag" .Values.controller.image.tag "digest" .Values.controller.image.digest "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+          args:
+            - --readiness-timeout={{ .Values.controller.lifecycle.readinessTimeout }}
+            - --readiness-grace-period={{ .Values.controller.lifecycle.readinessGracePeriod }}
+            - --shutdown-timeout={{ .Values.controller.lifecycle.shutdownTimeout }}
           ports:
             - name: runtime
               containerPort: {{ .Values.controller.metrics.port }}

@@ -16,6 +16,10 @@ server:
   service:
     type: ClusterIP
     port: 8080
+  lifecycle:
+    readinessTimeout: 2s
+    readinessGracePeriod: 15s
+    shutdownTimeout: 5s
   resources:
     limits:
       cpu: 500m
@@ -41,6 +45,10 @@ controller:
     tag: ""
     digest: ""
     pullPolicy: IfNotPresent
+  lifecycle:
+    readinessTimeout: 2s
+    readinessGracePeriod: 15s
+    shutdownTimeout: 5s
   metrics:
     port: 8082
     service:

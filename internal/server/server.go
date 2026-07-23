@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -17,8 +18,27 @@ import (
 	"github.com/oaslananka/draforge/internal/doctor"
 	"github.com/oaslananka/draforge/internal/explain"
 	"github.com/oaslananka/draforge/internal/graph"
+	"github.com/oaslananka/draforge/internal/health"
 	"k8s.io/client-go/kubernetes"
 )
+
+const DefaultShutdownTimeout = 5 * time.Second
+
+// ServerOptions configures dependency readiness and graceful shutdown.
+type ServerOptions struct {
+	ReadinessTimeout     time.Duration
+	ReadinessGracePeriod time.Duration
+	ShutdownTimeout      time.Duration
+}
+
+// DefaultServerOptions returns production-safe lifecycle defaults.
+func DefaultServerOptions() ServerOptions {
+	return ServerOptions{
+		ReadinessTimeout:     health.DefaultReadinessTimeout,
+		ReadinessGracePeriod: health.DefaultReadinessGracePeriod,
+		ShutdownTimeout:      DefaultShutdownTimeout,
+	}
+}
 
 // Server handles HTTP API requests and serves the frontend.
 type Server struct {
@@ -29,14 +49,31 @@ type Server struct {
 	allowedOrigins       string
 	allowedOriginsParsed []string // pre-parsed from allowedOrigins, avoids split/trim per request
 	logf                 func(format string, args ...any)
+	readiness            *health.ReadinessProbe
+	shutdownTimeout      time.Duration
 	mu                   sync.Mutex
 	clients              map[chan string]bool
 }
 
-// NewServer creates a Server instance.
+// NewServer creates a Server instance with default lifecycle settings.
+func NewServer(clientset kubernetes.Interface, port int) *Server {
+	return NewServerWithOptions(clientset, port, DefaultServerOptions())
+}
+
+// NewServerWithOptions creates a Server instance with explicit lifecycle settings.
 // Configuration is read from environment variables where applicable:
 //   - CORS_ALLOWED_ORIGINS: comma-separated list (default "*")
-func NewServer(clientset kubernetes.Interface, port int) *Server {
+func NewServerWithOptions(clientset kubernetes.Interface, port int, options ServerOptions) *Server {
+	if options.ReadinessTimeout <= 0 {
+		options.ReadinessTimeout = health.DefaultReadinessTimeout
+	}
+	if options.ReadinessGracePeriod < 0 {
+		options.ReadinessGracePeriod = 0
+	}
+	if options.ShutdownTimeout <= 0 {
+		options.ShutdownTimeout = DefaultShutdownTimeout
+	}
+
 	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
 		allowedOrigins = "*"
@@ -57,6 +94,8 @@ func NewServer(clientset kubernetes.Interface, port int) *Server {
 		allowedOrigins:       allowedOrigins,
 		allowedOriginsParsed: parsed,
 		logf:                 defaultLogf,
+		readiness:            health.NewKubernetesReadinessProbe(clientset, options.ReadinessTimeout, options.ReadinessGracePeriod),
+		shutdownTimeout:      options.ShutdownTimeout,
 		clients:              make(map[chan string]bool),
 	}
 }
@@ -106,34 +145,67 @@ func (s *Server) handler() http.Handler {
 	return mux
 }
 
+type httpServerLifecycle interface {
+	ListenAndServe() error
+	Shutdown(context.Context) error
+	Close() error
+}
+
+// newHTTPServer builds the HTTP server using a cancelable base context for all connections.
+func (s *Server) newHTTPServer(requestCtx context.Context) *http.Server {
+	return &http.Server{
+		Addr:              fmt.Sprintf(":%d", s.port),
+		Handler:           s.handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		BaseContext: func(net.Listener) context.Context {
+			return requestCtx
+		},
+	}
+}
+
 // Start launches the HTTP server and handles graceful shutdown.
 func (s *Server) Start(ctx context.Context) error {
-	// Start background SSE broadcaster.
-	go s.startSSEBroadcaster(ctx)
+	requestCtx, cancelRequests := context.WithCancel(context.Background())
+	defer cancelRequests()
 
-	httpServer := &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.port),
-		Handler:      s.handler(),
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
+	go s.startSSEBroadcaster(requestCtx)
+	httpServer := s.newHTTPServer(requestCtx)
+	fmt.Printf("API Server listening on port %d...\n", s.port)
+	return runHTTPServer(ctx, httpServer, s.shutdownTimeout, cancelRequests)
+}
 
+func runHTTPServer(ctx context.Context, httpServer httpServerLifecycle, shutdownTimeout time.Duration, cancelRequests context.CancelFunc) error {
 	errChan := make(chan error, 1)
 	go func() {
-		fmt.Printf("API Server listening on port %d...\n", s.port)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errChan <- err
-		}
+		errChan <- httpServer.ListenAndServe()
 	}()
 
 	select {
+	case err := <-errChan:
+		cancelRequests()
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
 	case <-ctx.Done():
 		fmt.Println("Shutting down API Server gracefully...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cancelRequests()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
-		return httpServer.Shutdown(shutdownCtx)
-	case err := <-errChan:
-		return err
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			if errors.Is(err, http.ErrServerClosed) {
+				return nil
+			}
+			closeErr := httpServer.Close()
+			if closeErr != nil {
+				return errors.Join(fmt.Errorf("graceful shutdown: %w", err), fmt.Errorf("force close: %w", closeErr))
+			}
+			return fmt.Errorf("graceful shutdown: %w", err)
+		}
+		return nil
 	}
 }
 
@@ -255,10 +327,13 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
-// Readyz
+// Readyz reports bounded Kubernetes API dependency readiness.
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ready"))
+	if s.readiness == nil {
+		http.Error(w, "readiness probe is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	s.readiness.ServeHTTP(w, r)
 }
 
 // Summary

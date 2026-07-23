@@ -107,6 +107,11 @@ tasks:
     cmds:
       - scripts/verify-controller-metrics-policy.sh
 
+  helm:verify-lifecycle:
+    desc: Verify readiness and graceful shutdown lifecycle settings
+    cmds:
+      - scripts/verify-runtime-lifecycle.sh
+
   infra:preflight:
     desc: Validate Terraform showcase tools and static configuration
     cmds:

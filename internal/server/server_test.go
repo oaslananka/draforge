@@ -3,16 +3,40 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/oaslananka/draforge/internal/health"
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
+
+func TestHealthzRemainsLiveWhenReadinessDependencyFails(t *testing.T) {
+	srv := NewServer(fake.NewSimpleClientset(), 8081)
+	srv.readiness = health.NewReadinessProbe(func(context.Context) error {
+		return errors.New("kubernetes API unavailable")
+	}, time.Millisecond, 0)
+
+	healthReq := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthResp := httptest.NewRecorder()
+	srv.handler().ServeHTTP(healthResp, healthReq)
+	if healthResp.Code != http.StatusOK {
+		t.Fatalf("liveness status = %d, want 200", healthResp.Code)
+	}
+
+	readyReq := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	readyResp := httptest.NewRecorder()
+	srv.handler().ServeHTTP(readyResp, readyReq)
+	if readyResp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("readiness status = %d, want 503", readyResp.Code)
+	}
+}
 
 func TestServerEndpoints(t *testing.T) {
 

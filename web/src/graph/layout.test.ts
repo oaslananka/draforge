@@ -9,6 +9,13 @@ describe('deterministicInitialPosition', () => {
     expect(second).toEqual(first);
   });
 
+  it('hashes Unicode identities by code point deterministically', () => {
+    const identity = 'device/driver/pool/gpu-😀';
+    expect(deterministicInitialPosition(identity, 800, 500)).toEqual(
+      deterministicInitialPosition(identity, 800, 500),
+    );
+  });
+
   it('keeps positions inside the requested spread and separates identities', () => {
     const first = deterministicInitialPosition('device/driver-a/pool-a/dev-0', 800, 500);
     const second = deterministicInitialPosition('device/driver-b/pool-a/dev-0', 800, 500);

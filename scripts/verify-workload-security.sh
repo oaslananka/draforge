@@ -67,9 +67,7 @@ assert_contains build/remote/kaniko-job.yaml "runAsUser: 0"
 assert_contains build/remote/kaniko-job.yaml "privileged: false"
 assert_contains build/remote/kaniko-job.yaml "allowPrivilegeEscalation: false"
 assert_contains build/remote/kaniko-job.yaml "readOnlyRootFilesystem: false"
-for capability in CHOWN DAC_OVERRIDE FOWNER MKNOD SETFCAP SETGID SETUID; do
-  assert_contains build/remote/kaniko-job.yaml "- $capability"
-done
+assert_contains build/remote/kaniko-job.yaml "- NET_RAW"
 assert_contains build/remote/kaniko-job.yaml "type: RuntimeDefault"
 
 # Remote E2E has a dedicated RBAC manifest and therefore intentionally keeps

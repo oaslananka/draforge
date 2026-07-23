@@ -133,8 +133,8 @@ describe('App critical dashboard flows', () => {
     await user.click(screen.getByRole('button', { name: 'EXPLAIN' }));
 
     const selector = screen.getByRole('combobox', { name: /Select ResourceClaim/i });
-    expect(screen.getByRole('option', { name: 'team-a/shared (Pending)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'team-b/shared (Allocated)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'team-a/shared (Pending)' }).isConnected).toBe(true);
+    expect(screen.getByRole('option', { name: 'team-b/shared (Allocated)' }).isConnected).toBe(true);
 
     await user.selectOptions(selector, 'team-b/shared');
 
@@ -150,7 +150,7 @@ describe('App critical dashboard flows', () => {
     await user.click(await screen.findByRole('button', { name: 'GRAPH' }));
     await user.click(screen.getByRole('button', { name: 'Open team-b/shared from graph' }));
 
-    expect(await screen.findByRole('heading', { name: 'Allocation Explanation Engine' })).toBeInTheDocument();
+    expect((await screen.findByRole('heading', { name: 'Allocation Explanation Engine' })).isConnected).toBe(true);
     await waitFor(() => {
       expect(mockFetchExplain).toHaveBeenLastCalledWith('shared', 'team-b');
     });
@@ -163,9 +163,9 @@ describe('App critical dashboard flows', () => {
 
     await user.click(await screen.findByRole('button', { name: 'GRAPH' }));
 
-    expect(screen.getByText('Reconnecting...')).toBeInTheDocument();
-    expect(screen.getByText('Dashboard stream disconnected. Reconnecting...')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open team-b/shared from graph' })).toBeEnabled();
+    expect(screen.getByText('Reconnecting...').isConnected).toBe(true);
+    expect(screen.getByText('Dashboard stream disconnected. Reconnecting...').isConnected).toBe(true);
+    expect((screen.getByRole('button', { name: 'Open team-b/shared from graph' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('keeps unaffected empty views usable when one API request fails', async () => {
@@ -174,9 +174,9 @@ describe('App critical dashboard flows', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    expect(await screen.findByText('summary unavailable')).toBeInTheDocument();
+    expect((await screen.findByText('summary unavailable')).isConnected).toBe(true);
     await user.click(screen.getByRole('button', { name: 'CLAIMS' }));
-    expect(screen.getByText('No ResourceClaims found in the current cluster.')).toBeInTheDocument();
+    expect(screen.getByText('No ResourceClaims found in the current cluster.').isConnected).toBe(true);
   });
 
   it('renders diagnostics through an accessible navigation control', async () => {
@@ -186,9 +186,9 @@ describe('App critical dashboard flows', () => {
     const doctorButton = await screen.findByRole('button', { name: /Doctor: 1 Failure/i });
     await user.click(doctorButton);
 
-    expect(screen.getByRole('heading', { name: 'Cluster Diagnostics (Doctor)' })).toBeInTheDocument();
-    expect(screen.getByText('ResourceClaims API is unavailable.')).toBeInTheDocument();
-    expect(screen.getByText(/Enable the resource.k8s.io\/v1 API/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cluster Diagnostics (Doctor)' }).isConnected).toBe(true);
+    expect(screen.getByText('ResourceClaims API is unavailable.').isConnected).toBe(true);
+    expect(screen.getByText(/Enable the resource.k8s.io\/v1 API/).isConnected).toBe(true);
   });
 
   it('marks the active tab for assistive technology', async () => {
@@ -198,7 +198,7 @@ describe('App critical dashboard flows', () => {
     const poolsTab = await screen.findByRole('button', { name: 'POOLS' });
     await user.click(poolsTab);
 
-    expect(poolsTab).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'OVERVIEW' })).toHaveAttribute('aria-pressed', 'false');
+    expect(poolsTab.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'OVERVIEW' }).getAttribute('aria-pressed')).toBe('false');
   });
 });

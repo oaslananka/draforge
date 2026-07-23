@@ -25,11 +25,23 @@ assert_absent() {
 }
 
 assert_contains "$workspace" "autoInstallPeers: false"
-assert_contains "$workspace" "cssom: \"link:./vendor/cssom\""
-assert_contains "$lockfile" "cssom: link:./vendor/cssom"
-assert_contains "$lockfile" "cssom: link:vendor/cssom"
+for adapter in cssom html-escaper uhyphen; do
+  assert_contains "$workspace" "$adapter: \"link:./vendor/$adapter\""
+  assert_contains "$lockfile" "$adapter: link:./vendor/$adapter"
+  assert_contains "$lockfile" "$adapter: link:vendor/$adapter"
+done
 
-for package in "cssom@" "data-urls@" "rrweb-cssom@" "jsdom@" "happy-dom@"; do
+for package in \
+  "cssom@" \
+  "html-escaper@" \
+  "uhyphen@" \
+  "css.escape@" \
+  "min-indent@" \
+  "@testing-library/jest-dom@" \
+  "data-urls@" \
+  "rrweb-cssom@" \
+  "jsdom@" \
+  "happy-dom@"; do
   assert_absent "$lockfile" "$package"
 done
 
@@ -49,6 +61,9 @@ fi
 
 node --input-type=module <<'NODE'
 import { parse } from './web/vendor/cssom/index.js';
+import { escape, unescape } from './web/vendor/html-escaper/index.js';
+import uhyphen from './web/vendor/uhyphen/index.js';
+
 const sheet = parse('.card { display: grid; }');
 const index = sheet.insertRule('.badge { display: inline-flex; }');
 if (index !== 0 || sheet.cssRules.length !== 1) {
@@ -57,6 +72,13 @@ if (index !== 0 || sheet.cssRules.length !== 1) {
 sheet.deleteRule(0);
 if (sheet.cssRules.length !== 0) {
   throw new Error('local CSSOM adapter deleteRule contract failed');
+}
+if (uhyphen('backgroundColor') !== 'background-color') {
+  throw new Error('local uhyphen adapter contract failed');
+}
+const escaped = escape('<button aria-label="x&y">');
+if (escaped !== '&lt;button aria-label=&quot;x&amp;y&quot;&gt;' || unescape(escaped) !== '<button aria-label="x&y">') {
+  throw new Error('local html-escaper adapter contract failed');
 }
 NODE
 

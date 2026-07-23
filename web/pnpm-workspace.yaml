@@ -6,6 +6,8 @@ autoInstallPeers: false
 overrides:
   "brace-expansion@<1.1.16": "1.1.16"
   cssom: "link:./vendor/cssom"
+  html-escaper: "link:./vendor/html-escaper"
+  uhyphen: "link:./vendor/uhyphen"
 allowBuilds:
   esbuild: true
 

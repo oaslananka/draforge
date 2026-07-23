@@ -45,7 +45,7 @@ A stream status badge is visible in the dashboard header.
 
 `App.tsx` is a small composition root. API/query state is isolated in `useDashboardData`, claim explanation requests are isolated in `useClaimExplanation`, SSE lifecycle remains in `useSSE`, and tab rendering is delegated to `DashboardViewRouter`. Header, footer, graph, and view state components are independently reviewable.
 
-The Vitest + repository-owned linkedom environment + React Testing Library suite runs without Kubernetes or a live API server. A local `web/vendor/cssom` adapter supplies the narrow `<style>.sheet` contract required by linkedom without introducing the scanner-flagged npm CSSOM implementation. Deterministic mocks cover:
+The Vitest + repository-owned linkedom environment + React Testing Library suite runs without Kubernetes or a live API server. Local `web/vendor` adapters supply the narrow CSSOM, HTML escaping, and property-hyphenation contracts required by linkedom without introducing scanner-flagged npm helper packages. Deterministic mocks cover:
 
 - initial and partial API failures plus empty states;
 - SSE connected, reconnecting, malformed-message, and cleanup behavior;

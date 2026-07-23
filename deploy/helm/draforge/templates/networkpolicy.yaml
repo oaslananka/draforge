@@ -38,7 +38,21 @@ spec:
   policyTypes:
     - Ingress
     - Egress
-  ingress: [] # No incoming connections allowed to controller
+  {{- if and .Values.controller.metrics.service.enabled .Values.controller.metrics.networkPolicy.enabled }}
+  ingress:
+    - from:
+        - namespaceSelector:
+            {{- toYaml .Values.controller.metrics.networkPolicy.namespaceSelector | nindent 12 }}
+          {{- with .Values.controller.metrics.networkPolicy.podSelector }}
+          podSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.controller.metrics.port }}
+  {{- else }}
+  ingress: []
+  {{- end }}
   egress:
     {{- include "draforge.restrictedEgress" . | nindent 4 }}
 {{- end }}

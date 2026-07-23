@@ -108,11 +108,183 @@
         },
         "image": {
           "$ref": "#/definitions/image"
+        },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "service": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "ClusterIP"
+                  ]
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
+              },
+              "required": [
+                "enabled",
+                "type",
+                "port"
+              ]
+            },
+            "networkPolicy": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "namespaceSelector": {
+                  "type": "object",
+                  "properties": {
+                    "matchLabels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "podSelector": {
+                  "type": "object",
+                  "properties": {
+                    "matchLabels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "enabled",
+                "namespaceSelector",
+                "podSelector"
+              ]
+            },
+            "serviceMonitor": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "namespace": {
+                  "type": "string",
+                  "maxLength": 63,
+                  "pattern": "^(?:[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)?$"
+                },
+                "labels": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "interval": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*(ms|s|m|h)$"
+                },
+                "scrapeTimeout": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*(ms|s|m|h)$"
+                }
+              },
+              "required": [
+                "enabled",
+                "namespace",
+                "labels",
+                "interval",
+                "scrapeTimeout"
+              ]
+            }
+          },
+          "required": [
+            "port",
+            "service",
+            "networkPolicy",
+            "serviceMonitor"
+          ],
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "networkPolicy": {
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "enabled"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "networkPolicy": {
+                    "properties": {
+                      "namespaceSelector": {
+                        "properties": {
+                          "matchLabels": {
+                            "minProperties": 1
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "serviceMonitor": {
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "enabled"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "service": {
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       },
       "required": [
         "replicaCount",
-        "image"
+        "image",
+        "metrics"
       ]
     },
     "networkPolicies": {

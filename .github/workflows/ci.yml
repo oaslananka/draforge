@@ -113,7 +113,7 @@ jobs:
         run: helm template draforge deploy/helm/draforge
 
       - name: Lint chart and showcase image scripts
-        run: shellcheck scripts/verify-chart-images.sh scripts/test-chart-image-verifier.sh scripts/remote-build.sh scripts/test-remote-build.sh
+        run: shellcheck scripts/verify-chart-images.sh scripts/test-chart-image-verifier.sh scripts/verify-controller-metrics-policy.sh scripts/remote-build.sh scripts/test-remote-build.sh
 
       - name: Verify chart image contract
         run: scripts/verify-chart-images.sh
@@ -123,6 +123,9 @@ jobs:
 
       - name: Test DOCR showcase integration
         run: scripts/test-remote-build.sh
+
+      - name: Verify controlled controller metrics scraping
+        run: scripts/verify-controller-metrics-policy.sh
 
       - name: Package Helm Chart
         run: |
@@ -143,7 +146,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Install GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
         with:
           version: v2.16.0
           install-only: true

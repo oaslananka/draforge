@@ -47,6 +47,20 @@ controller:
       enabled: true
       type: ClusterIP
       port: 8082
+    # Metrics ingress remains closed until an explicit monitoring peer is selected.
+    networkPolicy:
+      enabled: false
+      namespaceSelector:
+        matchLabels: {}
+      # Empty means every pod in the selected namespace. Add matchLabels to narrow it.
+      podSelector: {}
+    # Requires the Prometheus Operator CRDs and remains disabled by default.
+    serviceMonitor:
+      enabled: false
+      namespace: ""
+      labels: {}
+      interval: 30s
+      scrapeTimeout: 10s
   resources:
     limits:
       cpu: 500m

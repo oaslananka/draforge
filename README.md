@@ -127,7 +127,7 @@ task test
 End-to-end tests require a real Kubernetes cluster with DRA feature gate and are gated by `DRAFORGE_E2E=1`:
 
 ```bash
-DRAFORGE_E2E=1 go test ./tests/e2e -v
+DRAFORGE_E2E=1 go test -tags=e2e ./tests/e2e/... -v
 ```
 
 ## Release

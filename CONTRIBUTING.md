@@ -111,7 +111,7 @@ E2E tests require a real or Kind-based Kubernetes cluster with DRA feature gate
 enabled and are guarded by the `DRAFORGE_E2E` environment variable:
 
 ```bash
-DRAFORGE_E2E=1 go test ./tests/e2e -v
+DRAFORGE_E2E=1 go test -tags=e2e ./tests/e2e/... -v
 ```
 
 **Note:** E2E tests are excluded from `task test` / `go test ./...` by default.

@@ -42,6 +42,15 @@ jobs:
       - name: Run unit tests (fast)
         run: go test ./...
 
+      - name: Compile tagged E2E package
+        run: go test -tags=e2e ./tests/e2e/... -run '^$'
+
+      - name: Lint remote E2E shell scripts
+        run: shellcheck scripts/remote-e2e.sh scripts/run-remote-e2e-tests.sh scripts/test-remote-e2e-harness.sh
+
+      - name: Test remote E2E orchestration
+        run: bash scripts/test-remote-e2e-harness.sh
+
       - name: Run race detector with coverage
         run: go test -race -coverprofile=coverage.out ./...
 

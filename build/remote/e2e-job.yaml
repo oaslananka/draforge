@@ -3,44 +3,65 @@ kind: Job
 metadata:
   name: draforge-e2e-RUN_ID
   namespace: draforge-ci
+  labels:
+    app.kubernetes.io/name: draforge
+    app.kubernetes.io/component: remote-e2e
+    draforge.oaslananka/e2e-run-id: RUN_LABEL
 spec:
   backoffLimit: 0
+  activeDeadlineSeconds: 1800
   template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: draforge
+        app.kubernetes.io/component: remote-e2e
+        draforge.oaslananka/e2e-run-id: RUN_LABEL
     spec:
+      serviceAccountName: draforge-e2e-RUN_ID
+      automountServiceAccountToken: true
       restartPolicy: Never
+      terminationGracePeriodSeconds: 30
       initContainers:
-      - name: clone
-        image: alpine/git:2.45.2
-        command:
-        - sh
-        - -c
-        - |
-          git clone REPO_URL /workspace && \
-          cd /workspace && \
-          git checkout COMMIT_SHA
-        volumeMounts:
-        - name: workspace
-          mountPath: /workspace
+        - name: clone
+          image: alpine/git:2.45.2
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              git clone --filter=blob:none REPO_URL /workspace
+              cd /workspace
+              git checkout --detach COMMIT_SHA
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
       containers:
-      - name: e2e-runner
-        image: golang:1.26.5
-        workingDir: /workspace
-        command:
-        - sh
-        - -c
-        - |
-          echo "Running remote E2E tests..."
-          go test -v ./tests/e2e/...
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "1Gi"
-          limits:
-            cpu: "1.5"
-            memory: "2Gi"
-        volumeMounts:
-        - name: workspace
-          mountPath: /workspace
+        - name: e2e-runner
+          image: golang:1.26.5
+          workingDir: /workspace
+          command:
+            - /bin/bash
+            - -lc
+            - ./scripts/run-remote-e2e-tests.sh
+          env:
+            - name: DRAFORGE_E2E
+              value: "1"
+            - name: DRAFORGE_E2E_RESULTS
+              value: /artifacts/go-test.json
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1.5"
+              memory: "2Gi"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: artifacts
+              mountPath: /artifacts
       volumes:
-      - name: workspace
-        emptyDir: {}
+        - name: workspace
+          emptyDir: {}
+        - name: artifacts
+          emptyDir: {}

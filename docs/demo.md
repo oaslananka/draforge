@@ -70,11 +70,13 @@ For continuous integration and release readiness, a manual-only remote E2E test 
 3. **Safety Phrase**: When triggering the workflow manually via `workflow_dispatch`, you must enter `run-e2e-doks` in the `confirm` input field.
 
 ### Secret Configuration & Token Scope
-The workflow requires a GitHub repository secret named `DIGITALOCEAN_TOKEN`.
-- **Required Token Scope**: The token must have **Read & Write** access to:
-  - **Kubernetes**: To save kubeconfig and interact with the DOKS cluster.
-  - **Droplets / VPC**: If the E2E script provisions resources.
-- **Repository Visibility**: Only maintainers with access to secrets can run this workflow.
+The workflow requires a GitHub Actions repository secret named `DIGITALOCEAN_TOKEN`.
+- Use a custom-scope token with `kubernetes:read` and `kubernetes:access_cluster`; Droplet, VPC, registry, and Kubernetes create/update/delete API scopes are not required.
+- The token is used only by `doctl` to locate the existing cluster and retrieve a one-hour kubeconfig credential.
+- Never expose the token or generated kubeconfig in inputs, logs, artifacts, or committed files.
+- Only maintainers who can approve the protected `e2e-doks` environment should run the workflow.
+
+The workflow does not provision DigitalOcean infrastructure. It consumes CPU and memory on the existing DOKS workers, which remain billable until the cluster is destroyed through the separate showcase teardown flow.
 
 ### Manual E2E Run Checklist
 Before running the remote E2E workflow:
@@ -85,7 +87,7 @@ Before running the remote E2E workflow:
 
 ### Cleanup Behavior after Failure/Cancellation
 - **Automatic Cleanup Job**: The workflow has a dedicated `cleanup` job that runs `always()` (even if the main test job fails or is cancelled).
-- **Resource Destruction**: This cleanup job deletes the Helm release (`draforge`) and any applied scenario files (e.g. `examples/scenarios/basic-gpu.yaml`) from the cluster to prevent dangling resources.
+- **Run-scoped cleanup**: The script trap and cleanup job delete the remote E2E Job, ServiceAccount, ClusterRole, and ClusterRoleBinding selected by the GitHub run ID. The shared `draforge-ci` Namespace, ResourceQuota, and LimitRange remain for later remote jobs. The existing Helm/scenario cleanup remains best-effort. The DOKS cluster itself is never deleted by this workflow.
 
 ### Common Failure Modes & Troubleshooting
 1. **Error: `DIGITALOCEAN_TOKEN secret is not configured`**
@@ -95,5 +97,5 @@ Before running the remote E2E workflow:
    - *Cause*: The cluster name provided in the workflow input does not exist in the DigitalOcean account.
    - *Fix*: Ensure the cluster is created first or double-check the spelling in the `cluster_name` input.
 3. **Error: `Unauthorized / Forbidden` API calls**
-   - *Cause*: The `DIGITALOCEAN_TOKEN` does not have write scope or has expired.
-   - *Fix*: Regenerate a token with write scope in the DigitalOcean control panel and update the GitHub secret.
+   - *Cause*: The token is expired or lacks `kubernetes:read` / `kubernetes:access_cluster`.
+   - *Fix*: Generate a custom-scope token with those two scopes and update the GitHub secret.

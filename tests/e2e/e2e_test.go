@@ -24,7 +24,7 @@ func TestSmoke(t *testing.T) {
 	// 1. Initialize cluster clients using default kubeconfig
 	clientset, _, _, err := cluster.NewClientset("")
 	if err != nil {
-		t.Skip("Skipping E2E smoke test: no active cluster connection configured")
+		t.Fatalf("E2E smoke test requires an active cluster connection: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

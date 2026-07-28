@@ -62,3 +62,23 @@ func TestControllerMetricsExposeLeaderState(t *testing.T) {
 		})
 	}
 }
+
+func TestControllerMetricsExposeQueueErrorPolicyCounters(t *testing.T) {
+	reconciler := &simulator.Reconciler{
+		ReconcileRetriesCount: 3,
+		TerminalErrorsCount:   2,
+	}
+	runtimeServer := newRuntimeServer(":0", reconciler, nil)
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	response := httptest.NewRecorder()
+	runtimeServer.Handler.ServeHTTP(response, request)
+
+	for _, expected := range []string{
+		"draforge_controller_reconcile_retries_total 3\n",
+		"draforge_controller_terminal_errors_total 2\n",
+	} {
+		if body := response.Body.String(); !strings.Contains(body, expected) {
+			t.Fatalf("metrics body missing %q:\n%s", expected, body)
+		}
+	}
+}

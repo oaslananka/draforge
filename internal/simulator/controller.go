@@ -34,14 +34,16 @@ var (
 
 // Reconciler watches SimulatedDevicePools and creates/updates Kubernetes ResourceSlices.
 type Reconciler struct {
-	selectorEvaluator    *draeval.Evaluator
-	eventRecorder        record.EventRecorder
-	clientset            kubernetes.Interface
-	dynamicClient        dynamic.Interface
-	ReconcileErrorsCount int64
-	AllocationsSimulated int64
-	ActiveFaultsCount    int64
-	leaderState          atomic.Bool
+	selectorEvaluator     *draeval.Evaluator
+	eventRecorder         record.EventRecorder
+	clientset             kubernetes.Interface
+	dynamicClient         dynamic.Interface
+	ReconcileErrorsCount  int64
+	ReconcileRetriesCount int64
+	TerminalErrorsCount   int64
+	AllocationsSimulated  int64
+	ActiveFaultsCount     int64
+	leaderState           atomic.Bool
 }
 
 // NewReconciler creates a Reconciler instance.

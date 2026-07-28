@@ -108,11 +108,16 @@ intervals. Add, update, and delete events are coalesced into two typed workqueue
 Each queue has one worker, so pool passes are serialized with other pool passes
 and allocation passes are serialized with other allocation passes; the two
 pipelines can progress independently. A top-level synchronization error returned
-by a worker increments `draforge_controller_reconcile_errors_total` and is retried
-with exponential backoff starting at 100 milliseconds and capped at 30 seconds.
-A successful pass clears the item's retry history. The current workers re-read
-authoritative API state on each coalesced pass; informer events are the trigger,
-not a scheduler-equivalent cached allocation model.
+by a worker increments `draforge_controller_reconcile_errors_total`. Conflict,
+AlreadyExists, timeout, throttling, service-unavailable, internal, and unknown
+errors are retried with exponential backoff starting at 100 milliseconds and
+capped at 30 seconds. Retry history is cleared after success; otherwise the item
+becomes terminal after eight retries. Authorization, validation, bad-request,
+not-found, unsupported-method, and request-size errors are terminal immediately.
+`draforge_controller_reconcile_retries_total` counts scheduled retries and
+`draforge_controller_terminal_errors_total` counts terminal decisions. The
+current workers re-read authoritative API state on each coalesced pass; informer
+events are the trigger, not a scheduler-equivalent cached allocation model.
 
 ## Observability
 
@@ -123,6 +128,14 @@ DRAForge provides native support for monitoring and logging to assist operators 
 The API server exposes Prometheus metrics on its HTTP service. The controller exposes runtime health and metrics on the named `runtime` port, which defaults to TCP `8082` and serves `/metrics`.
 
 The controller metrics Service is enabled by default, but the controller NetworkPolicy keeps all ingress closed until a monitoring peer is explicitly selected. This prevents unrelated namespaces from scraping the controller merely because the Service exists.
+
+Key controller lifecycle metrics include:
+
+- `draforge_controller_leader`: `1` on the active Lease holder and `0` on standby replicas.
+- `draforge_controller_reconcile_errors_total`: synchronization attempts that returned an error.
+- `draforge_controller_reconcile_retries_total`: rate-limited retries scheduled by the queue policy.
+- `draforge_controller_terminal_errors_total`: errors forgotten immediately or after the retry limit.
+
 
 #### Allow a restricted monitoring peer
 

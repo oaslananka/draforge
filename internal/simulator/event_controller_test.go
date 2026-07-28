@@ -9,6 +9,7 @@ import (
 	"time"
 
 	resourcev1 "k8s.io/api/resource/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -223,6 +224,12 @@ func TestEventControllerRateLimitsAndForgetsFailedItems(t *testing.T) {
 	if errorsCount := controller.reconciler.ReconcileErrorsCount; errorsCount != 1 {
 		t.Fatalf("reconcile errors = %d, want 1", errorsCount)
 	}
+	if retriesCount := controller.reconciler.ReconcileRetriesCount; retriesCount != 1 {
+		t.Fatalf("reconcile retries = %d, want 1", retriesCount)
+	}
+	if terminalCount := controller.reconciler.TerminalErrorsCount; terminalCount != 0 {
+		t.Fatalf("terminal errors = %d, want 0", terminalCount)
+	}
 
 	next := make(chan string, 1)
 	go func() {
@@ -241,5 +248,59 @@ func TestEventControllerRateLimitsAndForgetsFailedItems(t *testing.T) {
 	})
 	if retries := queue.NumRequeues(key); retries != 0 {
 		t.Fatalf("requeues after success = %d, want 0", retries)
+	}
+}
+
+func TestEventControllerForgetsTerminalItems(t *testing.T) {
+	queue := workqueue.NewTypedRateLimitingQueue(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[string](time.Millisecond, 10*time.Millisecond),
+	)
+	defer queue.ShutDown()
+	controller := &eventController{reconciler: &Reconciler{}}
+	queue.Add(poolSyncKey)
+	key, shutdown := queue.Get()
+	if shutdown {
+		t.Fatal("queue shut down before terminal item")
+	}
+	controller.processQueueItem(context.Background(), queue, key, func(context.Context) error {
+		return apierrors.NewForbidden(controllerTestResource, "claim-a", errors.New("forbidden"))
+	})
+	if retries := queue.NumRequeues(key); retries != 0 {
+		t.Fatalf("terminal item requeues = %d, want 0", retries)
+	}
+	if controller.reconciler.ReconcileErrorsCount != 1 || controller.reconciler.ReconcileRetriesCount != 0 || controller.reconciler.TerminalErrorsCount != 1 {
+		t.Fatalf("unexpected terminal counters: %#v", controller.reconciler)
+	}
+}
+
+func TestEventControllerStopsRetryingAtLimit(t *testing.T) {
+	queue := workqueue.NewTypedRateLimitingQueue(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[string](time.Nanosecond, time.Nanosecond),
+	)
+	defer queue.ShutDown()
+	controller := &eventController{reconciler: &Reconciler{}}
+	queue.Add(allocationSyncKey)
+
+	for attempt := 0; attempt <= maxControllerQueueRetries; attempt++ {
+		key, shutdown := queue.Get()
+		if shutdown {
+			t.Fatalf("queue shut down at attempt %d", attempt)
+		}
+		controller.processQueueItem(context.Background(), queue, key, func(context.Context) error {
+			return errors.New("unknown transport error")
+		})
+	}
+
+	if controller.reconciler.ReconcileErrorsCount != maxControllerQueueRetries+1 {
+		t.Fatalf("reconcile errors = %d, want %d", controller.reconciler.ReconcileErrorsCount, maxControllerQueueRetries+1)
+	}
+	if controller.reconciler.ReconcileRetriesCount != maxControllerQueueRetries {
+		t.Fatalf("reconcile retries = %d, want %d", controller.reconciler.ReconcileRetriesCount, maxControllerQueueRetries)
+	}
+	if controller.reconciler.TerminalErrorsCount != 1 {
+		t.Fatalf("terminal errors = %d, want 1", controller.reconciler.TerminalErrorsCount)
+	}
+	if retries := queue.NumRequeues(allocationSyncKey); retries != 0 {
+		t.Fatalf("retry history after terminal exhaustion = %d, want 0", retries)
 	}
 }

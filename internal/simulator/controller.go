@@ -42,6 +42,7 @@ type Reconciler struct {
 	ReconcileErrorsCount int64
 	AllocationsSimulated int64
 	ActiveFaultsCount    int64
+	leaderState          atomic.Bool
 }
 
 // NewReconciler creates a Reconciler instance.
@@ -61,6 +62,16 @@ func NewReconciler(clientset kubernetes.Interface, dyn dynamic.Interface) *Recon
 		dynamicClient:     dyn,
 		eventRecorder:     eventRecorder,
 	}
+}
+
+// SetLeader records whether this process currently owns the active controller lifecycle.
+func (r *Reconciler) SetLeader(leader bool) {
+	r.leaderState.Store(leader)
+}
+
+// IsLeader reports whether this process currently owns the active controller lifecycle.
+func (r *Reconciler) IsLeader() bool {
+	return r.leaderState.Load()
 }
 
 // StartReconciliationLoop runs the reconciliation loop periodically.

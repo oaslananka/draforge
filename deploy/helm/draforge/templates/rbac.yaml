@@ -78,6 +78,35 @@ roleRef:
   name: {{ include "draforge.fullname" . }}-controller-role
   apiGroup: rbac.authorization.k8s.io
 
+{{- if .Values.controller.leaderElection.enabled }}
+---
+# Controller leader-election Role is namespaced and limited to Lease operations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "draforge.fullname" . }}-controller-leader-election
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "draforge.fullname" . }}-controller-leader-election
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "draforge.fullname" . }}-controller
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ include "draforge.fullname" . }}-controller-leader-election
+  apiGroup: rbac.authorization.k8s.io
+
+{{- end }}
+
 ---
 # 3. Node Plugin ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1

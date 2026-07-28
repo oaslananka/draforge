@@ -59,6 +59,42 @@ For direct binary use, the corresponding flags are:
 --shutdown-timeout
 ```
 
+### Controller leader election and replicas
+
+The controller uses a namespaced Kubernetes `Lease` by default. Every replica keeps
+its `/healthz`, `/readyz`, and `/metrics` endpoints available, but only the current
+lease holder starts reconciliation and simulated-allocation loops. The controller
+Pod name is used as the lease identity through the Downward API.
+
+```yaml
+controller:
+  replicaCount: 2
+  leaderElection:
+    enabled: true
+    leaseDuration: 15s
+    renewDeadline: 10s
+    retryPeriod: 2s
+```
+
+The chart rejects `replicaCount` values above one when leader election is disabled.
+The corresponding binary flags are `--leader-elect`,
+`--leader-election-lease-name`, `--leader-election-lease-namespace`,
+`--leader-election-identity`, `--leader-election-lease-duration`,
+`--leader-election-renew-deadline`, and `--leader-election-retry-period`.
+
+`draforge_controller_leader` is `1` only on the active replica and `0` on standby
+replicas. A process that loses leadership stops its active loops and exits so the
+Deployment can restart it as a fresh candidate.
+
+Leader leases are not released early during shutdown. This prevents an old leader
+and a replacement from overlapping while in-flight work drains. During an upgrade,
+rollback, abrupt Pod loss, or node disruption, the replacement may therefore wait
+up to `leaseDuration` before becoming active. Keep the lease duration short enough
+for the required recovery objective, while preserving `leaseDuration >
+renewDeadline > retryPeriod * 1.2`. Roll back by restoring the previous chart/image
+version; the same Lease name is retained, so only one version can be active at a
+time.
+
 ## Observability
 
 DRAForge provides native support for monitoring and logging to assist operators in maintaining cluster health.

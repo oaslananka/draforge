@@ -34,6 +34,20 @@ spec:
             - --readiness-timeout={{ .Values.controller.lifecycle.readinessTimeout }}
             - --readiness-grace-period={{ .Values.controller.lifecycle.readinessGracePeriod }}
             - --shutdown-timeout={{ .Values.controller.lifecycle.shutdownTimeout }}
+            - --leader-elect={{ .Values.controller.leaderElection.enabled }}
+            - --leader-election-lease-name={{ include "draforge.fullname" . }}-controller
+            - --leader-election-lease-duration={{ .Values.controller.leaderElection.leaseDuration }}
+            - --leader-election-renew-deadline={{ .Values.controller.leaderElection.renewDeadline }}
+            - --leader-election-retry-period={{ .Values.controller.leaderElection.retryPeriod }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           ports:
             - name: runtime
               containerPort: {{ .Values.controller.metrics.port }}

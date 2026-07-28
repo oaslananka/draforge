@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,12 +30,26 @@ func main() {
 	var readinessTimeout time.Duration
 	var readinessGracePeriod time.Duration
 	var shutdownTimeout time.Duration
+	leaderOptions := leaderElectionOptions{}
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Absolute path to the kubeconfig file")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8082", "Address for controller health and metrics endpoints")
 	flag.DurationVar(&readinessTimeout, "readiness-timeout", health.DefaultReadinessTimeout, "Maximum duration of one Kubernetes API readiness check")
 	flag.DurationVar(&readinessGracePeriod, "readiness-grace-period", health.DefaultReadinessGracePeriod, "Grace period for transient Kubernetes API readiness failures")
 	flag.DurationVar(&shutdownTimeout, "shutdown-timeout", 5*time.Second, "Maximum graceful runtime server shutdown duration")
+	flag.BoolVar(&leaderOptions.Enabled, "leader-elect", true, "Use a Kubernetes Lease so only one controller replica performs writes")
+	flag.StringVar(&leaderOptions.LeaseName, "leader-election-lease-name", defaultLeaderLeaseName, "Name of the Kubernetes Lease used for controller leadership")
+	flag.StringVar(&leaderOptions.LeaseNamespace, "leader-election-lease-namespace", "", "Namespace of the leader Lease; defaults to POD_NAMESPACE or default")
+	flag.StringVar(&leaderOptions.Identity, "leader-election-identity", "", "Leader candidate identity; defaults to POD_NAME or the hostname")
+	flag.DurationVar(&leaderOptions.LeaseDuration, "leader-election-lease-duration", defaultLeaderLeaseDuration, "Duration non-leaders wait before attempting lease takeover")
+	flag.DurationVar(&leaderOptions.RenewDeadline, "leader-election-renew-deadline", defaultLeaderRenewDeadline, "Maximum time the leader retries lease renewal")
+	flag.DurationVar(&leaderOptions.RetryPeriod, "leader-election-retry-period", defaultLeaderRetryPeriod, "Delay between leader-election attempts")
 	flag.Parse()
+
+	resolvedLeaderOptions, err := resolveProcessLeaderElectionOptions(leaderOptions)
+	if err != nil {
+		fmt.Printf("Invalid leader-election configuration: %v\n", err)
+		os.Exit(1)
+	}
 
 	// 1. Initialize cluster clients
 	clientset, dynamicClient, _, err := cluster.NewClientset(kubeconfig)
@@ -61,14 +76,37 @@ func main() {
 		}
 	}()
 
-	// 3. Start reconciliation loop (sync pools to ResourceSlices)
-	go reconciler.StartReconciliationLoop(ctx, 10*time.Second)
+	activeController := func(activeContext context.Context) {
+		var active sync.WaitGroup
+		active.Add(2)
+		go func() {
+			defer active.Done()
+			reconciler.StartReconciliationLoop(activeContext, 10*time.Second)
+		}()
+		go func() {
+			defer active.Done()
+			reconciler.StartAllocationSimulator(activeContext, 5*time.Second)
+		}()
+		<-activeContext.Done()
+		active.Wait()
+	}
 
-	// 4. Start allocation simulator loop (fallback scheduler logic)
-	go reconciler.StartAllocationSimulator(ctx, 5*time.Second)
+	lifecycleDone := make(chan error, 1)
+	go func() {
+		lifecycleDone <- runControllerLifecycle(ctx, clientset, resolvedLeaderOptions, reconciler, activeController)
+	}()
 
-	// Keep running until signal received
-	<-ctx.Done()
+	select {
+	case lifecycleErr := <-lifecycleDone:
+		if lifecycleErr != nil {
+			fmt.Printf("Controller lifecycle error: %v\n", lifecycleErr)
+		}
+		stop()
+	case <-ctx.Done():
+		if lifecycleErr := <-lifecycleDone; lifecycleErr != nil {
+			fmt.Printf("Controller lifecycle stop error: %v\n", lifecycleErr)
+		}
+	}
 
 	ctx2, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()

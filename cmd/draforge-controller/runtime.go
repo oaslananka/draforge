@@ -45,5 +45,12 @@ func metricsHandler(reconciler *simulator.Reconciler) http.HandlerFunc {
 		_, _ = fmt.Fprintf(w, "draforge_controller_reconcile_errors_total %d\n", atomic.LoadInt64(&reconciler.ReconcileErrorsCount))
 		_, _ = fmt.Fprintf(w, "draforge_controller_allocations_simulated_total %d\n", atomic.LoadInt64(&reconciler.AllocationsSimulated))
 		_, _ = fmt.Fprintf(w, "draforge_controller_active_faults %d\n", atomic.LoadInt64(&reconciler.ActiveFaultsCount))
+		_, _ = fmt.Fprintf(w, "# HELP draforge_controller_leader Whether this process currently owns the controller leader lease\n")
+		_, _ = fmt.Fprintf(w, "# TYPE draforge_controller_leader gauge\n")
+		leader := 0
+		if reconciler.IsLeader() {
+			leader = 1
+		}
+		_, _ = fmt.Fprintf(w, "draforge_controller_leader %d\n", leader)
 	}
 }

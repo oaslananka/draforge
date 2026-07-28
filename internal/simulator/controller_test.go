@@ -612,6 +612,90 @@ func TestSimulateAllocationNoDuplicate(t *testing.T) {
 	t.Logf("claim-1 -> %s, claim-2 -> %s", dev1, dev2)
 }
 
+func TestSimulateAllocationTreatsDriverAsPartOfDeviceIdentity(t *testing.T) {
+	nodeName := "node-0"
+	allocatedClaim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "allocated", Namespace: "default"},
+		Status: resourcev1.ResourceClaimStatus{
+			Allocation: &resourcev1.AllocationResult{
+				Devices: resourcev1.DeviceAllocationResult{
+					Results: []resourcev1.DeviceRequestAllocationResult{
+						{
+							Request: "existing",
+							Driver:  "driver-a.example",
+							Pool:    "shared-pool",
+							Device:  "dev-0",
+						},
+					},
+				},
+			},
+		},
+	}
+	pendingClaim := &resourcev1.ResourceClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "pending", Namespace: "default"},
+		Spec: resourcev1.ResourceClaimSpec{
+			Devices: resourcev1.DeviceClaim{
+				Requests: []resourcev1.DeviceRequest{
+					{
+						Name: "request",
+						Exactly: &resourcev1.ExactDeviceRequest{
+							Count: 1,
+						},
+					},
+				},
+			},
+		},
+	}
+	newSlice := func(name, driver string) *resourcev1.ResourceSlice {
+		return &resourcev1.ResourceSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					"draforge.oaslananka/managed-by": "simulator",
+					"draforge.oaslananka/health":     "healthy",
+				},
+			},
+			Spec: resourcev1.ResourceSliceSpec{
+				Driver:   driver,
+				NodeName: &nodeName,
+				Pool:     resourcev1.ResourcePool{Name: "shared-pool"},
+				Devices:  []resourcev1.Device{{Name: "dev-0"}},
+			},
+		}
+	}
+
+	clientset := fake.NewSimpleClientset(
+		allocatedClaim,
+		pendingClaim,
+		newSlice("driver-a-slice", "driver-a.example"),
+		newSlice("driver-b-slice", "driver-b.example"),
+	)
+	reconciler := NewReconciler(clientset, dynfake.NewSimpleDynamicClient(runtime.NewScheme()))
+	ctx := context.Background()
+
+	if err := reconciler.SimulateAllocation(ctx); err != nil {
+		t.Fatalf("SimulateAllocation failed: %v", err)
+	}
+
+	claim, err := clientset.ResourceV1().ResourceClaims("default").Get(ctx, "pending", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to get pending claim: %v", err)
+	}
+	if claim.Status.Allocation == nil {
+		t.Fatal("expected same-named device under a different driver to remain allocatable")
+	}
+	results := claim.Status.Allocation.Devices.Results
+	if len(results) != 1 {
+		t.Fatalf("expected 1 allocation result, got %d", len(results))
+	}
+	if results[0].Driver != "driver-b.example" {
+		t.Fatalf("expected allocation from driver-b.example, got %q", results[0].Driver)
+	}
+	if results[0].Pool != "shared-pool" || results[0].Device != "dev-0" {
+		t.Fatalf("unexpected allocation identity: %s/%s/%s", results[0].Driver, results[0].Pool, results[0].Device)
+	}
+}
+
 func TestSimulateAllocationNoDevice(t *testing.T) {
 	claim := &resourcev1.ResourceClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "pending", Namespace: "default"},

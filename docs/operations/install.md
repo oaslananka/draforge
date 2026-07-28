@@ -4,39 +4,41 @@ DRAForge is provider-neutral and can be deployed on any compatible Kubernetes cl
 
 ## Demo Profile (Local Development)
 
-The Demo profile is optimized for local exploration using a `kind` cluster with the DRA feature gate enabled. This profile is not suitable for production use as it uses local builds and configurations.
+The local profile uses the same policy-pinned kind installation exercised by pull-request CI. It creates a Kubernetes v1.35.5 cluster with DRA enabled, installs the hash-verified NetworkPolicy CNI, builds and loads all three local images, installs the complete Helm release, runs the scenario/API verification suite, and keeps the verified cluster for exploration.
 
 ### Prerequisites
-- [Go 1.26+](https://go.dev/doc/install)
-- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/)
-- [Task](https://taskfile.dev/installation/)
 
-### Installation Steps
+- Docker with daemon access
+- the exact kind version declared in `tests/install-e2e/kubernetes-versions.json`
+- kubectl, Helm, jq, curl, Go, Node.js, pnpm, and Task
 
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/oaslananka/draforge.git
-   cd draforge
-   ```
+### Create and keep the verified cluster
 
-2. **Build the Binaries:**
-   Use Task to compile the binaries into the `bin/` directory.
-   ```bash
-   task build
-   ```
+```bash
+DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind
+```
 
-3. **Deploy Core Components:**
-   Apply the Custom Resource Definitions (CRDs) and basic scenario manifests to your cluster.
-   ```bash
-   kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
-   kubectl apply -f examples/scenarios/basic-gpu.yaml
-   ```
+The command uses cluster name `draforge-install-e2e`, installs DRAForge in namespace `draforge-system`, and leaves diagnostics under `artifacts/install-e2e/`.
 
-4. **Verify Installation:**
-   You can verify the deployment by launching the Terminal User Interface (TUI).
-   ```bash
-   ./bin/draforge tui
-   ```
+Access the dashboard locally:
+
+```bash
+kubectl port-forward svc/draforge-server -n draforge-system 8080:8080
+```
+
+Then open `http://localhost:8080`. For CLI/TUI exploration in another terminal:
+
+```bash
+task build
+./bin/draforge doctor
+./bin/draforge tui
+```
+
+Delete the disposable cluster when finished:
+
+```bash
+kind delete cluster --name draforge-install-e2e
+```
 
 ## Production Profile (Helm Deployment)
 
@@ -45,7 +47,7 @@ The production profile installs credential-free GHCR images and internal Cluster
 ### Prerequisites
 - [Helm v3+](https://helm.sh/docs/intro/install/)
 - `kubectl` configured with cluster administrator access.
-- A Kubernetes cluster with the **DynamicResourceAllocation** feature gate enabled.
+- A Kubernetes v1.35+ cluster serving `resource.k8s.io/v1`. Core DRA is enabled by default on the supported baseline; distribution-specific configurations must still be verified.
 
 ### Installation Steps
 
@@ -142,9 +144,9 @@ The secure Gateway route targets the authentication proxy, not the DRAForge Serv
 
 For an Ingress controller, set `gateway.enabled: false` and `gateway.ingress.enabled: true` while retaining the same hostname, TLS Secret, proxy Service, and HTTPS CORS origin. Controller-specific annotations may be placed under `gateway.ingress.annotations`.
 
-### Upgrade Note for v0.3
+### Upgrade Note for Current Chart Defaults
 
-Earlier chart defaults created an HTTP Gateway automatically. Upgrades to v0.3 create no external listener unless an explicit profile enables one. Existing public installations must choose either the short-lived local-demo profile or a TLS/authenticated public configuration before upgrading.
+Earlier chart defaults created an HTTP Gateway automatically. The current chart creates no external listener unless an explicit profile enables one. Existing public installations must choose either the short-lived local-demo profile or a TLS/authenticated public configuration before upgrading.
 
 ### Optional DigitalOcean Showcase Registry Override
 

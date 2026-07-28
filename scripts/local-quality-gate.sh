@@ -10,6 +10,7 @@ for tool in go helm terraform pnpm golangci-lint goreleaser python3; do
 done
 
 python3 scripts/verify-release-metadata.py --self-test --root .
+python3 scripts/verify-documentation.py --self-test
 python3 scripts/verify-goreleaser-docker-v2.py --self-test --check
 python3 scripts/verify-goreleaser-docker-artifacts.py --self-test
 bash scripts/test-verify-release-tag.sh

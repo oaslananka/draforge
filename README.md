@@ -68,25 +68,33 @@ Binaries are also available as pre-built archives from the [GitHub Releases](htt
 
 ## Quickstart
 
-### Quickstart A: Local Kind cluster development
-To run DRAForge locally using a Go development environment and a `kind` cluster:
+### Quickstart A: Verified local kind cluster
 
-1. **Prerequisites**:
-   - Install Go 1.26+
-   - Install `kind` (with DRA feature gate enabled)
-   - Install `task`
+Install Docker, kubectl, Helm, jq, curl, Go, Node.js, pnpm, Task, and the kind version pinned in `tests/install-e2e/kubernetes-versions.json`. Then create the same complete local stack used by the pull-request install gate and keep it for exploration:
 
-2. **Build and Deploy**:
-   ```bash
-   task build
-   kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
-   kubectl apply -f examples/scenarios/basic-gpu.yaml
-   ```
+```bash
+DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind
+```
 
-3. **Launch TUI**:
-   ```bash
-   ./bin/draforge tui
-   ```
+Access the dashboard:
+
+```bash
+kubectl port-forward svc/draforge-server -n draforge-system 8080:8080
+```
+
+Build the local CLI/TUI when needed:
+
+```bash
+task build
+./bin/draforge doctor
+./bin/draforge tui
+```
+
+Destroy the disposable cluster when finished:
+
+```bash
+kind delete cluster --name draforge-install-e2e
+```
 
 ### Quickstart B: Optional DigitalOcean Kubernetes (DOKS) Showcase
 

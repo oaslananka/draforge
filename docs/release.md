@@ -231,9 +231,9 @@ Additionally, never commit:
 
 | Problem | Likely cause | Fix |
 |---|---|---|
-| `goreleaser` not found | Not installed or not on `$PATH` | Install via `go install github.com/goreleaser/goreleaser/v2@latest` |
+| `goreleaser` not found | Not installed or not on `$PATH` | Install the repository-pinned GoReleaser v2.16.0 release |
 | Docker build fails | Docker daemon not running | Start Docker Desktop / dockerd |
 | `syft` command not found | Syft not installed | Install from https://github.com/anchore/syft |
-| `gh` auth failure | No GitHub token or expired token | Run `gh auth login` or set `GITHUB_TOKEN` |
+| `gh` auth failure during local inspection | GitHub CLI is not authenticated | Run `gh auth login`; do not create a long-lived production publish token |
 | Cosign signing fails | GitHub OIDC or package permissions unavailable | Verify `id-token: write`, package permissions, and the failed workflow logs |
-| Release created but no assets | Missing `GITHUB_TOKEN` | Ensure token has `repo` scope |
+| Release created but no assets | Protected workflow publish step failed or lacked repository permissions | Inspect the tag workflow and verify `contents: write`, `packages: write`, and `id-token: write` |

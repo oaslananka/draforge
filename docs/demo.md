@@ -46,7 +46,7 @@ Once the dashboard is online:
 4. **Simulate a Fault**:
    Inject a device failure using the CLI:
    ```bash
-   draforge inject fault --pool basic-gpu-pool --type unhealthy
+   draforge inject-fault --pool basic-gpu-pool --type unhealthy
    ```
    Watch the graph update in real-time. The affected devices will show warning states, and the `doctor` check will highlight the failure.
 

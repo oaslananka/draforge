@@ -29,6 +29,16 @@ assert_contains() {
   }
 }
 
+assert_absent() {
+  local file=$1
+  local text=$2
+  if grep -Fq -- "$text" "$file"; then
+    echo "--- $file ---" >&2
+    cat "$file" >&2 || true
+    fail "expected $file not to contain: $text"
+  fi
+}
+
 cat > "$FAKE_BIN/helm" <<'HELM'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -80,6 +90,10 @@ case "$command_name" in
       printf 'yes\n'
       exit 0
     fi
+    if [[ "$identity" == *:draforge-controller && "$verb/$resource/$subresource" == "update/resourceclaims.resource.k8s.io/binding" ]]; then
+      printf 'yes\n'
+      exit 0
+    fi
     printf 'no\n'
     exit 1
     ;;
@@ -97,9 +111,13 @@ JSON
 JSON
         ;;
       resourceclaim.resource.k8s.io)
-        cat <<'JSON'
+        if [[ "${FAKE_NO_ALLOCATION:-0}" == "1" ]]; then
+          printf '%s\n' '{"status":{}}'
+        else
+          cat <<'JSON'
 {"status":{"allocation":{"devices":{"results":[{"driver":"sim.draforge.oaslananka","pool":"e2e-gpu-pool","device":"dev-0"}]}}}}
 JSON
+        fi
         ;;
       pod)
         cat <<'JSON'
@@ -225,6 +243,7 @@ run_case() {
   if [[ "$expected_status" -eq 0 ]]; then
     jq -e '.passed == true' "$case_dir/artifacts/report.json" >/dev/null
     assert_contains "$case_dir/commands.log" 'helm upgrade --install draforge'
+    assert_contains "$case_dir/commands.log" 'kubectl auth can-i --as=system:serviceaccount:draforge-system:draforge-controller update resourceclaims.resource.k8s.io --subresource=binding --all-namespaces'
     assert_contains "$case_dir/commands.log" 'kubectl apply -f tests/install-e2e/resources.yaml'
     assert_contains "$case_dir/commands.log" 'kubectl apply -f tests/install-e2e/network-policy-probes.yaml'
     assert_contains "$case_dir/commands.log" 'kubectl apply -f tests/install-e2e/workload.yaml'
@@ -239,6 +258,9 @@ run_case() {
 run_case success 0 env
 run_case broken-api 1 env FAKE_BROKEN_API=1
 run_case missing-component 1 env FAKE_MISSING_COMPONENT=1
+run_case no-allocation 1 env FAKE_NO_ALLOCATION=1
+assert_contains "$TEST_ROOT/no-allocation/stdout.log" 'ERROR: timed out waiting for simulated ResourceClaim allocation'
+assert_absent "$TEST_ROOT/no-allocation/stdout.log" 'Cannot iterate over null'
 
 pull_request_matrix=$("$ROOT_DIR/scripts/e2e-matrix.sh" pull-request)
 full_matrix=$("$ROOT_DIR/scripts/e2e-matrix.sh" full)

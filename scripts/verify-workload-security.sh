@@ -17,6 +17,28 @@ assert_contains() {
   grep -Fq -- "$text" "$file" || fail "$file is missing: $text"
 }
 
+assert_absent() {
+  local file=$1
+  local text=$2
+  if grep -Fq -- "$text" "$file"; then
+    fail "$file unexpectedly contains: $text"
+  fi
+}
+
+assert_rule() {
+  local file=$1
+  local resource=$2
+  local verbs=$3
+  awk -v resource="$resource" -v verbs="$verbs" '
+    index($0, "resources: [\"" resource "\"]") {
+      if (getline > 0 && index($0, "verbs: [" verbs "]")) {
+        found=1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' "$file" || fail "$file is missing exact rule for $resource with verbs [$verbs]"
+}
+
 assert_count() {
   local file=$1
   local text=$2
@@ -36,6 +58,15 @@ for component in server controller node-plugin; do
   assert_contains "$manifest" "name: draforge-$component-binding"
   assert_contains "$manifest" "name: draforge-$component-role"
 done
+
+controller_role="$work_dir/controller-role.yaml"
+awk 'BEGIN { RS="---"; ORS="" } /kind: ClusterRole/ && /name: draforge-controller-role/ { print }' \
+  "$manifest" > "$controller_role"
+[[ -s "$controller_role" ]] || fail "rendered controller ClusterRole was not found"
+assert_rule "$controller_role" "resourceclaims/binding" '"update"'
+assert_absent "$manifest" 'resources: ["*"]'
+assert_absent "$manifest" 'verbs: ["*"]'
+assert_count "$manifest" 'resources: ["resourceclaims/binding"]' 1
 
 # All three runtime workloads have bounded writable storage.
 assert_count "$manifest" "ephemeral-storage: 256Mi" 3

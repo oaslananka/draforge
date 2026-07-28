@@ -238,6 +238,10 @@ resources: [resourceclaims/status]
 verbs: [get, update, patch]
 
 apiGroups: [resource.k8s.io]
+resources: [resourceclaims/binding]
+verbs: [update]
+
+apiGroups: [resource.k8s.io]
 resources: [deviceclasses, resourceclaimtemplates]
 verbs: [get, list, watch]
 
@@ -250,8 +254,12 @@ resources: [simulateddevicepools/status]
 verbs: [get, update, patch]
 ```
 
-This is the target policy. The chart must be audited separately to remove any
-remaining wildcard verbs.
+Kubernetes v1.36 introduces granular authorization for ResourceClaim allocation
+and reservation changes. Updating `status.allocation` or `status.reservedFor`
+requires the synthetic `resourceclaims/binding` resource in addition to
+`resourceclaims/status`. DRAForge uses `UpdateStatus`, so the chart grants only
+`update` on `resourceclaims/binding`; it does not grant `patch`, wildcard
+resources, or wildcard verbs.
 
 ---
 

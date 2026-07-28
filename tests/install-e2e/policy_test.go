@@ -169,6 +169,12 @@ func validateResourceClaim(t *testing.T, claim *resourcev1.ResourceClaim, device
 	if len(claim.Spec.Devices.Requests) != 1 || claim.Spec.Devices.Requests[0].Exactly == nil {
 		t.Fatalf("claim must contain one exact device request: %#v", claim.Spec.Devices.Requests)
 	}
+	if len(claim.Spec.Devices.Constraints) != 1 || claim.Spec.Devices.Constraints[0].MatchAttribute == nil {
+		t.Fatalf("claim must contain one MatchAttribute constraint: %#v", claim.Spec.Devices.Constraints)
+	}
+	if got := string(*claim.Spec.Devices.Constraints[0].MatchAttribute); got != "sim.draforge.oaslananka/model" {
+		t.Fatalf("claim MatchAttribute must enforce the simulator model, got %q", got)
+	}
 	exact := claim.Spec.Devices.Requests[0].Exactly
 	if exact.DeviceClassName != deviceClassName || exact.AllocationMode != resourcev1.DeviceAllocationModeAll || exact.Count != 0 {
 		t.Fatalf("claim request must select all matching %q devices: %#v", deviceClassName, exact)

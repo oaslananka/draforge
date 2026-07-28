@@ -90,11 +90,22 @@ func (r *Reconciler) planClaimAllocation(
 	slices []resourcev1.ResourceSlice,
 	classes map[string]*resourcev1.DeviceClass,
 ) (allocationPlan, *allocationFailure) {
-	if failure := validateSupportedClaim(claim); failure != nil {
+	constraints, failure := supportedMatchAttributeConstraints(claim)
+	if failure != nil {
 		return allocationPlan{}, failure
 	}
 
 	planner := newClaimPlanner(r, claims, slices, classes)
+	if len(constraints) > 0 {
+		return planner.planConstrainedClaimAllocation(ctx, claim, constraints)
+	}
+	return planner.planUnconstrainedClaimAllocation(ctx, claim)
+}
+
+func (planner *claimPlanner) planUnconstrainedClaimAllocation(
+	ctx context.Context,
+	claim *resourcev1.ResourceClaim,
+) (allocationPlan, *allocationFailure) {
 	plan := allocationPlan{}
 	for _, request := range claim.Spec.Devices.Requests {
 		remainingResults := resourcev1.AllocationResultsMaxSize - len(plan.results)
@@ -109,13 +120,6 @@ func (r *Reconciler) planClaimAllocation(
 		plan.append(selection)
 	}
 	return plan, nil
-}
-
-func validateSupportedClaim(claim *resourcev1.ResourceClaim) *allocationFailure {
-	if len(claim.Spec.Devices.Constraints) > 0 {
-		return unsupportedFailure("claim-level device constraints are not supported")
-	}
-	return nil
 }
 
 func validateClaimResultLimit(existing, additional int) *allocationFailure {

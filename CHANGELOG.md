@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated the frontend container build to a digest-pinned Node 22.23.1 image and exact current Corepack release so pnpm signature verification remains deterministic in clean Docker builds.
 
 ### Changed
-- Replaced simulator product-name allocation heuristics and the explain engine's flat CEL map with the exact-version Kubernetes DRA CEL evaluator, typed selector inputs, ordered `FirstAvailable` handling, same-node `ExactCount` selection, complete latest-generation `All` allocation, and fail-closed warning events for unsupported requests.
+- Replaced simulator product-name allocation heuristics and the explain engine's flat CEL map with the exact-version Kubernetes DRA CEL evaluator, typed selector inputs, ordered `FirstAvailable` handling, same-node `ExactCount` selection, complete latest-generation `All` allocation, bounded scalar `MatchAttribute` backtracking, and fail-closed warning events for unsupported requests.
 - Synchronized security support, Kubernetes compatibility, local installation, E2E, release, and CLI documentation with repository-enforced contracts and added stable relative-link/command validation.
 - Future release tags must be annotated SemVer or release-candidate tag objects on `main`; protected `v*` tags are immutable after creation.
 - Helm installs no longer create Gateway or Ingress listeners by default. External dashboard exposure now requires an explicit local-demo or secure-public values profile.

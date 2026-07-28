@@ -62,12 +62,13 @@ type selectionInput struct {
 }
 
 type claimPlanner struct {
-	reconciler    *Reconciler
-	claims        []resourcev1.ResourceClaim
-	slices        []resourcev1.ResourceSlice
-	classes       map[string]*resourcev1.DeviceClass
-	evaluator     *draeval.Evaluator
-	chosenDevices map[string]bool
+	reconciler     *Reconciler
+	claims         []resourcev1.ResourceClaim
+	slices         []resourcev1.ResourceSlice
+	classes        map[string]*resourcev1.DeviceClass
+	evaluator      *draeval.Evaluator
+	chosenDevices  map[string]bool
+	committedUsage committedAllocationUsage
 }
 
 type candidateAccumulator struct {
@@ -96,8 +97,14 @@ func (r *Reconciler) planClaimAllocation(
 		return allocationPlan{}, failure
 	}
 
-	planner := newClaimPlanner(r, claims, slices, classes)
-	if len(constraints) > 0 {
+	committedUsage, failure := collectCommittedAllocationUsage(claims)
+	if failure != nil {
+		return allocationPlan{}, failure
+	}
+	useBacktrackingPlanner := len(constraints) > 0 || hasManagedShareableDevice(slices) || committedUsage.hasShared()
+
+	planner := newClaimPlanner(r, claims, slices, classes, committedUsage)
+	if useBacktrackingPlanner {
 		return planner.planConstrainedClaimAllocation(ctx, claim, constraints)
 	}
 	return planner.planUnconstrainedClaimAllocation(ctx, claim)
@@ -140,18 +147,20 @@ func newClaimPlanner(
 	claims []resourcev1.ResourceClaim,
 	slices []resourcev1.ResourceSlice,
 	classes map[string]*resourcev1.DeviceClass,
+	committedUsage committedAllocationUsage,
 ) *claimPlanner {
 	evaluator := reconciler.selectorEvaluator
 	if evaluator == nil {
 		evaluator = draeval.NewEvaluator()
 	}
 	return &claimPlanner{
-		reconciler:    reconciler,
-		claims:        claims,
-		slices:        slices,
-		classes:       classes,
-		evaluator:     evaluator,
-		chosenDevices: make(map[string]bool),
+		reconciler:     reconciler,
+		claims:         claims,
+		slices:         slices,
+		classes:        classes,
+		evaluator:      evaluator,
+		chosenDevices:  make(map[string]bool),
+		committedUsage: committedUsage,
 	}
 }
 
@@ -650,9 +659,6 @@ func unsupportedDeviceFailure(device *resourcev1.Device) *allocationFailure {
 	}
 	if device.BindsToNode != nil || len(device.BindingConditions) > 0 || len(device.BindingFailureConditions) > 0 {
 		return unsupportedFailure(fmt.Sprintf("device %q uses unsupported binding-condition fields", device.Name))
-	}
-	if device.AllowMultipleAllocations != nil && *device.AllowMultipleAllocations {
-		return unsupportedFailure(fmt.Sprintf("device %q allows multiple allocations", device.Name))
 	}
 	if len(device.NodeAllocatableResourceMappings) > 0 {
 		return unsupportedFailure(fmt.Sprintf("device %q uses node-allocatable resource mappings", device.Name))

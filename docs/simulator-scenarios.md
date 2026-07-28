@@ -68,7 +68,10 @@ The current supported allocation subset is:
   semantic-version values, including all-request, request, and
   `<request>/<subrequest>` scopes;
 - exclusive-device `CapacityRequirements.requests` filtering where every requested
-  quantity exists on the device and does not exceed its fixed capacity.
+  quantity exists on the device and does not exceed its fixed capacity;
+- shareable devices with at least one capacity, including policy defaults,
+  `validValues`/`validRange` rounding, committed and in-plan consumption accounting,
+  and UUID `ShareID` plus complete `ConsumedCapacity` allocation results.
 
 `All` allocation requires complete ResourceSlice coverage for the latest
 pool generation, excludes devices already allocated by exact identity, and
@@ -78,12 +81,16 @@ alternative may fall through to the next ordered `FirstAvailable` alternative.
 100,000-branch safety budget; exhausting that budget leaves the claim pending
 with an explicit unsupported-request warning instead of approximating a result.
 
+Shareable allocation is limited to devices that define at least one capacity.
+Existing share status must pair a normalized UUID `ShareID` with all capacity keys
+in `ConsumedCapacity`; duplicate IDs, missing or unknown keys, negative values,
+and aggregate overcommit fail closed. Capacity exhaustion rejects that candidate
+and allows normal device or ordered `FirstAvailable` backtracking.
+
 The following features are intentionally fail-closed until their complete
-semantics are implemented: capacity request policies, shareable-device
-aggregation and consumption status, multiple allocations, `DistinctAttribute`,
-list-valued constraint attributes, admin access,
-device taints/tolerations, partitionable/per-device node
-selection, binding conditions, shared counters, and node-allocatable mappings.
+semantics are implemented: `DistinctAttribute`, list-valued constraint attributes,
+admin access, device taints/tolerations, partitionable/per-device node selection,
+binding conditions, shared counters, and node-allocatable mappings.
 The claim remains pending and the controller emits a warning event such as
 `SimulationUnsupportedRequest`, `SimulationSelectorError`, or
 `SimulationDeviceClassNotFound`.
@@ -141,4 +148,5 @@ The simulator test suite covers:
 - `All` allocation across complete latest-generation pools, including empty, oversized, and allocated-device cases
 - Scalar `MatchAttribute` equality, request/subrequest scope, combination and cross-request backtracking, and bounded-search failure
 - Exclusive fixed-capacity filtering for exact, all, fallback, multi-key, and constrained allocation paths
+- Shareable-device policy rounding, cross-claim/request accounting, capacity exhaustion fallback, UUID/share status, and malformed existing-state rejection
 - Fail-closed diagnostics for missing classes, invalid CEL, and unsupported request, constraint, or sharing modes

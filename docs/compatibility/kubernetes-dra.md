@@ -66,7 +66,7 @@ explicitly supports them.
 | Granular status authorization | Beta extension | Not implemented |
 | Extended resource allocation by DRA | Alpha extension | Not implemented |
 | Partitionable devices | Alpha extension | Not implemented |
-| Consumable capacity | Alpha extension | Exclusive fixed-capacity request filtering is supported; sharing, request-policy rounding, and consumption accounting are not |
+| Consumable capacity | Alpha extension | Simulator support includes exclusive filtering plus a bounded shareable-device subset with request-policy rounding and allocation accounting |
 | Device taints and tolerations | Alpha extension | Not implemented |
 | Resource pool status | Alpha extension | Not implemented |
 | Device binding conditions | Alpha extension | Not implemented |
@@ -84,9 +84,9 @@ explicitly supports them.
 | ResourceClaim discovery | Supported | Reads status/allocation data and maps claims to Pods where possible |
 | DeviceClass discovery | Supported | DeviceClasses are listed and core selectors use `k8s.io/dynamic-resource-allocation/cel` pinned to the repository Kubernetes version |
 | Claim allocation explain | Partial | DeviceClass selectors use the shared Kubernetes evaluator; request-level selectors, taints, binding and consumable-capacity reasoning remain incomplete |
-| Simulator allocation | Partial | Supports existing DeviceClasses, class/request selectors, ordered `FirstAvailable`, default/`ExactCount`, `All` over complete latest-generation pools, scalar `MatchAttribute` constraints with bounded backtracking, exclusive fixed-capacity requirements, health, complete device identity, one-node selection and the 32-result limit; remaining advanced features fail closed |
+| Simulator allocation | Partial | Supports existing DeviceClasses, class/request selectors, ordered `FirstAvailable`, default/`ExactCount`, `All` over complete latest-generation pools, scalar `MatchAttribute`, exclusive and shareable capacity requirements, bounded backtracking, health, complete device/share identity, one-node selection and the 32-result limit; remaining advanced features fail closed |
 | Device health | Partial | Custom label fallback exists; native health status support is incomplete |
-| Consumable capacity | Partial | Values are displayed and exclusive requests filter on fixed capacities; shareable-device accounting, request policies, `ShareID`, and `ConsumedCapacity` allocation output are missing |
+| Consumable capacity | Partial | The simulator applies defaults, `validValues`, and `validRange` policies, aggregates committed and in-plan use, and writes UUID `ShareID` plus complete `ConsumedCapacity`; empty-capacity shareable devices and semantics outside this documented subset fail closed |
 | CDI output | Partial | The simulator can produce CDI-oriented output, but Helm deployment modes must clearly separate demo and host-integrated operation |
 | Helm CRD packaging | Supported | The SimulatedDevicePool CRD is packaged under chart `crds/` for Helm install |
 | RBAC least privilege | Supported | Server and node-plugin roles are read-only; controller writes are resource/verb scoped, including the Kubernetes v1.36 `resourceclaims/binding` authorization required for allocation updates |
@@ -110,12 +110,17 @@ explicitly supports them.
    and respects the 32-result claim limit. Stable scalar `MatchAttribute` constraints
    support all-request, request, and parent/subrequest scopes through deterministic
    bounded backtracking. Exclusive-device `CapacityRequirements.requests` filter
-   candidates by fixed quantity without producing sharing status. Capacity request
-   policies, shareable-device aggregation, `ShareID`, `ConsumedCapacity`,
-   `DistinctAttribute`, list-valued constraint semantics, admin access, taints/tolerations,
-   partitionable devices, binding conditions and node-allocatable mappings remain
-   unsupported. Unsupported input leaves the claim pending and emits a warning
-   event; the simulator must not be used as a scheduler conformance oracle.
+   candidates by fixed quantity without producing sharing status. Devices with
+   `allowMultipleAllocations=true` must define at least one capacity; the simulator
+   applies policy defaults, rounds through `validValues` or `validRange`, aggregates
+   committed and in-plan consumption by exact `<driver, pool, device>` identity, and
+   records a unique UUID `ShareID` plus every `ConsumedCapacity` entry. Malformed,
+   duplicate, incomplete, or overcommitted sharing status fails closed.
+   `DistinctAttribute`, list-valued constraint semantics, admin access,
+   taints/tolerations, partitionable/shared-counter devices, binding conditions and
+   node-allocatable mappings remain unsupported. Unsupported input leaves the claim
+   pending and emits a warning event; the simulator must not be used as a scheduler
+   conformance oracle.
 
 3. **Native health and status features are incomplete.** DRAForge still relies
    on custom labels or simplified status interpretation in some paths.
@@ -131,10 +136,11 @@ explicitly supports them.
    broad enough read access to observe DRA objects. Per-device status visibility
    and admin-access flows are future work.
 
-6. **Alpha/beta DRA extensions are not guaranteed.** v1.36-era alpha features
-   such as partitionable devices, consumable capacity, device taints, binding
-   conditions and node allocatable resources require explicit support before
-   DRAForge can diagnose them accurately.
+6. **Alpha/beta DRA extensions are not guaranteed.** The documented simulator
+   subset covers consumable capacity, but v1.36-era extensions such as
+   partitionable/shared-counter devices, device taints, binding conditions and node
+   allocatable resources require explicit support before DRAForge can diagnose them
+   accurately.
 
 ---
 

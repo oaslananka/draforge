@@ -9,13 +9,17 @@
     "lint": "node ./node_modules/eslint/bin/eslint.js . --report-unused-disable-directives --max-warnings 0",
     "preview": "node ./node_modules/vite/bin/vite.js preview",
     "test": "node ./node_modules/typescript/bin/tsc --noEmit && node ./node_modules/vitest/vitest.mjs run",
-    "test:watch": "node ./node_modules/vitest/vitest.mjs"
+    "test:watch": "node ./node_modules/vitest/vitest.mjs",
+    "test:browser": "node ./node_modules/vite/bin/vite.js build && node ./node_modules/@playwright/test/cli.js test",
+    "test:browser:install": "node ./node_modules/@playwright/test/cli.js install --with-deps chromium firefox webkit"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.61.1",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "16.3.0",
     "@testing-library/user-event": "14.6.1",

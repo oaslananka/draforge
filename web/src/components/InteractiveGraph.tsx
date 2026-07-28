@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ResourceGraph } from '../api/types';
 import type { ClaimIdentity } from '../claims/identity';
 import { claimIdentityFromGraphNode } from '../claims/identity';
 import { deterministicInitialPosition } from '../graph/layout';
+import usePrefersReducedMotion from '../hooks/usePrefersReducedMotion';
 
 interface NodePosition {
   id: string;
@@ -53,6 +54,25 @@ function nodeColor(graphData: ResourceGraph | null, type: string, id: string) {
     default:
       return '#6b7280';
   }
+}
+
+function nodeAccessibleName(node: NodePosition) {
+  const namespace = typeof node.metadata?.namespace === 'string'
+    ? node.metadata.namespace
+    : '';
+  const status = typeof node.metadata?.status === 'string'
+    ? node.metadata.status
+    : '';
+
+  if (node.type === 'ResourceClaim' && namespace && status) {
+    return `${node.type} ${node.label} in namespace ${namespace}, status ${status}`;
+  }
+  if (status) return `${node.type} ${node.label}, status ${status}`;
+  return `${node.type} ${node.label}`;
+}
+
+function nodeForeground(type: string) {
+  return type === 'Unknown' ? '#ffffff' : '#000000';
 }
 
 function relatedNodes(graphData: ResourceGraph | null, nodeId: string): RelatedNode[] {
@@ -136,6 +156,8 @@ function Relationships({ graphData, nodeId, nodes, onSelectNode }: Relationships
 export default function InteractiveGraph({ graphData, onSelectClaim }: InteractiveGraphProps) {
   const width = 800;
   const height = 500;
+  const graphDescriptionId = useId();
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const [nodes, setNodes] = useState<NodePosition[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodePosition | null>(null);
@@ -196,6 +218,16 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
 
   // Physics Simulation loop
   useEffect(() => {
+    if (prefersReducedMotion) {
+      const current = nodesRef.current;
+      current.forEach((node) => {
+        node.vx = 0;
+        node.vy = 0;
+      });
+      setNodes([...current]);
+      return undefined;
+    }
+
     let animationFrameId: number;
 
     const tick = () => {
@@ -264,7 +296,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
 
     animationFrameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [graphData]);
+  }, [graphData, prefersReducedMotion]);
 
   const handleNodeMouseDown = (e: React.MouseEvent, node: NodePosition) => {
     e.stopPropagation();
@@ -353,11 +385,24 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
         <div style={{ display: 'flex', gap: '10px' }}>
           <button type="button" className="badge badge-success" style={{ border: 'none', cursor: 'pointer' }} onClick={handleResetZoom}>Reset View</button>
         </div>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Use mouse wheel to zoom, drag background to pan.</span>
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          {prefersReducedMotion
+            ? 'Reduced motion is active; graph nodes use fixed positions.'
+            : 'Use mouse wheel to zoom, drag background to pan. Use Tab and Enter or Space to inspect nodes.'}
+        </span>
       </div>
 
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 2, minWidth: '300px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-light)', overflow: 'hidden', position: 'relative' }}>
+        <div
+          role="region"
+          aria-label="Resource relationship graph"
+          aria-describedby={graphDescriptionId}
+          data-motion={prefersReducedMotion ? 'reduced' : 'full'}
+          style={{ flex: 2, minWidth: '300px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-light)', overflow: 'hidden', position: 'relative' }}
+        >
+          <p id={graphDescriptionId} className="sr-only">
+            Interactive relationship graph. Use Tab to reach nodes, Enter or Space to select one, and the details panel to inspect relationships or diagnose a ResourceClaim.
+          </p>
           <svg
             ref={svgRef}
             width="100%"
@@ -370,6 +415,8 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
             onWheel={handleWheel}
             style={{ cursor: isPanningRef.current ? 'grabbing' : 'grab', display: 'block' }}
           >
+            <title>Resource relationship graph</title>
+            <desc>Interactive graph of DRA resources and their relationships.</desc>
             <defs>
               <marker id="arrow" viewBox="0 0 10 10" refX="24" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-muted)" />
@@ -436,7 +483,9 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                     transform={`translate(${node.x}, ${node.y})`}
                     role="button"
                     tabIndex={0}
-                    aria-label={`${node.type} ${node.label}`}
+                    className="graph-node"
+                    aria-label={nodeAccessibleName(node)}
+                    aria-pressed={selectedNode?.id === node.id}
                     onMouseDown={(event) => handleNodeMouseDown(event, node)}
                     onClick={() => setSelectedNode(node)}
                     onKeyDown={(event) => {
@@ -457,7 +506,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                     />
                     <text
                       dy=".3em"
-                      fill="white"
+                      fill={nodeForeground(node.type)}
                       fontSize="9"
                       fontWeight="bold"
                       textAnchor="middle"
@@ -487,7 +536,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
             {selectedNode ? (
               <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div>
-                  <span className="badge badge-success" style={{ background: nodeColor(graphData, selectedNode.type, selectedNode.id), color: 'white', borderColor: 'transparent' }}>{selectedNode.type}</span>
+                  <span className="badge badge-success" style={{ background: nodeColor(graphData, selectedNode.type, selectedNode.id), color: nodeForeground(selectedNode.type), borderColor: 'transparent' }}>{selectedNode.type}</span>
                   <h4 style={{ fontSize: '1.2rem', marginTop: '6px' }}>{selectedNode.label}</h4>
                 </div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -516,7 +565,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                 />
               </div>
             ) : (
-              <p style={{ color: 'var(--text-muted)', marginTop: '15px' }}>Click a node in the graph to inspect details.</p>
+              <p style={{ color: 'var(--text-muted)', marginTop: '15px' }}>Select a graph node with the pointer or keyboard to inspect details.</p>
             )}
           </div>
         </div>

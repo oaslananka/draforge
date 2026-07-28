@@ -146,6 +146,48 @@ jobs:
       - name: Build web app
         run: pnpm --dir web build
 
+
+  browser:
+    name: Browser Accessibility & Compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.5.2
+
+      - name: Install dependencies
+        run: pnpm --dir web install --frozen-lockfile --ignore-scripts
+
+      - name: Install Playwright browser engines
+        # This invokes the Playwright binary, not a package installation lifecycle.
+        run: pnpm --dir web exec playwright install --with-deps chromium firefox webkit # NOSONAR
+
+      - name: Run browser accessibility and compatibility gate
+        run: pnpm --dir web test:browser
+
+      - name: Upload failed browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-accessibility-${{ github.run_id }}
+          path: |
+            web/test-results/
+            web/playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
+
   helm:
     name: Helm Chart Lint & Template
     runs-on: ubuntu-latest
@@ -294,7 +336,7 @@ jobs:
 
   ci-pass:
     name: CI Pass
-    needs: [go, web, helm, goreleaser, infra]
+    needs: [go, web, browser, helm, goreleaser, infra]
     runs-on: ubuntu-latest
     steps:
       - name: Complete

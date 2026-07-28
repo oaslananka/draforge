@@ -99,7 +99,7 @@ claim_allocated() {
     -n "$FIXTURE_NAMESPACE" -o json 2>/dev/null | jq -e \
       --arg pool "$POOL_NAME" \
       --arg driver "$DRIVER_NAME" \
-      '.status.allocation.devices.results | any(.pool == $pool and .driver == $driver and (.device | length) > 0)' \
+      '(.status.allocation.devices.results // []) | any(.pool == $pool and .driver == $driver and (.device | length) > 0)' \
       >/dev/null
 }
 
@@ -198,10 +198,14 @@ controller_identity="system:serviceaccount:${SYSTEM_NAMESPACE}:${RELEASE_NAME}-c
 plugin_identity="system:serviceaccount:${SYSTEM_NAMESPACE}:${RELEASE_NAME}-node-plugin"
 assert_allowed "$server_identity" list resourceclaims.resource.k8s.io --all-namespaces
 assert_denied "$server_identity" patch resourceclaims.resource.k8s.io --all-namespaces
+assert_denied "$server_identity" update resourceclaims.resource.k8s.io --subresource=binding --all-namespaces
 assert_allowed "$controller_identity" patch resourceclaims.resource.k8s.io --subresource=status --all-namespaces
+assert_allowed "$controller_identity" update resourceclaims.resource.k8s.io --subresource=binding --all-namespaces
+assert_denied "$controller_identity" patch resourceclaims.resource.k8s.io --subresource=binding --all-namespaces
 assert_denied "$controller_identity" delete nodes
 assert_allowed "$plugin_identity" list resourceclaims.resource.k8s.io --all-namespaces
 assert_denied "$plugin_identity" patch resourceclaims.resource.k8s.io --all-namespaces
+assert_denied "$plugin_identity" update resourceclaims.resource.k8s.io --subresource=binding --all-namespaces
 echo "Verified least-privilege RBAC decisions."
 
 echo "Applying simulator scenario and ResourceClaim..."

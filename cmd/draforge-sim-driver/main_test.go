@@ -78,12 +78,12 @@ func TestSimDriverKubeconfigFlag(t *testing.T) {
 	}
 }
 
-func TestSimDriverVersionVarsNonEmpty(t *testing.T) {
-	if versionVal == "" {
-		t.Error("versionVal must not be empty")
+func TestSimDriverSourceVersionDefaults(t *testing.T) {
+	if versionVal != "dev" {
+		t.Errorf("source versionVal: got %q, want dev", versionVal)
 	}
-	if commitSHA == "" {
-		t.Error("commitSHA must not be empty")
+	if commitSHA != "unknown" {
+		t.Errorf("source commitSHA: got %q, want unknown", commitSHA)
 	}
 }
 

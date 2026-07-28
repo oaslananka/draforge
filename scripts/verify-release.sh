@@ -9,6 +9,9 @@ CHARTS_DIR=${CHARTS_DIR:-"charts"}
 
 echo "==> Verifying DRAForge release artifacts..."
 
+echo "==> Verifying release metadata contract..."
+python3 scripts/verify-release-metadata.py --self-test --root .
+
 echo "==> Verifying Helm chart image contract..."
 scripts/verify-chart-images.sh
 

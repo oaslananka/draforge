@@ -32,8 +32,8 @@ var (
 	kubeconfig string
 	namespace  string
 	outputFmt  string
-	versionVal = "v0.1.0"
-	commitSHA  = "dev"
+	versionVal = "dev"
+	commitSHA  = "unknown"
 )
 
 type serveOptions struct {

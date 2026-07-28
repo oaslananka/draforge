@@ -37,6 +37,9 @@ func TestVersionOutput(t *testing.T) {
 	if !strings.Contains(out, "Commit:") {
 		t.Errorf("version output should contain 'Commit:', got: %q", out)
 	}
+	if !strings.Contains(out, "DRAForge dev (Commit: unknown)") {
+		t.Errorf("source build must report dev/unknown metadata, got: %q", out)
+	}
 }
 
 func TestVersionOutputDeterministic(t *testing.T) {

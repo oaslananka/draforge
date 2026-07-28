@@ -33,6 +33,7 @@ type requestAlternative struct {
 	selectors       []resourcev1.DeviceSelector
 	mode            resourcev1.DeviceAllocationMode
 	count           int
+	capacity        *resourcev1.CapacityRequirements
 }
 
 type alternativeContract struct {
@@ -303,8 +304,8 @@ func supportedAlternative(contract alternativeContract) (requestAlternative, *al
 	if len(contract.tolerations) > 0 {
 		return requestAlternative{}, unsupportedFailure(fmt.Sprintf("request %q uses device tolerations", contract.requestName))
 	}
-	if contract.capacity != nil {
-		return requestAlternative{}, unsupportedFailure(fmt.Sprintf("request %q uses consumable capacity requirements", contract.requestName))
+	if failure := validateExclusiveCapacityRequirements(contract.requestName, contract.capacity); failure != nil {
+		return requestAlternative{}, failure
 	}
 
 	return requestAlternative{
@@ -313,6 +314,7 @@ func supportedAlternative(contract alternativeContract) (requestAlternative, *al
 		selectors:       contract.selectors,
 		mode:            mode,
 		count:           normalizedAlternativeCount(mode, contract.count),
+		capacity:        contract.capacity,
 	}, nil
 }
 
@@ -579,6 +581,13 @@ func (planner *claimPlanner) evaluateCandidate(
 	}
 	if failure := unsupportedDeviceFailure(device); failure != nil {
 		return resourcev1.DeviceRequestAllocationResult{}, false, failure
+	}
+	capacityMatches, capacityFailure := exclusiveCapacityMatches(device, input.alternative.capacity)
+	if capacityFailure != nil {
+		return resourcev1.DeviceRequestAllocationResult{}, false, capacityFailure
+	}
+	if !capacityMatches {
+		return resourcev1.DeviceRequestAllocationResult{}, false, nil
 	}
 
 	identity := deviceIdentityKey(slice.Spec.Driver, slice.Spec.Pool.Name, device.Name)

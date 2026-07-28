@@ -66,7 +66,9 @@ The current supported allocation subset is:
 - one compatible `NodeName` across all results in a claim;
 - stable scalar `MatchAttribute` constraints for string, integer, boolean, and
   semantic-version values, including all-request, request, and
-  `<request>/<subrequest>` scopes.
+  `<request>/<subrequest>` scopes;
+- exclusive-device `CapacityRequirements.requests` filtering where every requested
+  quantity exists on the device and does not exceed its fixed capacity.
 
 `All` allocation requires complete ResourceSlice coverage for the latest
 pool generation, excludes devices already allocated by exact identity, and
@@ -77,8 +79,9 @@ alternative may fall through to the next ordered `FirstAvailable` alternative.
 with an explicit unsupported-request warning instead of approximating a result.
 
 The following features are intentionally fail-closed until their complete
-semantics are implemented: consumable-capacity requests/accounting, multiple
-allocations, `DistinctAttribute`, list-valued constraint attributes, admin access,
+semantics are implemented: capacity request policies, shareable-device
+aggregation and consumption status, multiple allocations, `DistinctAttribute`,
+list-valued constraint attributes, admin access,
 device taints/tolerations, partitionable/per-device node
 selection, binding conditions, shared counters, and node-allocatable mappings.
 The claim remains pending and the controller emits a warning event such as
@@ -137,4 +140,5 @@ The simulator test suite covers:
 - Ordered `FirstAvailable` fallback without product-name heuristics
 - `All` allocation across complete latest-generation pools, including empty, oversized, and allocated-device cases
 - Scalar `MatchAttribute` equality, request/subrequest scope, combination and cross-request backtracking, and bounded-search failure
-- Fail-closed diagnostics for missing classes, invalid CEL, and unsupported request or constraint modes
+- Exclusive fixed-capacity filtering for exact, all, fallback, multi-key, and constrained allocation paths
+- Fail-closed diagnostics for missing classes, invalid CEL, and unsupported request, constraint, or sharing modes

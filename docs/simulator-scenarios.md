@@ -58,16 +58,21 @@ evaluator.
 The current supported allocation subset is:
 
 - `Exactly` requests and ordered `FirstAvailable` alternatives;
-- default or `ExactCount` allocation mode, with an omitted count defaulting to one;
+- default/`ExactCount` allocation mode, with an omitted count defaulting to one, and `All` mode over every matching device on one compatible node;
 - typed scalar attributes, semantic-version attributes, `device.driver`, and
   quantity capacities inside CEL selectors;
 - healthy simulator-managed devices that are not already allocated by the same
   `<driver, pool, device>` identity;
 - one compatible `NodeName` across all results in a claim.
 
+`All` allocation requires complete ResourceSlice coverage for the latest
+pool generation, excludes devices already allocated by exact identity, and
+respects Kubernetes' 32-result claim limit. An empty or oversized `All`
+alternative may fall through to the next ordered `FirstAvailable` alternative.
+
 The following features are intentionally fail-closed until their complete
-semantics are implemented: `All`, consumable-capacity requests/accounting,
-multiple allocations, claim constraints, admin access, device
+semantics are implemented: consumable-capacity requests/accounting, multiple
+allocations, claim constraints, admin access, device
 taints/tolerations, list-valued attributes, partitionable/per-device node
 selection, binding conditions, shared counters, and node-allocatable mappings.
 The claim remains pending and the controller emits a warning event such as
@@ -124,4 +129,5 @@ The simulator test suite covers:
 - Allocation success and failure paths
 - Typed DeviceClass and request-level CEL selector evaluation
 - Ordered `FirstAvailable` fallback without product-name heuristics
+- `All` allocation across complete latest-generation pools, including empty, oversized, and allocated-device cases
 - Fail-closed diagnostics for missing classes, invalid CEL, and unsupported request modes

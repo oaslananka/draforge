@@ -170,8 +170,8 @@ func validateResourceClaim(t *testing.T, claim *resourcev1.ResourceClaim, device
 		t.Fatalf("claim must contain one exact device request: %#v", claim.Spec.Devices.Requests)
 	}
 	exact := claim.Spec.Devices.Requests[0].Exactly
-	if exact.DeviceClassName != deviceClassName || exact.Count != 1 {
-		t.Fatalf("claim request must select one %q device: %#v", deviceClassName, exact)
+	if exact.DeviceClassName != deviceClassName || exact.AllocationMode != resourcev1.DeviceAllocationModeAll || exact.Count != 0 {
+		t.Fatalf("claim request must select all matching %q devices: %#v", deviceClassName, exact)
 	}
 	if len(exact.Selectors) != 1 || exact.Selectors[0].CEL == nil {
 		t.Fatalf("claim request must contain one CEL selector: %#v", exact.Selectors)

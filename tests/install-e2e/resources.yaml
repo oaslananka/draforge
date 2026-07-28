@@ -58,5 +58,4 @@ spec:
                 expression: >-
                   device.attributes["sim.draforge.oaslananka"].model == "DRAForge-E2E-GPU" &&
                   device.capacity["sim.draforge.oaslananka"].memory.compareTo(quantity("8Gi")) >= 0
-          allocationMode: ExactCount
-          count: 1
+          allocationMode: All

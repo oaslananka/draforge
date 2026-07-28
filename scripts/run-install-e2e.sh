@@ -99,7 +99,9 @@ claim_allocated() {
     -n "$FIXTURE_NAMESPACE" -o json 2>/dev/null | jq -e \
       --arg pool "$POOL_NAME" \
       --arg driver "$DRIVER_NAME" \
-      '(.status.allocation.devices.results // []) | any(.pool == $pool and .driver == $driver and (.device | length) > 0)' \
+      '(.status.allocation.devices.results // []) as $results |
+       ($results | length) == 2 and
+       ($results | all(.pool == $pool and .driver == $driver and (.device | length) > 0))' \
       >/dev/null
 }
 

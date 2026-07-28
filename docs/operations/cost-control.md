@@ -60,3 +60,9 @@ terraform destroy -auto-approve
 ## Terraform Showcase Validation Workflow
 
 Run scripts/validate-terraform-showcase.sh before changing showcase infrastructure.
+
+### Supported Terraform inputs and migration note
+
+The showcase publishes only inputs that affect the generated infrastructure: `project_name`, `region`, `kubernetes_version`, `node_size`, `node_count`, `registry_name`, and `tags`. Worker size and count directly affect provider cost. Tags are inventory metadata only and are not an authorization boundary.
+
+The unused `environment`, `enable_public_dashboard`, `domain_name`, and `allowed_admin_cidrs` inputs were removed. They never changed a Terraform resource, so removing them does not alter an existing plan. Dashboard exposure remains controlled by the explicit Helm profiles documented in the [installation guide](install.md); Terraform variables must not be treated as a substitute for TLS, authentication, Gateway/Ingress policy, or network access controls.

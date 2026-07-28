@@ -35,6 +35,7 @@ scripts/verify-controller-metrics-policy.sh
 scripts/verify-runtime-lifecycle.sh
 scripts/verify-dashboard-exposure.sh
 scripts/verify-sim-driver-cdi.sh
+python3 scripts/validate-terraform-variables.py --self-test infra/terraform/environments/showcase
 terraform -chdir=infra/terraform/environments/showcase init -backend=false
 terraform -chdir=infra/terraform/environments/showcase fmt -check
 terraform -chdir=infra/terraform/environments/showcase validate

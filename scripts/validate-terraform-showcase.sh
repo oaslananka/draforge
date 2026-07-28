@@ -41,6 +41,7 @@ if [ "$RUN_PLAN" = "true" ]; then
 fi
 
 echo "==> Terraform showcase preflight passed"
+python3 "$ROOT_DIR/scripts/validate-terraform-variables.py" --self-test "$TF_DIR"
 terraform -chdir="$TF_DIR" fmt -check
 terraform -chdir="$TF_DIR" init -backend=false
 terraform -chdir="$TF_DIR" validate

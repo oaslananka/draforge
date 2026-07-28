@@ -88,7 +88,7 @@ func allocatedResult(t *testing.T, clientset *fake.Clientset, claimName string) 
 	return &allocation.Devices.Results[0]
 }
 
-func assertPendingWithEvent(t *testing.T, clientset *fake.Clientset, claimName, reason string) {
+func requirePendingClaim(t *testing.T, clientset *fake.Clientset, claimName string) {
 	t.Helper()
 	claim, err := clientset.ResourceV1().ResourceClaims("default").Get(context.Background(), claimName, metav1.GetOptions{})
 	if err != nil {
@@ -97,8 +97,13 @@ func assertPendingWithEvent(t *testing.T, clientset *fake.Clientset, claimName, 
 	if claim.Status.Allocation != nil {
 		t.Fatalf("expected claim to remain pending, got allocation %#v", claim.Status.Allocation)
 	}
+}
 
-	err = wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, time.Second, true, func(ctx context.Context) (bool, error) {
+func assertPendingWithEvent(t *testing.T, clientset *fake.Clientset, claimName, reason string) {
+	t.Helper()
+	requirePendingClaim(t, clientset, claimName)
+
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, time.Second, true, func(ctx context.Context) (bool, error) {
 		events, listErr := clientset.CoreV1().Events("default").List(ctx, metav1.ListOptions{})
 		if listErr != nil {
 			return false, listErr

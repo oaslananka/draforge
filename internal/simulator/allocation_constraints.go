@@ -28,7 +28,7 @@ type constrainedSelection struct {
 type constrainedSearchState struct {
 	devices  []constrainedDevice
 	nodeName string
-	chosen   map[string]bool
+	usage    allocationAttemptUsage
 }
 
 type constrainedCandidateSet struct {
@@ -119,17 +119,18 @@ func (planner *claimPlanner) planConstrainedClaimAllocation(
 	claim *resourcev1.ResourceClaim,
 	constraints []matchAttributeConstraint,
 ) (allocationPlan, *allocationFailure) {
-	state := constrainedSearchState{chosen: make(map[string]bool)}
+	state := constrainedSearchState{usage: newAllocationAttemptUsage()}
 	budget := newConstraintSearchBudget(maxConstraintSearchBranches)
 	plan, found, failure := planner.searchConstrainedRequests(ctx, claim, constraints, 0, state, budget)
 	if failure != nil {
 		return allocationPlan{}, failure
 	}
 	if !found {
-		return allocationPlan{}, &allocationFailure{
-			reason:  reasonNoMatch,
-			message: fmt.Sprintf("no supported device allocation satisfies claim %q constraints", claim.Name),
+		message := fmt.Sprintf("no supported device allocation satisfies claim %q", claim.Name)
+		if len(constraints) > 0 {
+			message += " and its constraints"
 		}
+		return allocationPlan{}, &allocationFailure{reason: reasonNoMatch, message: message}
 	}
 	return plan, nil
 }
@@ -158,7 +159,7 @@ func (planner *claimPlanner) searchConstrainedRequests(
 		claim.Spec.Devices.Requests[requestIndex],
 		state.nodeName,
 		remainingResults,
-		state.chosen,
+		state.usage,
 		func(selection constrainedSelection) bool {
 			if failure := budget.consume(); failure != nil {
 				searchFailure = failure
@@ -208,19 +209,16 @@ func (state constrainedSearchState) withSelection(selection constrainedSelection
 	devices = append(devices, state.devices...)
 	devices = append(devices, selection.devices...)
 
-	chosen := make(map[string]bool, len(state.chosen)+len(selection.devices))
-	for identity, allocated := range state.chosen {
-		chosen[identity] = allocated
-	}
+	usage := state.usage.clone()
 	for _, device := range selection.devices {
-		chosen[deviceIdentityKey(device.result.Driver, device.result.Pool, device.result.Device)] = true
+		usage.reserve(device.result)
 	}
 
 	nodeName := state.nodeName
 	if nodeName == "" {
 		nodeName = selection.nodeName
 	}
-	return constrainedSearchState{devices: devices, nodeName: nodeName, chosen: chosen}
+	return constrainedSearchState{devices: devices, nodeName: nodeName, usage: usage}
 }
 
 func (state constrainedSearchState) allocationPlan() allocationPlan {
@@ -241,7 +239,7 @@ func (planner *claimPlanner) forEachConstrainedRequestSelection(
 	request resourcev1.DeviceRequest,
 	allocatedNodeName string,
 	maxResults int,
-	chosen map[string]bool,
+	usage allocationAttemptUsage,
 	yield func(constrainedSelection) bool,
 ) (bool, *allocationFailure) {
 	alternatives, failure := supportedAlternatives(request)
@@ -257,7 +255,7 @@ func (planner *claimPlanner) forEachConstrainedRequestSelection(
 			alternative,
 			allocatedNodeName,
 			maxResults,
-			chosen,
+			usage,
 			yield,
 		)
 		if outcome.missingClass != "" {
@@ -282,7 +280,7 @@ func (planner *claimPlanner) forEachConstrainedAlternative(
 	alternative requestAlternative,
 	allocatedNodeName string,
 	maxResults int,
-	chosen map[string]bool,
+	usage allocationAttemptUsage,
 	yield func(constrainedSelection) bool,
 ) (bool, constrainedAlternativeOutcome, *allocationFailure) {
 	deviceClass, found := planner.classes[alternative.deviceClassName]
@@ -300,10 +298,10 @@ func (planner *claimPlanner) forEachConstrainedAlternative(
 		maxResults:        maxResults,
 	}
 	if alternative.mode == resourcev1.DeviceAllocationModeAll {
-		stopped, limitExceeded, failure := planner.forEachConstrainedAllSelection(ctx, input, chosen, yield)
+		stopped, limitExceeded, failure := planner.forEachConstrainedAllSelection(ctx, input, usage, yield)
 		return stopped, constrainedAlternativeOutcome{resultLimitExceeded: limitExceeded}, failure
 	}
-	stopped, failure := planner.forEachConstrainedExactSelection(ctx, input, chosen, yield)
+	stopped, failure := planner.forEachConstrainedExactSelection(ctx, input, usage, yield)
 	return stopped, constrainedAlternativeOutcome{}, failure
 }
 
@@ -333,10 +331,10 @@ func constrainedRequestIterationFailure(
 func (planner *claimPlanner) forEachConstrainedExactSelection(
 	ctx context.Context,
 	input selectionInput,
-	chosen map[string]bool,
+	usage allocationAttemptUsage,
 	yield func(constrainedSelection) bool,
 ) (bool, *allocationFailure) {
-	candidates, failure := planner.collectConstrainedExactCandidates(ctx, input, chosen)
+	candidates, failure := planner.collectConstrainedExactCandidates(ctx, input, usage)
 	if failure != nil {
 		return false, failure
 	}
@@ -388,7 +386,7 @@ func forEachDeviceCombination(
 func (planner *claimPlanner) collectConstrainedExactCandidates(
 	ctx context.Context,
 	input selectionInput,
-	chosen map[string]bool,
+	usage allocationAttemptUsage,
 ) (constrainedCandidateSet, *allocationFailure) {
 	set := constrainedCandidateSet{byNode: make(map[string][]constrainedDevice)}
 	seenNodes := make(map[string]bool)
@@ -399,7 +397,7 @@ func (planner *claimPlanner) collectConstrainedExactCandidates(
 		if !eligible {
 			continue
 		}
-		devices, failure := planner.collectConstrainedSliceDevices(ctx, input, slice, chosen, seenDevices)
+		devices, failure := planner.collectConstrainedSliceDevices(ctx, input, slice, usage, seenDevices)
 		if failure != nil {
 			return constrainedCandidateSet{}, failure
 		}
@@ -426,7 +424,7 @@ func (planner *claimPlanner) collectConstrainedSliceDevices(
 	ctx context.Context,
 	input selectionInput,
 	slice *resourcev1.ResourceSlice,
-	chosen map[string]bool,
+	usage allocationAttemptUsage,
 	seenDevices map[string]bool,
 ) ([]constrainedDevice, *allocationFailure) {
 	devices := make([]constrainedDevice, 0, len(slice.Spec.Devices))
@@ -436,7 +434,7 @@ func (planner *claimPlanner) collectConstrainedSliceDevices(
 			input,
 			slice,
 			&slice.Spec.Devices[deviceIndex],
-			chosen,
+			usage,
 			seenDevices,
 		)
 		if failure != nil {
@@ -452,7 +450,7 @@ func (planner *claimPlanner) collectConstrainedSliceDevices(
 func (planner *claimPlanner) forEachConstrainedAllSelection(
 	ctx context.Context,
 	input selectionInput,
-	chosen map[string]bool,
+	usage allocationAttemptUsage,
 	yield func(constrainedSelection) bool,
 ) (bool, bool, *allocationFailure) {
 	nodeOrder, slicesByNode := planner.managedSlicesByNode(input.allocatedNodeName)
@@ -462,7 +460,7 @@ func (planner *claimPlanner) forEachConstrainedAllSelection(
 		devices, failure := planner.collectConstrainedAllDevicesForNode(
 			ctx,
 			input,
-			chosen,
+			usage,
 			slicesByNode[nodeName],
 		)
 		if failure != nil {
@@ -486,7 +484,7 @@ func (planner *claimPlanner) forEachConstrainedAllSelection(
 func (planner *claimPlanner) collectConstrainedAllDevicesForNode(
 	ctx context.Context,
 	input selectionInput,
-	chosen map[string]bool,
+	usage allocationAttemptUsage,
 	slices []*resourcev1.ResourceSlice,
 ) ([]constrainedDevice, *allocationFailure) {
 	currentSlices, failure := completeCurrentPoolSlices(slices)
@@ -504,7 +502,7 @@ func (planner *claimPlanner) collectConstrainedAllDevicesForNode(
 			ctx,
 			input,
 			slice,
-			chosen,
+			usage,
 			seenDevices,
 		)
 		if sliceFailure != nil {
@@ -530,7 +528,7 @@ func (planner *claimPlanner) evaluateConstrainedCandidate(
 	input selectionInput,
 	slice *resourcev1.ResourceSlice,
 	device *resourcev1.Device,
-	chosen map[string]bool,
+	usage allocationAttemptUsage,
 	seen map[string]bool,
 ) (constrainedDevice, bool, *allocationFailure) {
 	matched, err := planner.evaluator.Matches(
@@ -552,28 +550,19 @@ func (planner *claimPlanner) evaluateConstrainedCandidate(
 	if failure := unsupportedDeviceFailure(device); failure != nil {
 		return constrainedDevice{}, false, failure
 	}
-	capacityMatches, capacityFailure := exclusiveCapacityMatches(device, input.alternative.capacity)
-	if capacityFailure != nil {
-		return constrainedDevice{}, false, capacityFailure
-	}
-	if !capacityMatches {
-		return constrainedDevice{}, false, nil
-	}
 
-	identity := deviceIdentityKey(slice.Spec.Driver, slice.Spec.Pool.Name, device.Name)
-	if seen[identity] || chosen[identity] || planner.reconciler.isDeviceAllocated(planner.claims, slice.Spec.Driver, slice.Spec.Pool.Name, device.Name) {
-		return constrainedDevice{}, false, nil
+	result, accepted, failure := planner.buildBacktrackingCandidate(
+		input.alternative.requestName,
+		input.alternative.capacity,
+		slice,
+		device,
+		usage,
+		seen,
+	)
+	if failure != nil || !accepted {
+		return constrainedDevice{}, accepted, failure
 	}
-	seen[identity] = true
-	return constrainedDevice{
-		result: resourcev1.DeviceRequestAllocationResult{
-			Request: input.alternative.requestName,
-			Driver:  slice.Spec.Driver,
-			Pool:    slice.Spec.Pool.Name,
-			Device:  device.Name,
-		},
-		device: device,
-	}, true, nil
+	return constrainedDevice{result: result, device: device}, true, nil
 }
 
 func matchConstraintsSatisfied(

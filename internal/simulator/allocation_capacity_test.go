@@ -37,6 +37,32 @@ func exactCapacityRequest(name, class string, count int64, values map[resourcev1
 	}
 }
 
+func firstAvailableCapacityRequest(
+	name, class string,
+	capacityName resourcev1.QualifiedName,
+	firstName, firstValue, secondName, secondValue string,
+) resourcev1.DeviceRequest {
+	return resourcev1.DeviceRequest{
+		Name: name,
+		FirstAvailable: []resourcev1.DeviceSubRequest{
+			{
+				Name:            firstName,
+				DeviceClassName: class,
+				AllocationMode:  resourcev1.DeviceAllocationModeExactCount,
+				Count:           1,
+				Capacity:        capacityRequirements(map[resourcev1.QualifiedName]string{capacityName: firstValue}),
+			},
+			{
+				Name:            secondName,
+				DeviceClassName: class,
+				AllocationMode:  resourcev1.DeviceAllocationModeExactCount,
+				Count:           1,
+				Capacity:        capacityRequirements(map[resourcev1.QualifiedName]string{capacityName: secondValue}),
+			},
+		},
+	}
+}
+
 func TestSimulateAllocationSelectsExclusiveDeviceWithSufficientCapacity(t *testing.T) {
 	claim := allocationClaim("capacity-filter", exactCapacityRequest(
 		"device",
@@ -86,25 +112,9 @@ func TestSimulateAllocationRequiresEveryRequestedCapacity(t *testing.T) {
 }
 
 func TestSimulateAllocationFirstAvailableFallsBackAfterCapacityMiss(t *testing.T) {
-	claim := allocationClaim("capacity-fallback", resourcev1.DeviceRequest{
-		Name: "device",
-		FirstAvailable: []resourcev1.DeviceSubRequest{
-			{
-				Name:            "large",
-				DeviceClassName: "capacity-class",
-				AllocationMode:  resourcev1.DeviceAllocationModeExactCount,
-				Count:           1,
-				Capacity:        capacityRequirements(map[resourcev1.QualifiedName]string{"memory": "32Gi"}),
-			},
-			{
-				Name:            "small",
-				DeviceClassName: "capacity-class",
-				AllocationMode:  resourcev1.DeviceAllocationModeExactCount,
-				Count:           1,
-				Capacity:        capacityRequirements(map[resourcev1.QualifiedName]string{"memory": "8Gi"}),
-			},
-		},
-	})
+	claim := allocationClaim("capacity-fallback", firstAvailableCapacityRequest(
+		"device", "capacity-class", "memory", "large", "32Gi", "small", "8Gi",
+	))
 	slice := allocationSlice(
 		"capacity-device",
 		"driver.example.com",
@@ -250,16 +260,6 @@ func TestSimulateAllocationRejectsUnsupportedCapacityContracts(t *testing.T) {
 		1,
 		map[resourcev1.QualifiedName]string{"memory": "8Gi"},
 	))
-	shareable := true
-	shareableDevice := capacityDevice("shareable-device", map[resourcev1.QualifiedName]string{"memory": "16Gi"})
-	shareableDevice.AllowMultipleAllocations = &shareable
-	shareClaim := allocationClaim("capacity-shareable", exactCapacityRequest(
-		"device",
-		"capacity-class",
-		1,
-		map[resourcev1.QualifiedName]string{"memory": "8Gi"},
-	))
-
 	tests := []struct {
 		name    string
 		claim   *resourcev1.ResourceClaim
@@ -267,7 +267,6 @@ func TestSimulateAllocationRejectsUnsupportedCapacityContracts(t *testing.T) {
 	}{
 		{name: "negative request", claim: negative, devices: []resourcev1.Device{capacityDevice("device-0", map[resourcev1.QualifiedName]string{"memory": "16Gi"})}},
 		{name: "request policy", claim: policyClaim, devices: []resourcev1.Device{policyDevice}},
-		{name: "shareable device", claim: shareClaim, devices: []resourcev1.Device{shareableDevice}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

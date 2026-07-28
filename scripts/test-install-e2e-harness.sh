@@ -42,23 +42,31 @@ assert_absent() {
 cat > "$FAKE_BIN/helm" <<'HELM'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'helm' >> "$FAKE_COMMAND_LOG"
-printf ' %q' "$@" >> "$FAKE_COMMAND_LOG"
-printf '\n' >> "$FAKE_COMMAND_LOG"
+command_line=helm
+for argument in "$@"; do
+  printf -v quoted_argument ' %q' "$argument"
+  command_line+="$quoted_argument"
+done
+printf '%s\n' "$command_line" >> "$FAKE_COMMAND_LOG"
 HELM
 
 cat > "$FAKE_BIN/kubectl" <<'KUBECTL'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'kubectl' >> "$FAKE_COMMAND_LOG"
-printf ' %q' "$@" >> "$FAKE_COMMAND_LOG"
-printf '\n' >> "$FAKE_COMMAND_LOG"
+command_line=kubectl
+for argument in "$@"; do
+  printf -v quoted_argument ' %q' "$argument"
+  command_line+="$quoted_argument"
+done
+printf '%s\n' "$command_line" >> "$FAKE_COMMAND_LOG"
 
 command_name=${1:-}
 shift || true
 case "$command_name" in
   api-resources)
-    printf '%s\n' resourceclaims.resource.k8s.io resourceslices.resource.k8s.io deviceclasses.resource.k8s.io
+    printf '%s\n' resourceclaims.resource.k8s.io
+    sleep 0.02
+    printf '%s\n' resourceslices.resource.k8s.io deviceclasses.resource.k8s.io
     ;;
   rollout)
     if [[ "${FAKE_MISSING_COMPONENT:-0}" == "1" && "$*" == *controller* ]]; then
@@ -163,9 +171,12 @@ KUBECTL
 cat > "$FAKE_BIN/curl" <<'CURL'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'curl' >> "$FAKE_COMMAND_LOG"
-printf ' %q' "$@" >> "$FAKE_COMMAND_LOG"
-printf '\n' >> "$FAKE_COMMAND_LOG"
+command_line=curl
+for argument in "$@"; do
+  printf -v quoted_argument ' %q' "$argument"
+  command_line+="$quoted_argument"
+done
+printf '%s\n' "$command_line" >> "$FAKE_COMMAND_LOG"
 url=${!#}
 case "$url" in
   */healthz|*/readyz)

@@ -153,10 +153,13 @@ task release:local
 ### Tagged release
 
 ```bash
-git tag v0.x.x
-git push origin v0.x.x
-goreleaser release --clean
+release_tag=v0.3.0
+git tag -a "$release_tag" -m "DRAForge $release_tag"
+RELEASE_TAG="$release_tag" RELEASE_MAIN_REF=main bash scripts/verify-release-tag.sh
+git push origin "$release_tag"
 ```
+
+Pushing the annotated tag starts the protected release workflow. Published `v*` tags are immutable and are never moved or reused.
 
 ---
 

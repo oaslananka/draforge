@@ -10,7 +10,30 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  validate-tag:
+    name: Validate release tag provenance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Fetch protected release refs
+        run: |
+          git fetch --force --no-tags origin refs/heads/main:refs/remotes/origin/main
+          git fetch --force --tags origin
+
+      - name: Verify annotated tag and main ancestry
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_MAIN_REF: origin/main
+        run: bash scripts/verify-release-tag.sh
+
   install-e2e:
+    needs: validate-tag
     name: Full install E2E gate
     uses: ./.github/workflows/e2e-matrix.yml
     with:

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated the frontend container build to a digest-pinned Node 22.23.1 image and exact current Corepack release so pnpm signature verification remains deterministic in clean Docker builds.
 
 ### Changed
+- Future release tags must be annotated SemVer or release-candidate tag objects on `main`; protected `v*` tags are immutable after creation.
 - Helm installs no longer create Gateway or Ingress listeners by default. External dashboard exposure now requires an explicit local-demo or secure-public values profile.
 
 ### Fixed

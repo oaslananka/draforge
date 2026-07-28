@@ -4,7 +4,8 @@ packages:
 autoInstallPeers: false
 
 overrides:
-  "brace-expansion@<1.1.16": "1.1.16"
+  "brace-expansion@<=5.0.7": "5.0.8"
+  "postcss@<=8.5.17": "8.5.19"
   cssom: "link:./vendor/cssom"
   html-escaper: "link:./vendor/html-escaper"
   uhyphen: "link:./vendor/uhyphen"
@@ -14,6 +15,9 @@ allowBuilds:
 minimumReleaseAge: 10080
 minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
+  # Temporary security maturity exception for GHSA-mh99-v99m-4gvg.
+  # Owner: @oaslananka. Remove after 2026-07-30T11:39:25Z; tracked in #101.
+  - 'brace-expansion@5.0.8'
   # Exact lockfile versions audited with OSV Scanner and pnpm audit on 2026-07-23.
   # Newer releases remain subject to the seven-day maturity window.
   - '@typescript-eslint/eslint-plugin@8.65.0'
@@ -27,3 +31,7 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/utils@8.65.0'
   - '@typescript-eslint/visitor-keys@8.65.0'
   - 'obug@2.1.4'
+# Compatibility shim for brace-expansion v5 named exports.
+# Remove after minimatch 3.x leaves the resolved ESLint dependency graph; tracked in #101.
+patchedDependencies:
+  minimatch@3.1.5: patches/minimatch@3.1.5.patch

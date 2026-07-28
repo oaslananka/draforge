@@ -552,6 +552,13 @@ func (planner *claimPlanner) evaluateConstrainedCandidate(
 	if failure := unsupportedDeviceFailure(device); failure != nil {
 		return constrainedDevice{}, false, failure
 	}
+	capacityMatches, capacityFailure := exclusiveCapacityMatches(device, input.alternative.capacity)
+	if capacityFailure != nil {
+		return constrainedDevice{}, false, capacityFailure
+	}
+	if !capacityMatches {
+		return constrainedDevice{}, false, nil
+	}
 
 	identity := deviceIdentityKey(slice.Spec.Driver, slice.Spec.Pool.Name, device.Name)
 	if seen[identity] || chosen[identity] || planner.reconciler.isDeviceAllocated(planner.claims, slice.Spec.Driver, slice.Spec.Pool.Name, device.Name) {

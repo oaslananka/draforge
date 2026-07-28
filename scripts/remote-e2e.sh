@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Optional DOKS adapter: submits a Kubernetes Job to run the provider-neutral tagged smoke tests.
+# Provider-neutral core: submits a Kubernetes Job using the active kubectl connection.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
-readonly REPO_URL="https://github.com/oaslananka/draforge.git"
+REPO_URL=${REMOTE_E2E_REPO_URL:-https://github.com/oaslananka/draforge.git}
 readonly NAMESPACE="draforge-ci"
 COMMIT_SHA=${1:-$(git rev-parse HEAD)}
 RUN_LABEL=${REMOTE_E2E_RUN_ID:-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')}
@@ -15,6 +15,10 @@ STATUS_WAIT_ATTEMPTS=${REMOTE_E2E_STATUS_WAIT_ATTEMPTS:-60}
 
 if [[ ! "$COMMIT_SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
     echo "ERROR: commit SHA must be 7-40 hexadecimal characters" >&2
+    exit 2
+fi
+if [[ ! "$REPO_URL" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$ ]]; then
+    echo "ERROR: REMOTE_E2E_REPO_URL must be a GitHub HTTPS clone URL ending in .git" >&2
     exit 2
 fi
 if [[ ! "$RUN_LABEL" =~ ^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$ ]]; then
@@ -55,9 +59,9 @@ collect_artifacts() {
         kubectl get pod -n "$NAMESPACE" "$pod_name" -o yaml > "$ARTIFACT_DIR/pod.yaml" 2> "$ARTIFACT_DIR/pod-get.stderr"
         kubectl logs -n "$NAMESPACE" "$pod_name" -c clone --tail=-1 > "$ARTIFACT_DIR/clone.log" 2>&1
         kubectl logs -n "$NAMESPACE" "$pod_name" -c e2e-runner --tail=-1 > "$ARTIFACT_DIR/e2e-runner.log" 2>&1
-        kubectl cp -n "$NAMESPACE" -c e2e-runner \
-            "$pod_name:/artifacts/go-test.json" "$ARTIFACT_DIR/go-test.json" \
-            > "$ARTIFACT_DIR/kubectl-cp.stdout" 2> "$ARTIFACT_DIR/kubectl-cp.stderr"
+        if ! grep -E '^\{.*\}$' "$ARTIFACT_DIR/e2e-runner.log" > "$ARTIFACT_DIR/go-test.json"; then
+            rm -f "$ARTIFACT_DIR/go-test.json"
+        fi
     fi
     kubectl get events -n "$NAMESPACE" --sort-by=.metadata.creationTimestamp \
         > "$ARTIFACT_DIR/events.txt" 2> "$ARTIFACT_DIR/events.stderr"

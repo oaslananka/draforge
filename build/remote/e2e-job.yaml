@@ -38,8 +38,8 @@ spec:
             - |
               set -eu
               mkdir -p "$HOME"
-              git clone --filter=blob:none REPO_URL /workspace
-              cd /workspace
+              git clone --filter=blob:none REPO_URL /workspace/repo
+              cd /workspace/repo
               git checkout --detach COMMIT_SHA
           env:
             - name: HOME
@@ -69,10 +69,10 @@ spec:
       containers:
         - name: e2e-runner
           image: golang:1.26.5
-          workingDir: /workspace
+          workingDir: /workspace/repo
           command:
             - /bin/bash
-            - -lc
+            - -c
             - ./scripts/run-remote-e2e-tests.sh
           env:
             - name: DRAFORGE_E2E

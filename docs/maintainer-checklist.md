@@ -15,6 +15,7 @@
 - [ ] If Dockerfiles changed, verify with `goreleaser release --snapshot --clean --skip=publish --skip=sign`
 - [ ] If Go code changed, check `golangci-lint run ./...`
 - [ ] Security-sensitive changes reviewed for secret exposure and input validation
+- [ ] Remote E2E changes pass the portable kind workflow; external kubeconfigs remain short-lived and environment-protected
 
 ## Before a Release
 

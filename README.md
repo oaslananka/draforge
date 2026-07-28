@@ -133,7 +133,7 @@ pnpm --dir web test
 task test
 ```
 
-The tagged smoke tests run against any compatible Kubernetes cluster that serves the required DRA APIs and are gated by `DRAFORGE_E2E=1`:
+The tagged smoke tests run against any compatible Kubernetes cluster that serves the required DRA APIs and are gated by `DRAFORGE_E2E=1`. The `Portable Kubernetes E2E` workflow validates this path on credential-free kind for relevant pull requests and can use a protected short-lived kubeconfig for an external cluster:
 
 ```bash
 DRAFORGE_E2E=1 go test -tags=e2e ./tests/e2e/... -v

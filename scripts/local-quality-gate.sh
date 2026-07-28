@@ -25,6 +25,7 @@ helm template draforge deploy/helm/draforge >/tmp/draforge-helm-template.yaml
 scripts/verify-github-action-pins.sh
 scripts/verify-workload-security.sh
 scripts/verify-frontend-dependency-policy.sh
+scripts/test-prepare-remote-e2e-kubeconfig.sh
 scripts/test-remote-e2e-harness.sh
 scripts/verify-install-e2e-policy.sh
 scripts/test-install-e2e-cni.sh

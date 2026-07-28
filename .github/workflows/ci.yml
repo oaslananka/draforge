@@ -51,8 +51,10 @@ jobs:
       - name: Lint E2E shell scripts
         run: |
           shellcheck \
+            scripts/prepare-remote-e2e-kubeconfig.sh \
             scripts/remote-e2e.sh \
             scripts/run-remote-e2e-tests.sh \
+            scripts/test-prepare-remote-e2e-kubeconfig.sh \
             scripts/test-remote-e2e-harness.sh \
             scripts/e2e-matrix.sh \
             scripts/install-e2e-cni.sh \
@@ -64,6 +66,9 @@ jobs:
             scripts/test-install-e2e-cni.sh \
             scripts/test-install-e2e-harness.sh \
             scripts/verify-install-e2e-policy.sh
+
+      - name: Test remote E2E kubeconfig preparation
+        run: bash scripts/test-prepare-remote-e2e-kubeconfig.sh
 
       - name: Test remote E2E orchestration
         run: bash scripts/test-remote-e2e-harness.sh

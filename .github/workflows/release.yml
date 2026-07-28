@@ -82,6 +82,9 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_name }}
         run: scripts/verify-chart-images.sh "${RELEASE_VERSION#v}"
 
+      - name: Verify GoReleaser Docker v2 contract
+        run: python3 scripts/verify-goreleaser-docker-v2.py --self-test --check
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
@@ -92,6 +95,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COSIGN_EXPERIMENTAL: "true"
           COSIGN_YES: "true"
+
+      - name: Verify Docker v2 release artifacts
+        run: python3 scripts/verify-goreleaser-docker-artifacts.py --self-test --validate
 
       - name: Log out of GHCR before public pull verification
         run: docker logout ghcr.io

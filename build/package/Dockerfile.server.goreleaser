@@ -3,7 +3,8 @@ RUN apk add --no-cache ca-certificates && \
     addgroup -S draforge && adduser -S draforge -G draforge
 USER draforge
 WORKDIR /home/draforge
-COPY draforge .
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/draforge ./
 COPY web/dist ./web/dist
 EXPOSE 8080
 ENTRYPOINT ["./draforge", "serve"]

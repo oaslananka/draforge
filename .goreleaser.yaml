@@ -83,149 +83,68 @@ signs:
       - "--yes"
     artifacts: checksum
 
-dockers:
-  - image_templates:
-      - "ghcr.io/oaslananka/draforge-server:{{ .Version }}-amd64"
-      - "ghcr.io/oaslananka/draforge-server:v{{ .Major }}.{{ .Minor }}-amd64"
-      - "ghcr.io/oaslananka/draforge-server:latest-amd64"
-    use: docker
-    dockerfile: build/package/Dockerfile.server.goreleaser
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-    goos: linux
-    goarch: amd64
+dockers_v2:
+  - id: draforge-server-image
     ids:
       - draforge
-    extra_files:
-      - web/dist
-  - image_templates:
-      - "ghcr.io/oaslananka/draforge-server:{{ .Version }}-arm64"
-      - "ghcr.io/oaslananka/draforge-server:v{{ .Major }}.{{ .Minor }}-arm64"
-      - "ghcr.io/oaslananka/draforge-server:latest-arm64"
-    use: docker
+    images:
+      - "ghcr.io/oaslananka/draforge-server"
+    tags:
+      - "{{ .Version }}"
+      - "v{{ .Major }}.{{ .Minor }}"
+      - "latest"
     dockerfile: build/package/Dockerfile.server.goreleaser
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-    goos: linux
-    goarch: arm64
-    ids:
-      - draforge
     extra_files:
       - web/dist
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.title": "{{.ProjectName}} server"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+    sbom: true
 
-  - image_templates:
-      - "ghcr.io/oaslananka/draforge-controller:{{ .Version }}-amd64"
-      - "ghcr.io/oaslananka/draforge-controller:v{{ .Major }}.{{ .Minor }}-amd64"
-      - "ghcr.io/oaslananka/draforge-controller:latest-amd64"
-    use: docker
-    dockerfile: build/package/Dockerfile.controller.goreleaser
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-    goos: linux
-    goarch: amd64
+  - id: draforge-controller-image
     ids:
       - draforge-controller
-  - image_templates:
-      - "ghcr.io/oaslananka/draforge-controller:{{ .Version }}-arm64"
-      - "ghcr.io/oaslananka/draforge-controller:v{{ .Major }}.{{ .Minor }}-arm64"
-      - "ghcr.io/oaslananka/draforge-controller:latest-arm64"
-    use: docker
+    images:
+      - "ghcr.io/oaslananka/draforge-controller"
+    tags:
+      - "{{ .Version }}"
+      - "v{{ .Major }}.{{ .Minor }}"
+      - "latest"
     dockerfile: build/package/Dockerfile.controller.goreleaser
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-    goos: linux
-    goarch: arm64
-    ids:
-      - draforge-controller
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.title": "{{.ProjectName}} controller"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+    sbom: true
 
-  - image_templates:
-      - "ghcr.io/oaslananka/draforge-sim-driver:{{ .Version }}-amd64"
-      - "ghcr.io/oaslananka/draforge-sim-driver:v{{ .Major }}.{{ .Minor }}-amd64"
-      - "ghcr.io/oaslananka/draforge-sim-driver:latest-amd64"
-    use: docker
-    dockerfile: build/package/Dockerfile.sim-driver.goreleaser
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-    goos: linux
-    goarch: amd64
+  - id: draforge-sim-driver-image
     ids:
       - draforge-sim-driver
-  - image_templates:
-      - "ghcr.io/oaslananka/draforge-sim-driver:{{ .Version }}-arm64"
-      - "ghcr.io/oaslananka/draforge-sim-driver:v{{ .Major }}.{{ .Minor }}-arm64"
-      - "ghcr.io/oaslananka/draforge-sim-driver:latest-arm64"
-    use: docker
+    images:
+      - "ghcr.io/oaslananka/draforge-sim-driver"
+    tags:
+      - "{{ .Version }}"
+      - "v{{ .Major }}.{{ .Minor }}"
+      - "latest"
     dockerfile: build/package/Dockerfile.sim-driver.goreleaser
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-    goos: linux
-    goarch: arm64
-    ids:
-      - draforge-sim-driver
-
-docker_manifests:
-  - name_template: "ghcr.io/oaslananka/draforge-server:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-server:{{ .Version }}-amd64"
-      - "ghcr.io/oaslananka/draforge-server:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/oaslananka/draforge-server:v{{ .Major }}.{{ .Minor }}"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-server:v{{ .Major }}.{{ .Minor }}-amd64"
-      - "ghcr.io/oaslananka/draforge-server:v{{ .Major }}.{{ .Minor }}-arm64"
-  - name_template: "ghcr.io/oaslananka/draforge-server:latest"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-server:latest-amd64"
-      - "ghcr.io/oaslananka/draforge-server:latest-arm64"
-
-  - name_template: "ghcr.io/oaslananka/draforge-controller:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-controller:{{ .Version }}-amd64"
-      - "ghcr.io/oaslananka/draforge-controller:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/oaslananka/draforge-controller:v{{ .Major }}.{{ .Minor }}"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-controller:v{{ .Major }}.{{ .Minor }}-amd64"
-      - "ghcr.io/oaslananka/draforge-controller:v{{ .Major }}.{{ .Minor }}-arm64"
-  - name_template: "ghcr.io/oaslananka/draforge-controller:latest"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-controller:latest-amd64"
-      - "ghcr.io/oaslananka/draforge-controller:latest-arm64"
-
-  - name_template: "ghcr.io/oaslananka/draforge-sim-driver:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-sim-driver:{{ .Version }}-amd64"
-      - "ghcr.io/oaslananka/draforge-sim-driver:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/oaslananka/draforge-sim-driver:v{{ .Major }}.{{ .Minor }}"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-sim-driver:v{{ .Major }}.{{ .Minor }}-amd64"
-      - "ghcr.io/oaslananka/draforge-sim-driver:v{{ .Major }}.{{ .Minor }}-arm64"
-  - name_template: "ghcr.io/oaslananka/draforge-sim-driver:latest"
-    image_templates:
-      - "ghcr.io/oaslananka/draforge-sim-driver:latest-amd64"
-      - "ghcr.io/oaslananka/draforge-sim-driver:latest-arm64"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.title": "{{.ProjectName}} simulator driver"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+    sbom: true
 
 docker_signs:
   - artifacts: all

@@ -28,6 +28,22 @@ assert_count() {
     [[ "$got" -eq "$want" ]] || fail "expected $want occurrences of '$text', got $got"
 }
 
+assert_contains() {
+    local file text
+    file=$1
+    text=$2
+    grep -Fq -- "$text" "$file" || fail "$file is missing: $text"
+}
+
+assert_not_contains() {
+    local file text
+    file=$1
+    text=$2
+    if grep -Fq -- "$text" "$file"; then
+        fail "$file unexpectedly contains: $text"
+    fi
+}
+
 work_dir=$(mktemp -d)
 cleanup() {
     rm -rf "$work_dir"
@@ -42,6 +58,25 @@ for argument in \
     '            - --shutdown-timeout=5s'; do
     assert_count "$default_manifest" "$argument" 2
 done
+for argument in \
+    '            - --leader-elect=true' \
+    '            - --leader-election-lease-name=draforge-controller' \
+    '            - --leader-election-lease-duration=15s' \
+    '            - --leader-election-renew-deadline=10s' \
+    '            - --leader-election-retry-period=2s'; do
+    assert_count "$default_manifest" "$argument" 1
+done
+for contract in \
+    '  name: draforge-controller-leader-election' \
+    '  - apiGroups: ["coordination.k8s.io"]' \
+    '    resources: ["leases"]' \
+    '    verbs: ["get", "create", "update"]' \
+    '            - name: POD_NAME' \
+    '                  fieldPath: metadata.name' \
+    '            - name: POD_NAMESPACE' \
+    '                  fieldPath: metadata.namespace'; do
+    assert_contains "$default_manifest" "$contract"
+done
 
 custom_manifest="$work_dir/custom.yaml"
 render "$custom_manifest" \
@@ -50,14 +85,24 @@ render "$custom_manifest" \
     --set-string server.lifecycle.shutdownTimeout=12s \
     --set-string controller.lifecycle.readinessTimeout=1s \
     --set-string controller.lifecycle.readinessGracePeriod=0 \
-    --set-string controller.lifecycle.shutdownTimeout=20s
+    --set-string controller.lifecycle.shutdownTimeout=20s \
+    --set controller.leaderElection.enabled=false \
+    --set-string controller.leaderElection.leaseDuration=30s \
+    --set-string controller.leaderElection.renewDeadline=20s \
+    --set-string controller.leaderElection.retryPeriod=4s
+assert_not_contains "$custom_manifest" 'draforge-controller-leader-election'
+
 for argument in \
     '            - --readiness-timeout=750ms' \
     '            - --readiness-grace-period=45s' \
     '            - --shutdown-timeout=12s' \
     '            - --readiness-timeout=1s' \
     '            - --readiness-grace-period=0' \
-    '            - --shutdown-timeout=20s'; do
+    '            - --shutdown-timeout=20s' \
+    '            - --leader-elect=false' \
+    '            - --leader-election-lease-duration=30s' \
+    '            - --leader-election-renew-deadline=20s' \
+    '            - --leader-election-retry-period=4s'; do
     assert_count "$custom_manifest" "$argument" 1
 done
 
@@ -67,10 +112,25 @@ for invalid in \
     'server.lifecycle.shutdownTimeout=-1s' \
     'controller.lifecycle.readinessTimeout=invalid' \
     'controller.lifecycle.readinessGracePeriod=-1s' \
-    'controller.lifecycle.shutdownTimeout=0'; do
+    'controller.lifecycle.shutdownTimeout=0' \
+    'controller.leaderElection.leaseDuration=0' \
+    'controller.leaderElection.leaseDuration=500ms' \
+    'controller.leaderElection.renewDeadline=invalid' \
+    'controller.leaderElection.retryPeriod=-1s'; do
     if "$HELM_BIN" template draforge "$CHART_DIR" --set-string "$invalid" >/dev/null 2>&1; then
         fail "invalid lifecycle value unexpectedly passed schema validation: $invalid"
     fi
 done
+
+if "$HELM_BIN" template draforge "$CHART_DIR" \
+    --set controller.replicaCount=2 \
+    --set controller.leaderElection.enabled=false >/dev/null 2>&1; then
+    fail "multiple controller replicas unexpectedly rendered with leader election disabled"
+fi
+
+ha_manifest="$work_dir/ha.yaml"
+render "$ha_manifest" --set controller.replicaCount=2
+assert_contains "$ha_manifest" '  replicas: 2'
+assert_contains "$ha_manifest" '            - --leader-elect=true'
 
 echo "Runtime lifecycle Helm contract verified."

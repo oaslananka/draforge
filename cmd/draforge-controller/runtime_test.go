@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,5 +33,32 @@ func TestControllerRuntimeKeepsLivenessIndependentFromReadiness(t *testing.T) {
 	runtimeServer.Handler.ServeHTTP(readyResp, readyReq)
 	if readyResp.Code != http.StatusServiceUnavailable {
 		t.Fatalf("readiness status = %d, want 503", readyResp.Code)
+	}
+}
+
+func TestControllerMetricsExposeLeaderState(t *testing.T) {
+	reconciler := &simulator.Reconciler{}
+	runtimeServer := newRuntimeServer(":0", reconciler, nil)
+
+	for _, test := range []struct {
+		name   string
+		leader bool
+		want   string
+	}{
+		{name: "standby", leader: false, want: "draforge_controller_leader 0\n"},
+		{name: "leader", leader: true, want: "draforge_controller_leader 1\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reconciler.SetLeader(test.leader)
+			request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+			response := httptest.NewRecorder()
+			runtimeServer.Handler.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("metrics status = %d, want 200", response.Code)
+			}
+			if body := response.Body.String(); !strings.Contains(body, test.want) {
+				t.Fatalf("metrics body missing %q:\n%s", test.want, body)
+			}
+		})
 	}
 }

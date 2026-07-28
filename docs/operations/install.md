@@ -44,6 +44,8 @@ kind delete cluster --name draforge-install-e2e
 
 The production profile installs credential-free GHCR images and internal ClusterIP services. External dashboard exposure is disabled by default. The server, controller, and sim-driver repositories are separate, and an empty image tag resolves to the chart `appVersion`.
 
+The controller enables Kubernetes Lease leader election by default. This keeps a single active writer even when `controller.replicaCount` is increased for availability.
+
 ### Prerequisites
 - [Helm v3+](https://helm.sh/docs/intro/install/)
 - `kubectl` configured with cluster administrator access.

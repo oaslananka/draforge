@@ -54,6 +54,11 @@ controller:
     readinessTimeout: 2s
     readinessGracePeriod: 15s
     shutdownTimeout: 5s
+  leaderElection:
+    enabled: true
+    leaseDuration: 15s
+    renewDeadline: 10s
+    retryPeriod: 2s
   metrics:
     port: 8082
     service:

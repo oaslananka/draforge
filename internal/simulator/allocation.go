@@ -157,7 +157,7 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 						if chosenDevices[devKey] {
 							continue
 						}
-						if r.isDeviceAllocated(claims.Items, slice.Spec.Pool.Name, dev.Name) {
+						if r.isDeviceAllocated(claims.Items, slice.Spec.Driver, slice.Spec.Pool.Name, dev.Name) {
 							continue
 						}
 
@@ -250,11 +250,11 @@ func (r *Reconciler) SimulateAllocation(ctx context.Context) error {
 	return nil
 }
 
-func (r *Reconciler) isDeviceAllocated(claims []resourcev1.ResourceClaim, poolName, devName string) bool {
+func (r *Reconciler) isDeviceAllocated(claims []resourcev1.ResourceClaim, driverName, poolName, devName string) bool {
 	for _, c := range claims {
 		if c.Status.Allocation != nil {
 			for _, res := range c.Status.Allocation.Devices.Results {
-				if res.Pool == poolName && res.Device == devName {
+				if res.Driver == driverName && res.Pool == poolName && res.Device == devName {
 					return true
 				}
 			}

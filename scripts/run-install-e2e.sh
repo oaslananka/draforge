@@ -170,9 +170,10 @@ done
 cd "$ROOT_DIR"
 
 echo "Verifying resource.k8s.io/v1 API availability..."
-kubectl api-resources --api-group=resource.k8s.io -o name | grep -Fxq 'resourceclaims.resource.k8s.io' || \
+resource_api_names=$(kubectl api-resources --api-group=resource.k8s.io -o name)
+grep -Fxq 'resourceclaims.resource.k8s.io' <<<"$resource_api_names" || \
   fail "resourceclaims.resource.k8s.io is not served by the cluster"
-kubectl api-resources --api-group=resource.k8s.io -o name | grep -Fxq 'resourceslices.resource.k8s.io' || \
+grep -Fxq 'resourceslices.resource.k8s.io' <<<"$resource_api_names" || \
   fail "resourceslices.resource.k8s.io is not served by the cluster"
 
 echo "Installing complete DRAForge Helm release..."

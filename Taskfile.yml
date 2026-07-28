@@ -86,6 +86,16 @@ tasks:
     cmds:
       - cd web && pnpm lint
 
+  web:test:browser:install:
+    desc: Install the exact Playwright Chromium, Firefox, and WebKit revisions
+    cmds:
+      - cd web && pnpm test:browser:install
+
+  web:test:browser:
+    desc: Run dashboard accessibility and compatibility tests in real browsers
+    cmds:
+      - cd web && pnpm test:browser
+
   web:build:
     desc: Build web app
     cmds:

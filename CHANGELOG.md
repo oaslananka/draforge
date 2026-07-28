@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added a blocking Playwright accessibility and compatibility gate for Chromium, Firefox, WebKit, reduced-motion behavior, keyboard graph interaction, and a representative mobile viewport.
 - Operator-grade documentation in `docs/operations/` (install, guide, troubleshooting).
 - Added install-level kind E2E coverage for the complete Helm stack, with digest-pinned Kubernetes v1.35/v1.36 targets, reduced pull-request and full scheduled/release matrices, simulator allocation fixtures, namespace-qualified API/SSE/metrics verification, RBAC assertions, enforced Calico NetworkPolicy probes, and failure diagnostics.
 - Updated the frontend container build to a digest-pinned Node 22.23.1 image and exact current Corepack release so pnpm signature verification remains deterministic in clean Docker builds.

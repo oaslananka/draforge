@@ -102,3 +102,36 @@ The production build outputs to `web/dist/`, which is served by the Go server fr
 | All data shows "No DRA resources" | No SimulatedDevicePool CRD applied | `kubectl get simpool` |
 | Doctor tab shows no data | Server cannot connect to cluster | `kubectl cluster-info` |
 | Graph empty | No resource relationships exist | Deploy a scenario |
+
+
+## Browser and Accessibility Support
+
+DRAForge uses a **rolling Playwright support policy**. Pull requests run the exact browser revisions bundled with the repository-pinned `@playwright/test` version against:
+
+- Playwright Chromium on a desktop profile;
+- Playwright Firefox on a desktop profile;
+- Playwright WebKit on a desktop profile; and
+- Playwright Chromium with the Pixel 7 mobile profile as the representative narrow viewport.
+
+These are Playwright-maintained browser builds, not claims of support for every branded browser release. Updating `@playwright/test` and the lockfile updates the tested rolling browser revisions together. The compatibility gate mocks the dashboard REST and SSE boundaries deterministically, so it does not require Kubernetes, cloud credentials, or a running DRAForge backend.
+
+The Chromium project additionally runs axe checks tagged for WCAG 2.0, 2.1, and 2.2 levels A and AA on Overview, Graph, Doctor, and the global error state. Serious or critical findings block the browser job. Automated checks cannot prove complete WCAG conformance; the manual keyboard review below remains required for interaction changes.
+
+Run the browser gate locally from the repository root:
+
+```bash
+task web:test:browser:install
+task web:test:browser
+```
+
+The install command downloads the exact Chromium, Firefox, and WebKit revisions and may install supported Linux system packages. Browser traces, screenshots, videos, and the HTML report are generated only for failed runs under `web/test-results/` and `web/playwright-report/`; both directories are gitignored.
+
+### Manual keyboard checklist
+
+For changes to navigation, graph interaction, status indicators, diagnostics, focus styles, or responsive layout:
+
+1. Use only `Tab`, `Shift+Tab`, `Enter`, and `Space`; confirm every interactive control has a clearly visible focus indicator.
+2. Navigate to Graph, select a ResourceClaim node with `Enter` or `Space`, and activate **Diagnose Allocation** without a pointer.
+3. Confirm the live stream status is announced as a named status and the Doctor summary opens the diagnostics view.
+4. Enable the operating system or browser reduced-motion preference; confirm graph nodes remain fixed and non-essential CSS animation is disabled.
+5. At a narrow mobile viewport, confirm the navigation remains reachable and the page does not introduce horizontal document scrolling.

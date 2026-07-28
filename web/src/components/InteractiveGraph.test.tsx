@@ -20,6 +20,16 @@ describe('InteractiveGraph accessibility', () => {
   beforeEach(() => {
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(() => true),
+    })));
   });
 
   afterEach(() => {
@@ -31,7 +41,9 @@ describe('InteractiveGraph accessibility', () => {
     const onSelectClaim = vi.fn();
     render(<InteractiveGraph graphData={graph} onSelectClaim={onSelectClaim} />);
 
-    const claimNode = await screen.findByRole('button', { name: 'ResourceClaim shared' });
+    const claimNode = await screen.findByRole('button', {
+      name: 'ResourceClaim shared in namespace team-b, status Allocated',
+    });
     claimNode.focus();
     fireEvent.keyDown(claimNode, { key: 'Enter' });
 
@@ -40,4 +52,31 @@ describe('InteractiveGraph accessibility', () => {
 
     expect(onSelectClaim).toHaveBeenCalledWith({ name: 'shared', namespace: 'team-b' });
   });
+
+  it('stops graph animation and exposes selected state when reduced motion is requested', () => {
+    const requestAnimationFrame = vi.fn(() => 1);
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame);
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      matches: true,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(() => true),
+    })));
+
+    render(<InteractiveGraph graphData={graph} onSelectClaim={vi.fn()} />);
+
+    const claimNode = screen.getByRole('button', {
+      name: 'ResourceClaim shared in namespace team-b, status Allocated',
+    });
+    expect(claimNode.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(claimNode);
+    expect(claimNode.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('Reduced motion is active; graph nodes use fixed positions.').isConnected).toBe(true);
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+  });
+
 });

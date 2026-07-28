@@ -45,14 +45,14 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="dashboard-shell">
       <DashboardHeader
         activeTab={activeTab}
         doctorReport={data.doctorReport}
         sseStatus={sseStatus}
         onTabChange={setActiveTab}
       />
-      <main style={{ flex: 1, padding: '40px' }}>
+      <main className="dashboard-main">
         {data.globalError && (
           <div className="glass-panel" style={{ borderColor: 'var(--color-danger)', marginBottom: '30px', display: 'flex', alignItems: 'center', gap: '15px' }} role="alert">
             <span className="badge badge-danger">Connection Error</span>

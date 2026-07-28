@@ -152,9 +152,15 @@ pnpm audit --audit-level high     # Dependency advisory gate
 pnpm test                         # Unit and integration tests
 pnpm lint                         # ESLint check
 pnpm build                        # Production build to web/dist/
+pnpm test:browser:install         # Install pinned Playwright browser engines
+pnpm test:browser                 # Real-browser accessibility and compatibility gate
 ```
 
 The frontend test command uses Vitest, a repository-owned linkedom environment, and React Testing Library. The `web/vendor` workspace packages implement only the CSSOM, HTML escaping, and property-hyphenation methods exercised by linkedom tests; do not replace them with the scanner-flagged npm helper packages. Critical tests mock API and EventSource boundaries, so they do not require a Kubernetes cluster. New navigation, query-state, SSE, graph-selection, or diagnostics behavior must include a deterministic regression test.
+
+
+
+Before submitting interaction or layout changes, complete the manual keyboard checklist in `docs/dashboard.md`: verify visible focus, keyboard-only navigation, graph-node selection and diagnosis, the named live/Doctor statuses, reduced-motion behavior, and the representative narrow viewport. The Playwright suite provides deterministic browser and axe coverage but does not replace manual assistive-technology review.
 
 The dev server proxies API requests to the Go backend running on port 8080.
 Start the Go server separately with `draforge serve` or `task build && ./bin/draforge serve`.

@@ -28,3 +28,5 @@ artifacts/install-e2e*/
 dist/
 bin/
 *.exe
+web/test-results/
+web/playwright-report/

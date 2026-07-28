@@ -191,6 +191,13 @@ describe('App critical dashboard flows', () => {
     expect(screen.getByText(/Enable the resource.k8s.io\/v1 API/).isConnected).toBe(true);
   });
 
+  it('announces the live stream state through a status role', async () => {
+    render(<App />);
+
+    const status = await screen.findByRole('status', { name: 'Live stream status' });
+    expect(status.textContent).toContain('Stream Connected');
+  });
+
   it('marks the active tab for assistive technology', async () => {
     const user = userEvent.setup();
     render(<App />);

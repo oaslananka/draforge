@@ -6,7 +6,7 @@ export default [
     ignores: ["dist/**", "node_modules/**"]
   },
   {
-    files: ["src/**/*.ts", "src/**/*.tsx"],
+    files: ["src/**/*.ts", "src/**/*.tsx", "e2e/**/*.ts", "playwright.config.ts"],
     languageOptions: {
       parser: tsParser,
       sourceType: "module",

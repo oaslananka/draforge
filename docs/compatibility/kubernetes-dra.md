@@ -84,7 +84,7 @@ explicitly supports them.
 | ResourceClaim discovery | Supported | Reads status/allocation data and maps claims to Pods where possible |
 | DeviceClass discovery | Supported | DeviceClasses are listed and core selectors use `k8s.io/dynamic-resource-allocation/cel` pinned to the repository Kubernetes version |
 | Claim allocation explain | Partial | DeviceClass selectors use the shared Kubernetes evaluator; request-level selectors, taints, binding and consumable-capacity reasoning remain incomplete |
-| Simulator allocation | Partial | Supports existing DeviceClasses, class/request selectors, ordered `FirstAvailable`, default/`ExactCount`, health, complete device identity and one-node selection; advanced modes fail closed |
+| Simulator allocation | Partial | Supports existing DeviceClasses, class/request selectors, ordered `FirstAvailable`, default/`ExactCount`, `All` over complete latest-generation pools, health, complete device identity, one-node selection and the 32-result limit; remaining advanced features fail closed |
 | Device health | Partial | Custom label fallback exists; native health status support is incomplete |
 | Consumable capacity | Partial | Values can be displayed; capacity-aware allocation and exhaustion scoring are missing |
 | CDI output | Partial | The simulator can produce CDI-oriented output, but Helm deployment modes must clearly separate demo and host-integrated operation |
@@ -104,9 +104,11 @@ explicitly supports them.
    unsupported and produce a fail-closed diagnostic instead of an approximation.
 
 2. **Simulator allocation is not scheduler-equivalent.** It supports
-   `Exactly`, ordered `FirstAvailable`, and default/`ExactCount` requests over
-   healthy simulator-managed devices on one compatible node. `All`, consumable
-   capacity accounting, claim constraints, admin access, taints/tolerations,
+   `Exactly`, ordered `FirstAvailable`, default/`ExactCount`, and `All` requests
+   over healthy simulator-managed devices on one compatible node. `All` requires
+   complete latest-generation pool slices, excludes already allocated identities,
+   and respects the 32-result claim limit. Consumable capacity accounting, claim
+   constraints, admin access, taints/tolerations,
    partitionable devices, binding conditions and node-allocatable mappings remain
    unsupported. Unsupported input leaves the claim pending and emits a warning
    event; the simulator must not be used as a scheduler conformance oracle.

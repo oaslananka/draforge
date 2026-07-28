@@ -31,6 +31,7 @@ type requestAlternative struct {
 	requestName     string
 	deviceClassName string
 	selectors       []resourcev1.DeviceSelector
+	mode            resourcev1.DeviceAllocationMode
 	count           int
 }
 
@@ -46,15 +47,17 @@ type alternativeContract struct {
 }
 
 type requestSelection struct {
-	results  []resourcev1.DeviceRequestAllocationResult
-	nodeName string
-	matched  bool
+	results             []resourcev1.DeviceRequestAllocationResult
+	nodeName            string
+	matched             bool
+	resultLimitExceeded bool
 }
 
 type selectionInput struct {
 	alternative       requestAlternative
 	deviceClass       *resourcev1.DeviceClass
 	allocatedNodeName string
+	maxResults        int
 }
 
 type claimPlanner struct {
@@ -72,6 +75,14 @@ type candidateAccumulator struct {
 	seen          map[string]bool
 }
 
+type poolGeneration struct {
+	driver        string
+	pool          string
+	generation    int64
+	expectedCount int64
+	slices        []*resourcev1.ResourceSlice
+}
+
 func (r *Reconciler) planClaimAllocation(
 	ctx context.Context,
 	claim *resourcev1.ResourceClaim,
@@ -86,7 +97,8 @@ func (r *Reconciler) planClaimAllocation(
 	planner := newClaimPlanner(r, claims, slices, classes)
 	plan := allocationPlan{}
 	for _, request := range claim.Spec.Devices.Requests {
-		selection, failure := planner.selectRequest(ctx, request, plan.nodeName)
+		remainingResults := resourcev1.AllocationResultsMaxSize - len(plan.results)
+		selection, failure := planner.selectRequest(ctx, request, plan.nodeName, remainingResults)
 		if failure != nil {
 			return allocationPlan{}, failure
 		}
@@ -155,6 +167,7 @@ func (planner *claimPlanner) selectRequest(
 	ctx context.Context,
 	request resourcev1.DeviceRequest,
 	allocatedNodeName string,
+	maxResults int,
 ) (requestSelection, *allocationFailure) {
 	alternatives, failure := supportedAlternatives(request)
 	if failure != nil {
@@ -162,10 +175,15 @@ func (planner *claimPlanner) selectRequest(
 	}
 
 	missingClasses := make([]string, 0)
+	resultLimitExceeded := false
 	for _, alternative := range alternatives {
 		deviceClass, found := planner.classes[alternative.deviceClassName]
 		if !found {
 			missingClasses = append(missingClasses, alternative.deviceClassName)
+			continue
+		}
+		if alternative.mode == resourcev1.DeviceAllocationModeExactCount && alternative.count > maxResults {
+			resultLimitExceeded = true
 			continue
 		}
 
@@ -173,15 +191,27 @@ func (planner *claimPlanner) selectRequest(
 			alternative:       alternative,
 			deviceClass:       deviceClass,
 			allocatedNodeName: allocatedNodeName,
+			maxResults:        maxResults,
 		})
 		if selectionFailure != nil {
 			return requestSelection{}, selectionFailure
+		}
+		if selection.resultLimitExceeded {
+			resultLimitExceeded = true
+			continue
 		}
 		if selection.matched {
 			return selection, nil
 		}
 	}
 
+	if resultLimitExceeded && len(alternatives) == 1 {
+		return requestSelection{}, unsupportedFailure(fmt.Sprintf(
+			"request %q cannot fit within the remaining Kubernetes allocation result budget of %d",
+			request.Name,
+			maxResults,
+		))
+	}
 	return requestSelection{}, unmatchedRequestFailure(request.Name, alternatives, missingClasses)
 }
 
@@ -259,14 +289,9 @@ func supportedAlternative(contract alternativeContract) (requestAlternative, *al
 	if contract.deviceClassName == "" {
 		return requestAlternative{}, unsupportedFailure(fmt.Sprintf("request %q has no DeviceClassName", contract.requestName))
 	}
-	if contract.mode != "" && contract.mode != resourcev1.DeviceAllocationModeExactCount {
-		return requestAlternative{}, unsupportedFailure(fmt.Sprintf("request %q uses unsupported allocation mode %q", contract.requestName, contract.mode))
-	}
-	if contract.count < 0 {
-		return requestAlternative{}, unsupportedFailure(fmt.Sprintf("request %q has invalid negative count %d", contract.requestName, contract.count))
-	}
-	if contract.count > int64(resourcev1.AllocationResultsMaxSize) {
-		return requestAlternative{}, unsupportedFailure(fmt.Sprintf("request %q count %d exceeds Kubernetes allocation result limit %d", contract.requestName, contract.count, resourcev1.AllocationResultsMaxSize))
+	mode, failure := supportedAllocationMode(contract)
+	if failure != nil {
+		return requestAlternative{}, failure
 	}
 	if contract.adminAccess != nil && *contract.adminAccess {
 		return requestAlternative{}, unsupportedFailure(fmt.Sprintf("request %q uses admin access", contract.requestName))
@@ -282,8 +307,39 @@ func supportedAlternative(contract alternativeContract) (requestAlternative, *al
 		requestName:     contract.requestName,
 		deviceClassName: contract.deviceClassName,
 		selectors:       contract.selectors,
-		count:           normalizedCount(contract.count),
+		mode:            mode,
+		count:           normalizedAlternativeCount(mode, contract.count),
 	}, nil
+}
+
+func supportedAllocationMode(contract alternativeContract) (resourcev1.DeviceAllocationMode, *allocationFailure) {
+	mode := contract.mode
+	if mode == "" {
+		mode = resourcev1.DeviceAllocationModeExactCount
+	}
+	switch mode {
+	case resourcev1.DeviceAllocationModeExactCount:
+		if contract.count < 0 {
+			return "", unsupportedFailure(fmt.Sprintf("request %q has invalid negative count %d", contract.requestName, contract.count))
+		}
+		if contract.count > int64(resourcev1.AllocationResultsMaxSize) {
+			return "", unsupportedFailure(fmt.Sprintf("request %q count %d exceeds Kubernetes allocation result limit %d", contract.requestName, contract.count, resourcev1.AllocationResultsMaxSize))
+		}
+	case resourcev1.DeviceAllocationModeAll:
+		if contract.count != 0 {
+			return "", unsupportedFailure(fmt.Sprintf("request %q uses All allocation mode with nonzero count %d", contract.requestName, contract.count))
+		}
+	default:
+		return "", unsupportedFailure(fmt.Sprintf("request %q uses unsupported allocation mode %q", contract.requestName, mode))
+	}
+	return mode, nil
+}
+
+func normalizedAlternativeCount(mode resourcev1.DeviceAllocationMode, count int64) int {
+	if mode == resourcev1.DeviceAllocationModeAll {
+		return 0
+	}
+	return normalizedCount(count)
 }
 
 func normalizedCount(count int64) int {
@@ -294,6 +350,13 @@ func normalizedCount(count int64) int {
 }
 
 func (planner *claimPlanner) selectAlternative(ctx context.Context, input selectionInput) (requestSelection, *allocationFailure) {
+	if input.alternative.mode == resourcev1.DeviceAllocationModeAll {
+		return planner.selectAllAlternative(ctx, input)
+	}
+	return planner.selectExactCountAlternative(ctx, input)
+}
+
+func (planner *claimPlanner) selectExactCountAlternative(ctx context.Context, input selectionInput) (requestSelection, *allocationFailure) {
 	candidates := newCandidateAccumulator(input.alternative.count)
 	for sliceIndex := range planner.slices {
 		selection, failure := planner.selectFromSlice(ctx, input, &planner.slices[sliceIndex], candidates)
@@ -305,6 +368,125 @@ func (planner *claimPlanner) selectAlternative(ctx context.Context, input select
 		}
 	}
 	return requestSelection{}, nil
+}
+
+func (planner *claimPlanner) selectAllAlternative(ctx context.Context, input selectionInput) (requestSelection, *allocationFailure) {
+	nodeOrder, slicesByNode := planner.managedSlicesByNode(input.allocatedNodeName)
+	var deferredFailure *allocationFailure
+	resultLimitExceeded := false
+	for _, nodeName := range nodeOrder {
+		currentSlices, failure := completeCurrentPoolSlices(slicesByNode[nodeName])
+		if failure != nil {
+			deferredFailure = failure
+			continue
+		}
+		selection, selectionFailure := planner.selectAllFromNode(ctx, input, nodeName, currentSlices)
+		if selectionFailure != nil {
+			return requestSelection{}, selectionFailure
+		}
+		if selection.matched && len(selection.results) <= input.maxResults {
+			return selection, nil
+		}
+		if selection.matched {
+			resultLimitExceeded = true
+		}
+	}
+	if resultLimitExceeded {
+		return requestSelection{resultLimitExceeded: true}, nil
+	}
+	if deferredFailure != nil {
+		return requestSelection{}, deferredFailure
+	}
+	return requestSelection{}, nil
+}
+
+func (planner *claimPlanner) managedSlicesByNode(allocatedNodeName string) ([]string, map[string][]*resourcev1.ResourceSlice) {
+	nodeOrder := make([]string, 0)
+	slicesByNode := make(map[string][]*resourcev1.ResourceSlice)
+	seenNodes := make(map[string]bool)
+	for index := range planner.slices {
+		slice := &planner.slices[index]
+		if !managedSimulatorSlice(slice) {
+			continue
+		}
+		nodeName, compatible := compatibleNodeName(slice, allocatedNodeName)
+		if !compatible {
+			continue
+		}
+		if !seenNodes[nodeName] {
+			seenNodes[nodeName] = true
+			nodeOrder = append(nodeOrder, nodeName)
+		}
+		slicesByNode[nodeName] = append(slicesByNode[nodeName], slice)
+	}
+	return nodeOrder, slicesByNode
+}
+
+func completeCurrentPoolSlices(slices []*resourcev1.ResourceSlice) ([]*resourcev1.ResourceSlice, *allocationFailure) {
+	poolOrder := make([]string, 0)
+	pools := make(map[string]*poolGeneration)
+	for _, slice := range slices {
+		key := slice.Spec.Driver + "\x00" + slice.Spec.Pool.Name
+		pool := pools[key]
+		if pool == nil {
+			pool = &poolGeneration{driver: slice.Spec.Driver, pool: slice.Spec.Pool.Name, generation: slice.Spec.Pool.Generation}
+			pools[key] = pool
+			poolOrder = append(poolOrder, key)
+		}
+		if slice.Spec.Pool.Generation > pool.generation {
+			pool.generation = slice.Spec.Pool.Generation
+			pool.expectedCount = 0
+			pool.slices = nil
+		}
+		if slice.Spec.Pool.Generation != pool.generation {
+			continue
+		}
+		if pool.expectedCount == 0 {
+			pool.expectedCount = slice.Spec.Pool.ResourceSliceCount
+		}
+		if slice.Spec.Pool.ResourceSliceCount != pool.expectedCount {
+			return nil, unsupportedFailure(fmt.Sprintf("resource pool %s/%s generation %d reports inconsistent slice counts", pool.driver, pool.pool, pool.generation))
+		}
+		pool.slices = append(pool.slices, slice)
+	}
+
+	current := make([]*resourcev1.ResourceSlice, 0, len(slices))
+	for _, key := range poolOrder {
+		pool := pools[key]
+		if pool.expectedCount <= 0 || int64(len(pool.slices)) != pool.expectedCount {
+			return nil, unsupportedFailure(fmt.Sprintf("resource pool %s/%s generation %d is incomplete: observed %d of %d slices", pool.driver, pool.pool, pool.generation, len(pool.slices), pool.expectedCount))
+		}
+		current = append(current, pool.slices...)
+	}
+	return current, nil
+}
+
+func (planner *claimPlanner) selectAllFromNode(
+	ctx context.Context,
+	input selectionInput,
+	nodeName string,
+	slices []*resourcev1.ResourceSlice,
+) (requestSelection, *allocationFailure) {
+	candidates := newCandidateAccumulator(0)
+	results := make([]resourcev1.DeviceRequestAllocationResult, 0)
+	for _, slice := range slices {
+		if slice.Labels["draforge.oaslananka/health"] == "unhealthy" {
+			continue
+		}
+		for deviceIndex := range slice.Spec.Devices {
+			result, accepted, failure := planner.evaluateCandidate(ctx, input, slice, &slice.Spec.Devices[deviceIndex], candidates)
+			if failure != nil {
+				return requestSelection{}, failure
+			}
+			if accepted {
+				results = append(results, result)
+			}
+		}
+	}
+	if len(results) == 0 {
+		return requestSelection{}, nil
+	}
+	return requestSelection{results: results, nodeName: nodeName, matched: true}, nil
 }
 
 func newCandidateAccumulator(count int) *candidateAccumulator {
@@ -346,9 +528,12 @@ func (planner *claimPlanner) selectFromSlice(
 	return requestSelection{}, nil
 }
 
+func managedSimulatorSlice(slice *resourcev1.ResourceSlice) bool {
+	return slice.Labels["draforge.oaslananka/managed-by"] == "simulator"
+}
+
 func eligibleSimulatorSlice(slice *resourcev1.ResourceSlice) bool {
-	return slice.Labels["draforge.oaslananka/managed-by"] == "simulator" &&
-		slice.Labels["draforge.oaslananka/health"] != "unhealthy"
+	return managedSimulatorSlice(slice) && slice.Labels["draforge.oaslananka/health"] != "unhealthy"
 }
 
 func compatibleNodeName(slice *resourcev1.ResourceSlice, allocatedNodeName string) (string, bool) {

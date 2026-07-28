@@ -115,7 +115,7 @@ JSON
         ;;
       resourceslices.resource.k8s.io)
         cat <<'JSON'
-{"items":[{"spec":{"driver":"sim.draforge.oaslananka","pool":{"name":"e2e-gpu-pool"},"devices":[{"name":"dev-0"}]}}]}
+{"items":[{"spec":{"driver":"sim.draforge.oaslananka","pool":{"name":"e2e-gpu-pool"},"devices":[{"name":"dev-0"},{"name":"dev-1"}]}}]}
 JSON
         ;;
       resourceclaim.resource.k8s.io)
@@ -123,7 +123,7 @@ JSON
           printf '%s\n' '{"status":{}}'
         else
           cat <<'JSON'
-{"status":{"allocation":{"devices":{"results":[{"driver":"sim.draforge.oaslananka","pool":"e2e-gpu-pool","device":"dev-0"}]}}}}
+{"status":{"allocation":{"devices":{"results":[{"driver":"sim.draforge.oaslananka","pool":"e2e-gpu-pool","device":"dev-0"},{"driver":"sim.draforge.oaslananka","pool":"e2e-gpu-pool","device":"dev-1"}]}}}}
 JSON
         fi
         ;;
@@ -187,7 +187,7 @@ case "$url" in
       printf '[]\n'
     else
       cat <<'JSON'
-[{"namespace":"draforge-e2e","name":"e2e-gpu-claim","status":"Allocated","ownerPodName":"e2e-claim-consumer","allocations":[{"driverName":"sim.draforge.oaslananka","poolName":"e2e-gpu-pool","deviceName":"dev-0","nodeName":"kind-control-plane"}]}]
+[{"namespace":"draforge-e2e","name":"e2e-gpu-claim","status":"Allocated","ownerPodName":"e2e-claim-consumer","allocations":[{"driverName":"sim.draforge.oaslananka","poolName":"e2e-gpu-pool","deviceName":"dev-0","nodeName":"kind-control-plane"},{"driverName":"sim.draforge.oaslananka","poolName":"e2e-gpu-pool","deviceName":"dev-1","nodeName":"kind-control-plane"}]}]
 JSON
     fi
     ;;

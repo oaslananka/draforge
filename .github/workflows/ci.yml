@@ -13,6 +13,9 @@ jobs:
   go:
     name: Go Lint & Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -82,6 +85,16 @@ jobs:
           cov=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total coverage: $cov%"
           awk -v cov="$cov" 'BEGIN { if (cov + 0 < 50.0) { print "Error: Coverage is below 50.0%"; exit 1 } }'
+
+      - name: Upload Go coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          use_oidc: true
+          files: ./coverage.out
+          flags: go
+          disable_search: true
+          fail_ci_if_error: true
+          name: go
 
   web:
     name: Web Test, Lint & Build

@@ -1,0 +1,21 @@
+coverage:
+  status:
+    project:
+      go:
+        informational: true
+        flags:
+          - go
+    patch:
+      go:
+        informational: true
+        flags:
+          - go
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: "any_change"
+
+flags:
+  go:
+    carryforward: false

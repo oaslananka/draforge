@@ -161,24 +161,26 @@ Start the Go server separately with `draforge serve` or `task build && ./bin/dra
 
 ## Kubernetes / DRA Testing
 
-To test against a real Kubernetes cluster:
+The supported baseline is Kubernetes v1.35+ with the stable `resource.k8s.io/v1` DRA API. For a disposable local cluster, use the verified kind flow:
 
-1. Ensure your cluster has the DRA feature gate enabled (Kubernetes 1.26+ with
-   `DynamicResourceAllocation` feature gate).
-2. Apply the DRAForge CRDs:
-   ```bash
-   kubectl apply -f deploy/crds/simulateddevicepool-crd.yaml
-   ```
-3. Apply a test scenario:
-   ```bash
-   kubectl apply -f examples/scenarios/basic-gpu.yaml
-   ```
-4. Run the CLI:
-   ```bash
-   ./bin/draforge discover
-   ./bin/draforge doctor
-   ./bin/draforge tui
-   ```
+```bash
+DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind
+```
+
+For an already configured compatible cluster, install the complete chart before applying simulator scenarios:
+
+```bash
+helm upgrade --install draforge deploy/helm/draforge \
+  --namespace draforge-system \
+  --create-namespace
+kubectl apply -f examples/scenarios/basic-gpu.yaml
+task build
+./bin/draforge discover
+./bin/draforge doctor
+./bin/draforge tui
+```
+
+A CRD and scenario alone do not start the server, controller, or simulator driver. Confirm that the cluster serves `resource.k8s.io/v1` with `kubectl api-resources --api-group=resource.k8s.io`.
 
 ## Simulator Scenarios
 

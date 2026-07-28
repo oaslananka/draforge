@@ -8,8 +8,8 @@ Only the latest release is actively supported with security updates.
 
 | Version | Supported |
 | ------- | --------- |
-| v0.1.x  | Yes       |
-| < v0.1  | No        |
+| v0.2.x  | Yes       |
+| < v0.2  | No        |
 
 ## Reporting a Vulnerability
 
@@ -42,10 +42,9 @@ The DRAForge web dashboard is intentionally **read-only**, but read-only data ca
   documentation.
 - If you must share configuration for debugging, redact all sensitive values
   before posting.
-- Use environment variables or secret management tools (e.g., GitHub Secrets,
-  Vault, 1Password) for all credentials.
-- The repository is configured with Dependabot for dependency updates and expects
-  GitHub secret scanning to be enabled on the repository.
+- Use Doppler as the source of truth for repository, cloud, and environment secrets. GitHub Environment or Actions secrets are runtime delivery targets, not the canonical store.
+- Dependency advisories are enforced by `govulncheck`, pnpm audit, OSV/security workflows, Dependency Review, and pinned-action checks. Automated dependency-update tooling is not treated as a security boundary.
+- GitHub secret scanning and push protection are enabled; never rely on scanners as permission to commit a credential.
 
 ### Host-Integrated CDI Mode
 
@@ -68,18 +67,18 @@ The DRAForge web dashboard is intentionally **read-only**, but read-only data ca
   - Pod and event read access
 - If extending RBAC, ensure permissions are no broader than necessary.
 
-### GitHub Security Features (Recommended)
+### GitHub Security Features
 
-To fully secure this repository, enable the following GitHub settings:
+The following controls reflect the current public repository configuration:
 
-| Feature | Purpose | How to Enable |
-|---------|---------|---------------|
-| Branch protection | Prevent force-pushes and deletion of `main` | Settings > Branches > Add rule |
-| Required status checks | Block merges if CI fails | Branch protection rule > "Require status checks" |
-| PR reviews | Require at least one review before merge | Branch protection rule > "Require pull request reviews" |
-| Dependabot security updates | Auto-merge dependency fixes | Settings > Security & analysis > Dependabot security updates |
-| Secret scanning | Detect accidental credential commits | Settings > Security & analysis > Secret scanning |
-| Code scanning (CodeQL) | Automated vulnerability detection | Already configured in `.github/workflows/security.yml` |
+| Feature | Repository state | Security purpose |
+|---------|------------------|------------------|
+| `main` ruleset | Active | Blocks force-push/deletion and requires the repository's merge checks |
+| Release-tag ruleset | Active for `refs/tags/v*` | Blocks update and deletion of published release tags |
+| Required status checks | Active through rulesets | Blocks merge when required CI or security checks fail |
+| Secret scanning and push protection | Enabled | Detects and blocks supported secret patterns before publication |
+| Code and dependency scanning | Active workflows and PR checks | Runs CodeQL/security analysis, Dependency Review, Semgrep, Socket, and language advisory gates |
+| Automated security fixes | Not enabled | Optional automation; CI advisory gates and reviewed updates remain authoritative |
 
 ### Supply-Chain and Workload Controls
 
@@ -94,13 +93,10 @@ To fully secure this repository, enable the following GitHub settings:
 
 ### CI/CD Security
 
-- Normal CI (`ci.yml`) does not require any cloud credentials and runs safely
-  on forks and PRs.
-- E2E tests (`e2e.yml`) require `DIGITALOCEAN_TOKEN` and are gated to the
-  upstream repository. They only trigger on `workflow_dispatch` (manual) or
-  nightly schedule.
-- Release workflow (`release.yml`) requires `GITHUB_TOKEN` with `packages: write`
-  and is gated to the upstream repository.
+- Normal CI (`.github/workflows/ci.yml`) and the install matrix (`.github/workflows/e2e-matrix.yml`) require no cloud credentials. The reduced install matrix runs on pull requests; the full matrix runs weekly, manually, and as the required tagged-release gate.
+- Portable smoke testing (`.github/workflows/e2e-kubernetes.yml`) runs credential-free kind for relevant pull requests. Its manual external mode uses a short-lived `KUBECONFIG_B64` delivered through the protected `e2e-kubernetes` Environment from Doppler and removes the kubeconfig after the run.
+- The optional DOKS adapter (`.github/workflows/e2e.yml`) is manual-only, targets an existing billable cluster, and requires the exact confirmation phrase plus protected-environment approval. `DIGITALOCEAN_TOKEN` is sourced from Doppler and should have only `kubernetes:read` and `kubernetes:access_cluster`.
+- The release workflow (`.github/workflows/release.yml`) accepts only immutable annotated release tags on `main`, requires the full credential-free install matrix, and uses the repository-provided `GITHUB_TOKEN` plus GitHub OIDC for package publication and Cosign signing.
 
 ## Responsible Disclosure
 

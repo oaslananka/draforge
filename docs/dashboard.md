@@ -102,4 +102,3 @@ The production build outputs to `web/dist/`, which is served by the Go server fr
 | All data shows "No DRA resources" | No SimulatedDevicePool CRD applied | `kubectl get simpool` |
 | Doctor tab shows no data | Server cannot connect to cluster | `kubectl cluster-info` |
 | Graph empty | No resource relationships exist | Deploy a scenario |
-```

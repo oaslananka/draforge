@@ -1,6 +1,6 @@
 # Kubernetes DRA Compatibility
 
-> **Last updated:** 2026-07-23
+> **Last updated:** 2026-07-28
 > **Kubernetes reference:** v1.35 through v1.36
 > **DRAForge version:** 0.2.0
 
@@ -53,7 +53,7 @@ The table below captures the compatibility model DRAForge should use as of
 baseline; alpha/beta extensions are discovered or explained only when the code
 explicitly supports them.
 
-| Capability | Upstream status as of v1.36 docs | DRAForge 0.1.0 support |
+| Capability | Upstream status as of v1.36 docs | DRAForge 0.2.0 support |
 | --- | --- | --- |
 | Core Dynamic Resource Allocation | Stable since v1.35 | Supported for discovery and visualization |
 | DeviceClass | Stable core DRA | Discovered; selector evaluation is partial |
@@ -89,7 +89,7 @@ explicitly supports them.
 | Consumable capacity | Partial | Values can be displayed; capacity-aware allocation and exhaustion scoring are missing |
 | CDI output | Partial | The simulator can produce CDI-oriented output, but Helm deployment modes must clearly separate demo and host-integrated operation |
 | Helm CRD packaging | Supported | The SimulatedDevicePool CRD is packaged under chart `crds/` for Helm install |
-| RBAC least privilege | Partial | Current chart still needs narrower controller permissions |
+| RBAC least privilege | Supported | Server and node-plugin roles are read-only; controller writes are resource/verb scoped, including the Kubernetes v1.36 `resourceclaims/binding` authorization required for allocation updates |
 | Install-level E2E coverage | Supported | Reduced v1.35 gate on pull requests; full v1.35-v1.36 gate on schedule and releases |
 
 ---

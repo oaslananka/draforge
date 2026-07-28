@@ -9,6 +9,7 @@ RUN npm install --global --ignore-scripts --force corepack@0.35.0 && \
     corepack prepare pnpm@11.5.2 --activate
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 COPY web/vendor ./vendor
+COPY web/patches ./patches
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY web/ ./
 RUN pnpm build

@@ -1,0 +1,235 @@
+name: Portable Kubernetes E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/e2e-kubernetes.yml'
+      - 'build/remote/**'
+      - 'cmd/draforge-e2e-check/**'
+      - 'scripts/install-e2e-cni.sh'
+      - 'scripts/prepare-remote-e2e-kubeconfig.sh'
+      - 'scripts/remote-e2e.sh'
+      - 'scripts/run-remote-e2e-tests.sh'
+      - 'scripts/test-prepare-remote-e2e-kubeconfig.sh'
+      - 'scripts/test-remote-e2e-harness.sh'
+      - 'tests/e2e/**'
+      - 'tests/install-e2e/kubernetes-versions.json'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Run against an ephemeral kind cluster or a protected external kubeconfig'
+        required: true
+        type: choice
+        options:
+          - kind
+          - external
+        default: kind
+      confirm:
+        description: 'Type "run-e2e-kubernetes" to confirm manual execution'
+        required: true
+        type: string
+        default: ''
+      commit_sha:
+        description: 'Optional commit SHA to test; leave empty to use the selected ref'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portable-kubernetes-e2e-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  kind:
+    name: Portable smoke test on kind
+    if: ${{ github.event_name == 'pull_request' || inputs.target == 'kind' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CONFIRM: ${{ inputs.confirm }}
+      COMMIT_SHA: ${{ github.event.pull_request.head.sha || inputs.commit_sha || github.sha }}
+      CLUSTER_NAME: draforge-portable-e2e
+      DRAFORGE_INSTALL_E2E_ARTIFACT_DIR: artifacts/portable-kind-cni
+      REMOTE_E2E_ARTIFACT_DIR: artifacts/remote-e2e
+      REMOTE_E2E_RUN_ID: kind-${{ github.run_id }}
+      REMOTE_E2E_REPO_URL: ${{ github.event.pull_request.head.repo.clone_url || format('{0}/{1}.git', github.server_url, github.repository) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Validate manual inputs
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRM" != "run-e2e-kubernetes" ]]; then
+            echo "ERROR: Type 'run-e2e-kubernetes' to run the portable E2E workflow." >&2
+            exit 1
+          fi
+          if [[ ! "$COMMIT_SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            echo "ERROR: commit_sha must resolve to a 7-40 character hexadecimal Git SHA." >&2
+            exit 1
+          fi
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
+        with:
+          version: v1.35.5
+
+      - name: Install pinned kind
+        run: |
+          set -euo pipefail
+          kind_version=$(jq -r '.kindVersion' tests/install-e2e/kubernetes-versions.json)
+          node_image=$(jq -r '.profiles["pull-request"][0].nodeImage' tests/install-e2e/kubernetes-versions.json)
+          test -n "$kind_version"
+          test -n "$node_image"
+          mkdir -p "$RUNNER_TEMP/bin"
+          GOBIN="$RUNNER_TEMP/bin" go install "sigs.k8s.io/kind@$kind_version"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          echo "NODE_IMAGE=$node_image" >> "$GITHUB_ENV"
+
+      - name: Create provider-neutral kind cluster
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/kind-config.yaml" <<'CONFIG'
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          featureGates:
+            DynamicResourceAllocation: true
+          networking:
+            disableDefaultCNI: true
+            podSubnet: 192.168.0.0/16
+          CONFIG
+          kind delete cluster --name "$CLUSTER_NAME" >/dev/null 2>&1 || true
+          kind create cluster \
+            --name "$CLUSTER_NAME" \
+            --image "$NODE_IMAGE" \
+            --config "$RUNNER_TEMP/kind-config.yaml" \
+            --wait 0s
+
+      - name: Install pinned NetworkPolicy-capable CNI
+        run: scripts/install-e2e-cni.sh
+
+      - name: Validate kind DRA API
+        run: |
+          set -euo pipefail
+          kubectl api-resources --api-group=resource.k8s.io -o name \
+            | grep -Fxq 'resourceclaims.resource.k8s.io'
+
+      - name: Run provider-neutral remote E2E core
+        run: bash scripts/remote-e2e.sh "$COMMIT_SHA"
+
+      - name: Upload portable E2E artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: portable-kind-e2e-${{ github.run_id }}
+          path: |
+            artifacts/remote-e2e/
+            artifacts/portable-kind-cni/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Delete kind cluster
+        if: ${{ always() }}
+        run: kind delete cluster --name "$CLUSTER_NAME" || true
+
+  external:
+    name: Portable smoke test on external Kubernetes
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'external' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: e2e-kubernetes
+    env:
+      CONFIRM: ${{ inputs.confirm }}
+      COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+      REMOTE_E2E_ARTIFACT_DIR: artifacts/remote-e2e
+      REMOTE_E2E_RUN_ID: external-${{ github.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Validate manual inputs and required secret
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRM" != "run-e2e-kubernetes" ]]; then
+            echo "ERROR: Type 'run-e2e-kubernetes' to run the portable E2E workflow." >&2
+            exit 1
+          fi
+          if [[ ! "$COMMIT_SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            echo "ERROR: commit_sha must resolve to a 7-40 character hexadecimal Git SHA." >&2
+            exit 1
+          fi
+          if [[ -z "$KUBECONFIG_B64" ]]; then
+            echo "ERROR: KUBECONFIG_B64 is not configured in the e2e-kubernetes environment." >&2
+            exit 1
+          fi
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
+        with:
+          version: v1.35.5
+
+      - name: Prepare short-lived kubeconfig
+        env:
+          DRAFORGE_E2E_KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          kubeconfig_path="$RUNNER_TEMP/draforge-kubeconfig"
+          scripts/prepare-remote-e2e-kubeconfig.sh "$kubeconfig_path"
+          echo "KUBECONFIG_PATH=$kubeconfig_path" >> "$GITHUB_ENV"
+          echo "KUBECONFIG=$kubeconfig_path" >> "$GITHUB_ENV"
+
+      - name: Validate external cluster connection and DRA API
+        run: |
+          set -euo pipefail
+          kubectl version --request-timeout=15s
+          kubectl api-resources --api-group=resource.k8s.io -o name \
+            | grep -Fxq 'resourceclaims.resource.k8s.io'
+
+      - name: Run provider-neutral remote E2E core
+        run: bash scripts/remote-e2e.sh "$COMMIT_SHA"
+
+      - name: Upload portable E2E artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: portable-external-e2e-${{ github.run_id }}
+          path: artifacts/remote-e2e/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Remove run-scoped resources
+        if: ${{ always() }}
+        continue-on-error: true
+        run: |
+          if [[ -z "${KUBECONFIG:-}" || ! -f "$KUBECONFIG" ]]; then
+            echo "No prepared kubeconfig is available; skipping external cleanup."
+            exit 0
+          fi
+          kubectl delete job,serviceaccount -n draforge-ci \
+            -l "draforge.oaslananka/e2e-run-id=$REMOTE_E2E_RUN_ID" \
+            --ignore-not-found=true --wait=false
+          kubectl delete clusterrole,clusterrolebinding \
+            -l "draforge.oaslananka/e2e-run-id=$REMOTE_E2E_RUN_ID" \
+            --ignore-not-found=true --wait=false
+
+      - name: Remove kubeconfig
+        if: ${{ always() }}
+        run: |
+          if [[ -n "${KUBECONFIG_PATH:-}" ]]; then
+            rm -f "$KUBECONFIG_PATH"
+          fi

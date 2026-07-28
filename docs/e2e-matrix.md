@@ -89,6 +89,22 @@ Failed matrix entries upload a seven-day artifact named `install-e2e-<kubernetes
 - cluster events and Pod descriptions;
 - discovery, graph, explain, metrics, and SSE payloads produced before the failure.
 
+## Portable remote smoke workflow
+
+`.github/workflows/e2e-kubernetes.yml` exercises the same provider-neutral `scripts/remote-e2e.sh` core in two modes:
+
+- **kind mode** creates an ephemeral Kubernetes v1.35.5 cluster with DRA enabled, using the pinned kind version, node image, and hash-verified Calico CNI from `tests/install-e2e/kubernetes-versions.json`. Relevant pull requests run this mode automatically, which proves Pod networking, the remote Job, least-privilege RBAC, result verification, artifacts, and cleanup on a non-DigitalOcean cluster.
+- **external mode** consumes a standard kubeconfig from the protected `e2e-kubernetes` GitHub Environment. Store the base64-encoded short-lived kubeconfig as `KUBECONFIG_B64`, sourced from Doppler rather than a committed file or workflow input. The preparation script decodes to a runner-temporary absolute path, enforces mode `0600`, validates the configuration with kubectl, and removes it after the run.
+
+Manual runs require the exact confirmation phrase `run-e2e-kubernetes`. External credentials should grant only the access required to create the run-scoped Namespace controls, Job, ServiceAccount, ClusterRole, and ClusterRoleBinding and to read the DRA/core resources used by `TestSmoke`. The portable smoke workflow supplements the required install E2E matrix; it does not replace or broaden the release support matrix.
+
+Run the credential-handling and orchestration contracts locally without a cluster:
+
+```bash
+scripts/test-prepare-remote-e2e-kubeconfig.sh
+scripts/test-remote-e2e-harness.sh
+```
+
 ## Optional DOKS smoke adapter
 
 The manual `Optional DOKS E2E` workflow is one provider-specific adapter for the provider-neutral tagged Go smoke package. It runs on an **existing** DOKS cluster and does not create or destroy the cluster, node pools, VPC, or registry. A missing DOKS credential may block this optional adapter, but it does not invalidate the kind-based release gate or the Kubernetes portability contract.

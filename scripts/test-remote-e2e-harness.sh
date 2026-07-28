@@ -89,7 +89,13 @@ case "$command_name" in
         ;;
     logs)
         if printf "%s\n" "$*" | grep -Fq -- "e2e-runner"; then
-            printf "remote E2E runner log\n"
+            cat <<"JSON"
+Running tagged remote E2E tests...
+{"Action":"run","Package":"github.com/oaslananka/draforge/tests/e2e","Test":"TestSmoke"}
+{"Action":"pass","Package":"github.com/oaslananka/draforge/tests/e2e","Test":"TestSmoke"}
+{"Action":"pass","Package":"github.com/oaslananka/draforge/tests/e2e"}
+Remote E2E results verified: executed=1 passed=1 failed=0 skipped=0 required=TestSmoke
+JSON
         else
             printf "clone log\n"
         fi
@@ -129,6 +135,7 @@ run_case() {
         FAKE_KUBECTL_LOG="$case_dir/kubectl.log" \
         FAKE_STATE_DIR="$case_dir/state" \
         REMOTE_E2E_RUN_ID="test-$name" \
+        REMOTE_E2E_REPO_URL="https://github.com/example/draforge-fork.git" \
         REMOTE_E2E_ARTIFACT_DIR="$case_dir/artifacts" \
         REMOTE_E2E_POD_WAIT_ATTEMPTS=1 \
         REMOTE_E2E_LOG_WAIT_ATTEMPTS=1 \
@@ -144,13 +151,37 @@ run_case() {
     assert_file "$case_dir/artifacts/job.yaml"
     assert_file "$case_dir/artifacts/pod.yaml"
     assert_file "$case_dir/artifacts/go-test.json"
+    assert_contains "$case_dir/artifacts/go-test.json" '"Action":"pass","Package":"github.com/oaslananka/draforge/tests/e2e","Test":"TestSmoke"'
     assert_contains "$case_dir/state/rendered-job.yaml" "serviceAccountName: draforge-e2e-test-$name"
     assert_contains "$case_dir/state/rendered-rbac.yaml" "draforge.oaslananka/e2e-run-id: test-$name"
+    assert_contains "$case_dir/state/rendered-job.yaml" "https://github.com/example/draforge-fork.git"
+    assert_contains "$case_dir/state/rendered-job.yaml" "git clone --filter=blob:none https://github.com/example/draforge-fork.git /workspace/repo"
+    assert_contains "$case_dir/state/rendered-job.yaml" "workingDir: /workspace/repo"
+    assert_contains "$case_dir/state/rendered-job.yaml" "- -c"
+    if grep -Fq -- " cp " "$case_dir/kubectl.log"; then
+        fail "$name artifact collection unexpectedly used kubectl cp"
+    fi
     assert_contains "$case_dir/kubectl.log" "delete -f"
     if grep -Eq "RUN_ID|RUN_LABEL|REPO_URL|COMMIT_SHA" \
         "$case_dir/state/rendered-job.yaml" "$case_dir/state/rendered-rbac.yaml"; then
         fail "$name rendered manifest contains unresolved placeholders"
     fi
+}
+
+run_invalid_repo_case() {
+    local case_dir="$TEST_ROOT/invalid-repo"
+    mkdir -p "$case_dir"
+
+    set +e
+    (
+        cd "$ROOT_DIR"
+        REMOTE_E2E_REPO_URL="https://example.com/oaslananka/draforge.git"           bash scripts/remote-e2e.sh deadbeef
+    ) > "$case_dir/stdout.log" 2> "$case_dir/stderr.log"
+    local status=$?
+    set -e
+
+    [[ "$status" -eq 2 ]] || fail "invalid repo exit status $status, expected 2"
+    assert_contains "$case_dir/stderr.log" "must be a GitHub HTTPS clone URL"
 }
 
 run_cancel_case() {
@@ -202,6 +233,7 @@ run_cancel_case() {
 
 run_case success success 0
 run_case failure failure 1
+run_invalid_repo_case
 run_cancel_case
 
 echo "Remote E2E harness tests passed."

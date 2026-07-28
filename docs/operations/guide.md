@@ -95,6 +95,25 @@ renewDeadline > retryPeriod * 1.2`. Roll back by restoring the previous chart/im
 version; the same Lease name is retained, so only one version can be active at a
 time.
 
+### Event-driven reconciliation
+
+The active controller uses Kubernetes shared informers instead of fixed polling
+intervals. Add, update, and delete events are coalesced into two typed workqueues:
+
+- SimulatedDevicePool, Node, and ResourceSlice events trigger an idempotent pool
+  synchronization and orphan cleanup pass.
+- ResourceClaim, ResourceSlice, and DeviceClass events trigger an idempotent
+  allocation synchronization pass.
+
+Each queue has one worker, so pool passes are serialized with other pool passes
+and allocation passes are serialized with other allocation passes; the two
+pipelines can progress independently. A top-level synchronization error returned
+by a worker increments `draforge_controller_reconcile_errors_total` and is retried
+with exponential backoff starting at 100 milliseconds and capped at 30 seconds.
+A successful pass clears the item's retry history. The current workers re-read
+authoritative API state on each coalesced pass; informer events are the trigger,
+not a scheduler-equivalent cached allocation model.
+
 ## Observability
 
 DRAForge provides native support for monitoring and logging to assist operators in maintaining cluster health.

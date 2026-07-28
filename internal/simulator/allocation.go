@@ -6,30 +6,11 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// StartAllocationSimulator watches for pending claims and simulates allocation.
-func (r *Reconciler) StartAllocationSimulator(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	fmt.Println("Starting ResourceClaim allocation simulator...")
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := r.SimulateAllocation(ctx); err != nil {
-				fmt.Printf("Allocation simulation error: %v\n", err)
-			}
-		}
-	}
-}
 
 // SimulateAllocation finds pending claims and assigns them through the supported DRA selection subset.
 func (r *Reconciler) SimulateAllocation(ctx context.Context) error {

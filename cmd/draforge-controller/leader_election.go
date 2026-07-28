@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync/atomic"
@@ -25,7 +26,7 @@ const (
 	defaultLeaderRetryPeriod    = 2 * time.Second
 )
 
-type controllerActiveFunc func(context.Context)
+type controllerActiveFunc func(context.Context) error
 
 type leaderElectionOptions struct {
 	Enabled        bool
@@ -131,15 +132,38 @@ func runControllerLifecycle(
 		return fmt.Errorf("active controller callback must not be nil")
 	}
 	if !options.Enabled {
-		reconciler.SetLeader(true)
-		defer reconciler.SetLeader(false)
-		active(ctx)
-		return nil
+		return runSingleControllerLifecycle(ctx, reconciler, active)
 	}
 	if clientset == nil {
 		return fmt.Errorf("leader election requires a Kubernetes client")
 	}
+	return runLeaseControllerLifecycle(ctx, clientset, options, reconciler, active)
+}
 
+func runSingleControllerLifecycle(
+	ctx context.Context,
+	reconciler *simulator.Reconciler,
+	active controllerActiveFunc,
+) error {
+	reconciler.SetLeader(true)
+	defer reconciler.SetLeader(false)
+	activeErr := normalizeActiveControllerError(active(ctx), ctx)
+	if activeErr != nil {
+		return fmt.Errorf("active controller: %w", activeErr)
+	}
+	if ctx.Err() == nil {
+		return fmt.Errorf("active controller stopped unexpectedly")
+	}
+	return nil
+}
+
+func runLeaseControllerLifecycle(
+	ctx context.Context,
+	clientset kubernetes.Interface,
+	options leaderElectionOptions,
+	reconciler *simulator.Reconciler,
+	active controllerActiveFunc,
+) error {
 	lock, err := resourcelock.New(
 		resourcelock.LeasesResourceLock,
 		options.LeaseNamespace,
@@ -155,7 +179,41 @@ func runControllerLifecycle(
 	// state is 0 while the callback may start, 1 while active, and 2 once stopped.
 	// The CAS prevents a delayed callback from starting after Run has returned.
 	var state atomic.Int32
-	activeDone := make(chan struct{})
+	activeDone := make(chan error, 1)
+	runContext, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	elector, err := newControllerLeaderElector(
+		lock,
+		options,
+		reconciler,
+		active,
+		&state,
+		activeDone,
+		cancelRun,
+	)
+	if err != nil {
+		return err
+	}
+
+	elector.Run(runContext)
+	if state.CompareAndSwap(0, 2) {
+		return nil
+	}
+	if activeErr := <-activeDone; activeErr != nil {
+		return fmt.Errorf("active controller: %w", activeErr)
+	}
+	return nil
+}
+
+func newControllerLeaderElector(
+	lock resourcelock.Interface,
+	options leaderElectionOptions,
+	reconciler *simulator.Reconciler,
+	active controllerActiveFunc,
+	state *atomic.Int32,
+	activeDone chan<- error,
+	cancelRun context.CancelFunc,
+) (*leaderelection.LeaderElector, error) {
 	elector, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
 		Lock:          lock,
 		LeaseDuration: options.LeaseDuration,
@@ -163,16 +221,7 @@ func runControllerLifecycle(
 		RetryPeriod:   options.RetryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(activeContext context.Context) {
-				if !state.CompareAndSwap(0, 1) {
-					return
-				}
-				reconciler.SetLeader(true)
-				defer func() {
-					reconciler.SetLeader(false)
-					state.Store(2)
-					close(activeDone)
-				}()
-				active(activeContext)
+				runActiveLeader(activeContext, reconciler, active, state, activeDone, cancelRun)
 			},
 			OnStoppedLeading: func() {
 				klog.Infof("Controller %q stopped leading lease %s/%s", options.Identity, options.LeaseNamespace, options.LeaseName)
@@ -185,15 +234,36 @@ func runControllerLifecycle(
 		Name:            options.LeaseName,
 	})
 	if err != nil {
-		return fmt.Errorf("create leader elector: %w", err)
+		return nil, fmt.Errorf("create leader elector: %w", err)
 	}
+	return elector, nil
+}
 
-	elector.Run(ctx)
-	if state.CompareAndSwap(0, 2) {
+func runActiveLeader(
+	activeContext context.Context,
+	reconciler *simulator.Reconciler,
+	active controllerActiveFunc,
+	state *atomic.Int32,
+	activeDone chan<- error,
+	cancelRun context.CancelFunc,
+) {
+	if !state.CompareAndSwap(0, 1) {
+		return
+	}
+	reconciler.SetLeader(true)
+	activeErr := normalizeActiveControllerError(active(activeContext), activeContext)
+	if activeErr == nil && activeContext.Err() == nil {
+		activeErr = fmt.Errorf("active controller stopped unexpectedly")
+	}
+	reconciler.SetLeader(false)
+	state.Store(2)
+	activeDone <- activeErr
+	cancelRun()
+}
+
+func normalizeActiveControllerError(err error, ctx context.Context) error {
+	if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 		return nil
 	}
-	if state.Load() == 1 {
-		<-activeDone
-	}
-	return nil
+	return err
 }

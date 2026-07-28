@@ -3,5 +3,6 @@ RUN apk add --no-cache ca-certificates && \
     addgroup -S draforge && adduser -S draforge -G draforge
 USER draforge
 WORKDIR /home/draforge
-COPY draforge-sim-driver .
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/draforge-sim-driver ./
 ENTRYPOINT ["./draforge-sim-driver"]

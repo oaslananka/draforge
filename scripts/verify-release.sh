@@ -6,11 +6,15 @@ set -euo pipefail
 
 DIST_DIR=${DIST_DIR:-"dist"}
 CHARTS_DIR=${CHARTS_DIR:-"charts"}
+REQUIRE_DOCKER_ARTIFACTS=${REQUIRE_DOCKER_ARTIFACTS:-"0"}
 
 echo "==> Verifying DRAForge release artifacts..."
 
 echo "==> Verifying release metadata contract..."
 python3 scripts/verify-release-metadata.py --self-test --root .
+
+echo "==> Verifying GoReleaser Docker v2 configuration..."
+python3 scripts/verify-goreleaser-docker-v2.py --self-test
 
 echo "==> Verifying Helm chart image contract..."
 scripts/verify-chart-images.sh
@@ -71,12 +75,38 @@ fi
 
 # 5. Container Image Metadata (from GoReleaser artifacts.json)
 echo "==> Checking container image metadata expectations..."
-if [ -f "$DIST_DIR/artifacts.json" ]; then
-  if grep -q -i 'docker' "$DIST_DIR/artifacts.json"; then
-    echo "✅ Found container image metadata in artifacts.json"
+if [[ -f "$DIST_DIR/artifacts.json" ]]; then
+  docker_artifact_count=$(python3 - "$DIST_DIR/artifacts.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+component_ids = {
+    "draforge-server-image",
+    "draforge-controller-image",
+    "draforge-sim-driver-image",
+}
+artifacts = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+count = 0
+if isinstance(artifacts, list):
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or artifact.get("type") != "Docker Image":
+            continue
+        extra = artifact.get("extra")
+        if isinstance(extra, dict) and extra.get("ID") in component_ids:
+            count += 1
+print(count)
+PY
+  )
+  if [[ "$docker_artifact_count" -gt 0 ]]; then
+    python3 scripts/verify-goreleaser-docker-artifacts.py --self-test --validate
+  elif [[ "$REQUIRE_DOCKER_ARTIFACTS" == "1" ]]; then
+    fail "No GoReleaser Docker v2 artifacts found in $DIST_DIR/artifacts.json"
   else
-    warn "No Docker image metadata found in artifacts.json (expected for --skip=docker)"
+    warn "No Docker v2 image metadata found in artifacts.json (expected for --skip=docker)"
   fi
+elif [[ "$REQUIRE_DOCKER_ARTIFACTS" == "1" ]]; then
+  fail "$DIST_DIR/artifacts.json not found"
 else
   warn "$DIST_DIR/artifacts.json not found"
 fi

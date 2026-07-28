@@ -235,6 +235,9 @@ jobs:
         with:
           terraform_version: 1.7.0
 
+      - name: Verify Terraform input contract
+        run: python3 scripts/validate-terraform-variables.py --self-test infra/terraform/environments/showcase
+
       - name: Terraform Init
         run: terraform -chdir=infra/terraform/environments/showcase init -backend=false
 

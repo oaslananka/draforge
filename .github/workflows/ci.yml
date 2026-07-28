@@ -68,7 +68,12 @@ jobs:
             scripts/kind-install-e2e-matrix.sh \
             scripts/test-install-e2e-cni.sh \
             scripts/test-install-e2e-harness.sh \
-            scripts/verify-install-e2e-policy.sh
+            scripts/verify-install-e2e-policy.sh \
+            scripts/verify-release-tag.sh \
+            scripts/test-verify-release-tag.sh
+
+      - name: Test release tag provenance
+        run: bash scripts/test-verify-release-tag.sh
 
       - name: Test remote E2E kubeconfig preparation
         run: bash scripts/test-prepare-remote-e2e-kubeconfig.sh

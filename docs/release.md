@@ -16,7 +16,7 @@ All three binaries embed version and commit information at build time via GoRele
 
 These values are set by GoReleaser during `goreleaser release` and are visible via `go version -m` on the compiled binary. The CLI also exposes them via `draforge version`.
 
-Snapshot builds (local dry-runs) use a synthetic version like `v0.0.0-SNAPSHOT-<commit>` and do not publish anything. The CI pipeline validates the release configuration with `goreleaser release --snapshot --skip=docker,sbom,sign` in the `goreleaser` job (see `.github/workflows/ci.yml`).
+Snapshot builds use a synthetic `*-SNAPSHOT-<commit>` version and do not publish anything. The pull-request `GoReleaser Dry-Run` job builds both target architectures with pinned QEMU and Buildx, validates Docker v2 artifact metadata, and still does not push images. `task release:local` is the lighter Docker-free workstation check.
 
 ## Prerequisites
 
@@ -24,40 +24,30 @@ Snapshot builds (local dry-runs) use a synthetic version like `v0.0.0-SNAPSHOT-<
 - [Docker](https://docs.docker.com/engine/install/) installed and the daemon running
   (required for multi-arch image builds).
 - [Syft](https://github.com/anchore/syft) installed (used for CycloneDX SBOM generation).
-- Write access to the GitHub repository and `ghcr.io` container registry.
-- A valid [GitHub token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
-  with `repo` and `write:packages` scopes.
-- (Optional) [Cosign](https://docs.sigstore.dev/installation/) installed if signing
-  artifacts and images.
+- Write access to create a new annotated tag in the GitHub repository.
+- The repository-provided GitHub Actions token and OIDC identity; maintainers do not provide a long-lived publish token or Cosign key.
+- Optional local Git signing configuration when creating a signed annotated tag.
 
-### Environment variables
-
-```bash
-export GITHUB_TOKEN=ghp_...          # GitHub PAT with repo + write:packages
-export COSIGN_PASSWORD=...           # If signing with a cosign key
-```
+Production publication runs only in GitHub Actions. Do not export or store a personal GitHub token, registry credential, or Cosign private key for the normal release path.
 
 ---
 
 ## Snapshot release (local dry-run)
 
-A snapshot build validates the pipeline without publishing anything:
+Use the repository task for a Docker-free workstation check:
 
 ```bash
-goreleaser release --snapshot --clean --skip=publish
+task release:local
+# Equivalent to: goreleaser release --snapshot --clean --skip=docker,sbom,sign
 ```
 
-- Produces binaries, archives, checksums, and SBOMs in `dist/`.
-- Docker images are **built** but not pushed (image names include the snapshot tag).
-- No GitHub release is created, no tags are pushed.
-- The version tag in snapshot mode follows the pattern
-  `{{ .Tag }}-SNAPSHOT-{{ .ShortCommit }}`.
-
-To verify the output:
+This produces binaries, archives, and checksums in `dist/` without publishing, signing, generating SBOMs, or building containers. Verify the resulting payload with:
 
 ```bash
 task release:verify
 ```
+
+The pull-request `GoReleaser Dry-Run` job is the authoritative container check. It additionally builds the server, controller, and simulator-driver images for `linux/amd64` and `linux/arm64` and validates all Docker v2 snapshot artifacts.
 
 ---
 
@@ -77,69 +67,87 @@ Failure artifacts from GitHub Actions include rendered manifests, effective valu
 
 ## Tagged release flow
 
-### 1. Prepare the release
+### Tag provenance and immutability policy
 
-Ensure `CHANGELOG.md` is up to date:
+A releasable tag must:
+
+- match `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-rc.NUMBER`;
+- be an annotated Git tag object with a non-empty message and tagger provenance;
+- resolve to the reviewed commit checked out by the workflow;
+- be reachable from `main`;
+- be pushed once and never moved, reused, or deleted.
+
+The active `release-tag-immutability` repository ruleset blocks updates and deletions for `refs/tags/v*`. The historical `v0.1.0` and `v0.2.0` lightweight tags predate this policy. They remain unchanged because rewriting published tags would break provenance; every new release must satisfy the annotated-tag gate.
+
+Maintainers with a configured Git signing identity may use `git tag -s` instead of `git tag -a`. A Git tag signature is additional provenance, not a substitute for the workflow gates. The release workflow uses GitHub OIDC and Cosign to sign checksums and container images so published payloads remain independently verifiable.
+
+### 1. Prepare the release commit
+
+Update `CHANGELOG.md`, chart `version` and `appVersion`, web package metadata, compatibility statements, and supported-version documentation in a pull request. Merge only after required CI passes.
+
+Choose the new version after the release commit is on `main`:
 
 ```bash
-# Review unreleased changes
-grep -A 999 "## \\[Unreleased\\]" CHANGELOG.md | head -50
-
-# Move Unreleased entries to a new version section
-# and update the [Unreleased] compare link at the bottom of CHANGELOG.md
+release_tag=v0.3.0
+release_version=${release_tag#v}
 ```
 
-Commit the changelog update:
+### 2. Create and verify the annotated tag
+
+Create the tag on the reviewed `main` commit and verify it locally before pushing:
 
 ```bash
-git add CHANGELOG.md
-git commit -m "docs: prepare v0.1.0 changelog"
+git switch main
+git pull --ff-only origin main
+git tag -a "$release_tag" -m "DRAForge $release_tag"
+RELEASE_TAG="$release_tag" \
+  RELEASE_MAIN_REF=main \
+  bash scripts/verify-release-tag.sh
 ```
 
-### 2. Tag and push
+A signed annotated tag is also accepted:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag -s "$release_tag" -m "DRAForge $release_tag"
 ```
 
-### 3. Run GoReleaser
+Use only one of the two tag commands.
+
+### 3. Push once and let GitHub Actions publish
 
 ```bash
-goreleaser release --clean
+git push origin "$release_tag"
 ```
 
-This will:
+The tag push starts `.github/workflows/release.yml`. The workflow first validates the tag object and `main` ancestry, then runs the full install E2E matrix. GoReleaser publishes only after those gates pass. Do not run a second manual production GoReleaser publish for the same version.
 
-1. Build all three binaries (`draforge`, `draforge-controller`, `draforge-sim-driver`)
-   for `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`.
-2. Create compressed archives (`tar.gz` / `zip`).
-3. Generate `checksums.txt`.
-4. Generate CycloneDX SBOMs for each archive.
-5. Build and push Docker images to `ghcr.io/oaslananka/`:
-   - Per-architecture images tagged with `0.1.0-amd64`, `0.1.0-arm64`.
-   - Multi-arch manifest images (`0.1.0`, `v0.1`, `latest`).
-6. Create a GitHub release with the archives and checksums attached.
-7. (If configured) Sign checksums and Docker images with Cosign.
+The publish job:
 
-### 4. Verify the release
+1. builds all three binaries for their configured operating systems and architectures;
+2. creates archives and `checksums.txt`;
+3. generates CycloneDX archive SBOMs;
+4. builds multi-platform server, controller, and simulator-driver images;
+5. publishes release, minor, and `latest` GHCR tags;
+6. signs checksums and container images with Cosign using the workflow identity;
+7. creates the GitHub release and attached assets;
+8. validates Docker v2 artifact metadata and anonymously inspects the public multi-platform manifests.
+
+### 4. Verify the published release
 
 ```bash
-# Check GitHub release
-gh release view v0.1.0
+# Check the GitHub release and attached assets
+gh release view "$release_tag"
 
-# Verify chart metadata and image references match the release tag
-scripts/verify-chart-images.sh 0.1.0
-
-# Check all published multi-architecture manifests without registry credentials
+# Verify chart metadata and public multi-platform image references
+scripts/verify-chart-images.sh "$release_version"
 docker logout ghcr.io
-VERIFY_REMOTE_IMAGES=1 scripts/verify-chart-images.sh 0.1.0
+VERIFY_REMOTE_IMAGES=1 scripts/verify-chart-images.sh "$release_version"
 
-# Verify binary version
-docker run --rm ghcr.io/oaslananka/draforge-server:0.1.0 version
+# Verify the published server version
+docker run --rm "ghcr.io/oaslananka/draforge-server:$release_version" version
 
-# Check SBOM
-gh release download v0.1.0 -p "*.sbom"
+# Download SBOM assets for inspection
+gh release download "$release_tag" -p "*.sbom"
 ```
 
 ---
@@ -171,36 +179,33 @@ syft dist/draforge_linux_amd64_v1/draforge -o cyclonedx-json > draforge.sbom.jso
 | Checksums | `dist/checksums.txt` | SHA-256 checksums of all archives |
 | SBOMs | `dist/*.sbom` | CycloneDX JSON software bills of materials |
 | Docker images | `ghcr.io/oaslananka/` | Multi-arch container images |
-| GitHub release | `https://github.com/oaslananka/draforge/releases/tag/v0.1.0` | Release with assets |
+| GitHub release | GitHub Releases, keyed by the immutable annotated tag | Release with assets |
 
 ---
 
-## Rollback
+## Rollback and superseding releases
 
-### Before pushing a tag
+### Before pushing the tag
 
-Simple — delete the tag locally and revert the changelog commit:
-
-```bash
-git tag -d v0.1.0
-git reset --hard HEAD~1
-```
-
-### After pushing a tag (no release run)
+Delete the local, unpublished tag and update the release commit through the normal pull-request workflow:
 
 ```bash
-git push --delete origin v0.1.0
-git tag -d v0.1.0
+git tag -d "$release_tag"
 ```
 
-### After a release is published
+Do not reset or force-push shared `main`.
 
-1. **Draft a new release** on GitHub that supersedes the faulty one.
-2. **Do not delete the existing tag** — it may be referenced by users.
-3. **If Docker images were pushed**, consider whether they need to be deprecated
-   (the old images remain pullable under the same tag unless overwritten).
-4. **Fix the issue**, bump the patch version, and cut a new release
-   (e.g. `v0.1.1`).
+### After pushing the tag
+
+A pushed `v*` tag is immutable even when the workflow fails before publication. Do not delete, move, or recreate it. Diagnose the failed run, fix the repository through a pull request, increment the version, and create a new annotated tag.
+
+### After publication
+
+1. Mark the affected GitHub release as superseded or document the limitation without deleting provenance.
+2. Leave the original tag, release assets, and container digests intact.
+3. Fix the issue through a pull request.
+4. Increment the patch or release-candidate number and publish a new release.
+5. Verify the replacement release and clearly link it from the superseded release notes.
 
 ---
 
@@ -230,5 +235,5 @@ Additionally, never commit:
 | Docker build fails | Docker daemon not running | Start Docker Desktop / dockerd |
 | `syft` command not found | Syft not installed | Install from https://github.com/anchore/syft |
 | `gh` auth failure | No GitHub token or expired token | Run `gh auth login` or set `GITHUB_TOKEN` |
-| Cosign signing fails | Cosign key not set up | See [Cosign documentation](https://docs.sigstore.dev/installation/) |
+| Cosign signing fails | GitHub OIDC or package permissions unavailable | Verify `id-token: write`, package permissions, and the failed workflow logs |
 | Release created but no assets | Missing `GITHUB_TOKEN` | Ensure token has `repo` scope |

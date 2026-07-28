@@ -12,7 +12,7 @@
 - [ ] Conventional Commits format used
 - [ ] Documentation updated if behavior or configuration changed
 - [ ] No unrelated formatting or refactoring mixed in
-- [ ] If Dockerfiles changed, verify with `goreleaser release --snapshot --clean --skip=publish --skip=sign`
+- [ ] If Dockerfiles changed, verify with `goreleaser release --snapshot --clean --skip=docker,sbom,sign`
 - [ ] If Go code changed, check `golangci-lint run ./...`
 - [ ] Security-sensitive changes reviewed for secret exposure and input validation
 - [ ] Remote E2E changes pass the portable kind workflow; external kubeconfigs remain short-lived and environment-protected
@@ -20,8 +20,10 @@
 ## Before a Release
 
 - [ ] `CHANGELOG.md` updated with all changes since last release
-- [ ] Version tag created and pushed
-- [ ] GoReleaser run: `goreleaser release --clean`
+- [ ] Release tag is annotated, has a non-empty message, matches SemVer/RC syntax, and targets the reviewed `main` commit
+- [ ] `RELEASE_TAG=<tag> RELEASE_MAIN_REF=main bash scripts/verify-release-tag.sh` passes before push
+- [ ] New `v*` tag pushed once; an existing release tag is never moved, reused, or deleted
+- [ ] Protected tag workflow completed the full install E2E gate and GoReleaser publish job
 - [ ] Release artifacts verified locally: `task release:verify`
 - [ ] GitHub release assets verified (archives, checksums, SBOMs)
 - [ ] Chart `version` and `appVersion` match the release tag without the leading `v`

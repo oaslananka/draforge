@@ -12,6 +12,7 @@ done
 python3 scripts/verify-release-metadata.py --self-test --root .
 python3 scripts/verify-goreleaser-docker-v2.py --self-test --check
 python3 scripts/verify-goreleaser-docker-artifacts.py --self-test
+bash scripts/test-verify-release-tag.sh
 go mod tidy
 git diff --exit-code go.mod go.sum
 golangci-lint run ./...

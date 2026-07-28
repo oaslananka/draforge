@@ -208,16 +208,20 @@ See [docs/release.md](docs/release.md) for the full release process.
 Snapshot builds (no publishing):
 
 ```bash
-goreleaser release --snapshot --clean --skip=publish --skip=sign
+task release:local
+# Equivalent to: goreleaser release --snapshot --clean --skip=docker,sbom,sign
 ```
 
 For maintainers cutting a tagged release:
 
 ```bash
-git tag v0.x.x
-git push origin v0.x.x
-goreleaser release --clean
+release_tag=v0.3.0
+git tag -a "$release_tag" -m "DRAForge $release_tag"
+RELEASE_TAG="$release_tag" RELEASE_MAIN_REF=main bash scripts/verify-release-tag.sh
+git push origin "$release_tag"
 ```
+
+The tag push starts the release workflow. Do not create lightweight release tags, move an existing tag, or reuse a published version.
 
 ## Pull Request Expectations
 

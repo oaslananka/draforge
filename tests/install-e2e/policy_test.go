@@ -147,6 +147,18 @@ func validateDeviceClass(t *testing.T, deviceClass *resourcev1.DeviceClass) {
 	if deviceClass.Name != "draforge-e2e-gpu" {
 		t.Fatalf("unexpected DeviceClass name %q", deviceClass.Name)
 	}
+	if len(deviceClass.Spec.Selectors) != 1 || deviceClass.Spec.Selectors[0].CEL == nil {
+		t.Fatalf("DeviceClass must contain one CEL selector: %#v", deviceClass.Spec.Selectors)
+	}
+	expression := deviceClass.Spec.Selectors[0].CEL.Expression
+	for _, fragment := range []string{
+		`device.driver == "sim.draforge.oaslananka"`,
+		`device.attributes["sim.draforge.oaslananka"].type == "gpu"`,
+	} {
+		if !strings.Contains(expression, fragment) {
+			t.Fatalf("DeviceClass CEL selector %q is missing %q", expression, fragment)
+		}
+	}
 }
 
 func validateResourceClaim(t *testing.T, claim *resourcev1.ResourceClaim, deviceClassName string) {
@@ -160,6 +172,18 @@ func validateResourceClaim(t *testing.T, claim *resourcev1.ResourceClaim, device
 	exact := claim.Spec.Devices.Requests[0].Exactly
 	if exact.DeviceClassName != deviceClassName || exact.Count != 1 {
 		t.Fatalf("claim request must select one %q device: %#v", deviceClassName, exact)
+	}
+	if len(exact.Selectors) != 1 || exact.Selectors[0].CEL == nil {
+		t.Fatalf("claim request must contain one CEL selector: %#v", exact.Selectors)
+	}
+	expression := exact.Selectors[0].CEL.Expression
+	for _, fragment := range []string{
+		`device.attributes["sim.draforge.oaslananka"].model == "DRAForge-E2E-GPU"`,
+		`device.capacity["sim.draforge.oaslananka"].memory.compareTo(quantity("8Gi")) >= 0`,
+	} {
+		if !strings.Contains(expression, fragment) {
+			t.Fatalf("claim CEL selector %q is missing %q", expression, fragment)
+		}
 	}
 }
 

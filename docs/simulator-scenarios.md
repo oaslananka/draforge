@@ -47,6 +47,36 @@ done
 
 Create a focused YAML file in `examples/scenarios/` using the `SimulatedDevicePool` CRD. Give the resource and file a clear diagnostic intent, keep the scope small, and update the catalog table above.
 
+## Allocation Selection Contract
+
+The allocation simulator evaluates actual Kubernetes DRA objects rather than
+pool, class, or product-name substrings. A pending claim must reference an
+existing `DeviceClass`. Every class selector and request-level selector is
+combined with logical AND through the exact-version Kubernetes DRA CEL
+evaluator.
+
+The current supported allocation subset is:
+
+- `Exactly` requests and ordered `FirstAvailable` alternatives;
+- default or `ExactCount` allocation mode, with an omitted count defaulting to one;
+- typed scalar attributes, semantic-version attributes, `device.driver`, and
+  quantity capacities inside CEL selectors;
+- healthy simulator-managed devices that are not already allocated by the same
+  `<driver, pool, device>` identity;
+- one compatible `NodeName` across all results in a claim.
+
+The following features are intentionally fail-closed until their complete
+semantics are implemented: `All`, consumable-capacity requests/accounting,
+multiple allocations, claim constraints, admin access, device
+taints/tolerations, list-valued attributes, partitionable/per-device node
+selection, binding conditions, shared counters, and node-allocatable mappings.
+The claim remains pending and the controller emits a warning event such as
+`SimulationUnsupportedRequest`, `SimulationSelectorError`, or
+`SimulationDeviceClassNotFound`.
+
+This behavior is useful for deterministic development scenarios, but it is not
+a Kubernetes scheduler conformance oracle.
+
 ## CDI Output Modes
 
 The Helm chart deliberately separates two node-plugin modes:
@@ -92,3 +122,6 @@ The simulator test suite covers:
 - Empty targetNodes
 - Multi-node pool distribution
 - Allocation success and failure paths
+- Typed DeviceClass and request-level CEL selector evaluation
+- Ordered `FirstAvailable` fallback without product-name heuristics
+- Fail-closed diagnostics for missing classes, invalid CEL, and unsupported request modes

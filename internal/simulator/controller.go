@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/oaslananka/draforge/internal/draeval"
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -34,6 +35,7 @@ var (
 
 // Reconciler watches SimulatedDevicePools and creates/updates Kubernetes ResourceSlices.
 type Reconciler struct {
+	selectorEvaluator    *draeval.Evaluator
 	eventRecorder        record.EventRecorder
 	clientset            kubernetes.Interface
 	dynamicClient        dynamic.Interface
@@ -54,9 +56,10 @@ func NewReconciler(clientset kubernetes.Interface, dyn dynamic.Interface) *Recon
 		eventRecorder = record.NewFakeRecorder(100)
 	}
 	return &Reconciler{
-		clientset:     clientset,
-		dynamicClient: dyn,
-		eventRecorder: eventRecorder,
+		selectorEvaluator: draeval.NewEvaluator(),
+		clientset:         clientset,
+		dynamicClient:     dyn,
+		eventRecorder:     eventRecorder,
 	}
 }
 

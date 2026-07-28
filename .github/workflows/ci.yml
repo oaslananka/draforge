@@ -30,6 +30,9 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
+      - name: Verify Kubernetes module alignment
+        run: scripts/verify-kubernetes-module-alignment.sh
+
       - name: Verify release metadata contract
         run: python3 scripts/verify-release-metadata.py --self-test --root .
 
@@ -73,7 +76,8 @@ jobs:
             scripts/test-install-e2e-harness.sh \
             scripts/verify-install-e2e-policy.sh \
             scripts/verify-release-tag.sh \
-            scripts/test-verify-release-tag.sh
+            scripts/test-verify-release-tag.sh \
+            scripts/verify-kubernetes-module-alignment.sh
 
       - name: Test release tag provenance
         run: bash scripts/test-verify-release-tag.sh

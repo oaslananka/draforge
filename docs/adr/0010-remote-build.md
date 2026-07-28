@@ -1,9 +1,10 @@
-# ADR-0010: Remote Build Architecture
+# ADR-0010: Remote build architecture
 
-- **Status**: Approved
-- **Context**: Builds and tests must run on DigitalOcean Kubernetes.
-- **Decision**: Implement a script-driven remote CI system that spawns sequential Kubernetes Jobs in a draforge-ci namespace to build binaries and container images (using rootless BuildKit or Kaniko).
-- **Alternatives**: Heavy Jenkins or GitLab CI runners.
-- **Consequences**: Minimal overhead, fully native to DOKS, sequential execution prevents cluster starvation.
-- **Security Considerations**: Credentials are not logged; jobs run as non-root.
-- **Operational Considerations**: Cleans up completed job pods automatically.
+- **Status**: Superseded for required builds and tests by ADR-0013; retained for the optional DOKS showcase
+- **Context**: The original showcase needed to build and test within a constrained DOKS environment.
+- **Decision**: Use scripts that create sequential Kubernetes Jobs in the `draforge-ci` namespace to build binaries and container images with rootless builders.
+- **Alternatives**: Dedicated Jenkins or GitLab CI runners, local builds, or hosted CI.
+- **Consequences**: Sequential execution reduces showcase cluster contention but adds provider and registry integration overhead.
+- **Security Considerations**: Credentials must not be logged and build jobs run non-root where supported.
+- **Operational Considerations**: Completed remote jobs are cleaned up automatically.
+- **Scope after ADR-0013**: These scripts are optional showcase helpers. Required builds, tests, and releases run through provider-neutral local or hosted CI paths.

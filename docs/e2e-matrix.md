@@ -1,11 +1,12 @@
 # End-to-End Testing
 
-DRAForge has two distinct cluster test paths:
+DRAForge has a provider-neutral release gate and an optional provider adapter:
 
 1. **Install-level kind E2E** installs the complete Helm release and is required for pull requests, scheduled compatibility checks, and tagged releases.
-2. **Manual DOKS smoke E2E** verifies the tagged Go smoke package on an approved existing DigitalOcean Kubernetes cluster.
+2. **Tagged smoke package** uses standard Kubernetes APIs and can run on any compatible cluster when supplied with a kubeconfig.
+3. **Optional DOKS adapter** acquires a short-lived kubeconfig for one DigitalOcean showcase environment and then runs the same tagged smoke package.
 
-The kind path does not require cloud credentials or billable infrastructure.
+The required kind path does not use cloud credentials or billable infrastructure. No provider-specific smoke run is a general release requirement.
 
 ## Compatibility source of truth
 
@@ -88,9 +89,9 @@ Failed matrix entries upload a seven-day artifact named `install-e2e-<kubernetes
 - cluster events and Pod descriptions;
 - discovery, graph, explain, metrics, and SSE payloads produced before the failure.
 
-## Manual DOKS smoke E2E
+## Optional DOKS smoke adapter
 
-The manual `E2E Tests` workflow runs the tagged Go smoke package on an **existing** DOKS cluster. It does not create or destroy the cluster, node pools, VPC, or registry.
+The manual `Optional DOKS E2E` workflow is one provider-specific adapter for the provider-neutral tagged Go smoke package. It runs on an **existing** DOKS cluster and does not create or destroy the cluster, node pools, VPC, or registry. A missing DOKS credential may block this optional adapter, but it does not invalidate the kind-based release gate or the Kubernetes portability contract.
 
 ### Required secret and approvals
 
@@ -106,7 +107,7 @@ The workflow reconciles the shared `draforge-ci` Namespace, ResourceQuota, and L
 ### Running the workflow
 
 1. Confirm the target cluster exists and serves the required `resource.k8s.io/v1` APIs.
-2. Open **GitHub Actions → E2E Tests → Run workflow**.
+2. Open **GitHub Actions → Optional DOKS E2E → Run workflow**.
 3. Enter the exact confirmation phrase `run-e2e-doks`.
 4. Enter the existing cluster name and, optionally, a 7–40 character commit SHA.
 5. Approve the protected `e2e-doks` environment deployment.

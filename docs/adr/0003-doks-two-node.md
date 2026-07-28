@@ -1,9 +1,10 @@
-﻿# ADR-0003: DOKS Two-Node Architecture
+# ADR-0003: DOKS two-node showcase architecture
 
-- **Status**: Approved
-- **Context**: Need a real Kubernetes cluster for testing DRA without exceeding cloud budget and resource limits.
-- **Decision**: Provision a single DigitalOcean Kubernetes (DOKS) cluster with exactly two worker nodes of size s-4vcpu-8gb.
-- **Alternatives**: Single-node cluster (lacks multi-node scheduling validation) or larger clusters (cost prohibitive).
-- **Consequences**: Limited compute capacity, requiring strict resource quotas and sequential build jobs.
-- **Security Considerations**: Workloads isolated by namespaces and NetworkPolicies.
-- **Operational Considerations**: Node count strictly limited to 2.
+- **Status**: Superseded for the general platform by ADR-0013; retained for the optional DOKS showcase
+- **Context**: A real Kubernetes cluster was needed for one budget-constrained demonstration of multi-node DRA behavior.
+- **Decision**: Provision a single DigitalOcean Kubernetes cluster with exactly two `s-4vcpu-8gb` worker nodes for that showcase.
+- **Alternatives**: A single-node showcase, which would not exercise multi-node scheduling, or a larger showcase, which would increase cost.
+- **Consequences**: The optional showcase has limited compute capacity and requires quotas and sequential remote jobs.
+- **Security Considerations**: Showcase workloads are isolated by namespaces and NetworkPolicies.
+- **Operational Considerations**: The showcase node count is limited to two.
+- **Scope after ADR-0013**: This decision applies only to the optional DigitalOcean demonstration environment. It does not define DRAForge architecture, supported providers, installation requirements, or release gates.

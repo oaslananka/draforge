@@ -1,9 +1,10 @@
-﻿# ADR-0004: No Local Compute
+# ADR-0004: No local compute
 
-- **Status**: Approved
-- **Context**: Building, testing, and running Kubernetes workloads locally is prohibited to ensure clean, reproducible cloud-based testing.
-- **Decision**: Run all image builds, compilation, and integration/E2E tests remotely on DOKS via Kubernetes Jobs.
-- **Alternatives**: Running local docker builds or minikube (prohibited).
-- **Consequences**: Requires remote execution tooling (emote-build.sh, emote-test.sh).
-- **Security Considerations**: CI secrets must be handled carefully.
-- **Operational Considerations**: Incremental builds might be slower; mitigated by caching.
+- **Status**: Superseded by ADR-0013
+- **Context**: The original demonstration workflow prohibited local build and test execution in favor of a clean remote environment.
+- **Decision**: Run image builds, compilation, and integration/E2E tests remotely on DOKS through Kubernetes Jobs.
+- **Alternatives**: Local Docker builds, kind, or minikube.
+- **Consequences**: The approach required provider-specific remote execution helpers and increased feedback time.
+- **Security Considerations**: Remote CI credentials required careful handling.
+- **Operational Considerations**: Caching was used to mitigate slower incremental builds.
+- **Supersession**: Local development, kind install E2E, and GitHub Actions builds are supported and form part of the current provider-neutral workflow. The remote helpers remain optional showcase tools.

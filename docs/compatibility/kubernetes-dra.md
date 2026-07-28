@@ -8,8 +8,8 @@
 
 ## Compatibility Position
 
-DRAForge targets Kubernetes **Dynamic Resource Allocation (DRA)** using the
-`resource.k8s.io/v1` structured-parameters API. As of the current upstream
+DRAForge is provider-neutral and targets Kubernetes **Dynamic Resource Allocation (DRA)** using the
+`resource.k8s.io/v1` structured-parameters API. Compatibility is defined by Kubernetes API and behavior, not by cloud vendor. As of the current upstream
 Kubernetes documentation, core DRA is **stable in Kubernetes v1.35** and is
 enabled by default.
 
@@ -39,7 +39,7 @@ transition targets and must be validated per distribution.
 | GitHub Actions / static CI | n/a | Go, web, Helm, Terraform, workflow, and E2E harness contracts |
 | kind pull-request gate | v1.35.5 | Complete chart install and scenario-to-dashboard verification on every pull request |
 | kind full gate | v1.35.5 and v1.36.1 | Weekly, manual, release-candidate, and final-release matrix |
-| DOKS | distribution-supported v1 API | Manual approved smoke target on an existing cluster |
+| DOKS | distribution-supported v1 API | Optional provider-adapter smoke target; not a general release gate |
 
 `tests/install-e2e/kubernetes-versions.json` is the source of truth for the pinned kind and Kubernetes node-image matrix. The full install suite verifies the chart CRD, server, controller, sim-driver, Services, RBAC, NetworkPolicies, scenario, ResourceClaim allocation, consumer Pod association, API, explain output, metrics, readiness, graph, and SSE identity.
 

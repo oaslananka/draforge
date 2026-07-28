@@ -1,6 +1,6 @@
-# DRAForge - Showcase Demo Runbook
+# DRAForge - Optional DigitalOcean Showcase Runbook
 
-This runbook outlines how to deploy, manage, and tear down the DRAForge showcase platform on a 2-node DigitalOcean Kubernetes (DOKS) cluster.
+This runbook covers one optional, provider-specific showcase on a 2-node DigitalOcean Kubernetes (DOKS) cluster. DRAForge itself is provider-neutral; ordinary installation and release validation do not require DigitalOcean, DOKS, or DOCR.
 
 > **Non-production exposure:** `task demo:up` deliberately enables unauthenticated HTTP through `values-showcase-docr.yaml`. Use it only for short-lived demonstrations with non-sensitive cluster metadata, then run `task demo:down`.
 
@@ -64,9 +64,9 @@ This will uninstall the Helm release, delete all scenario custom resources, and 
 
 ---
 
-## GitHub Actions E2E Testing (Remote)
+## Optional DOKS Smoke Testing
 
-For continuous integration and release readiness, a manual-only remote E2E test workflow is provided under `.github/workflows/e2e.yml`. This workflow runs remote tests on a live DigitalOcean Kubernetes (DOKS) cluster.
+The manual workflow in `.github/workflows/e2e.yml` is a provider-specific showcase adapter that runs the tagged smoke package on an existing DOKS cluster. It is not the general release gate. Provider-neutral release validation is performed by the credential-free install E2E matrix described in [End-to-End Testing](e2e-matrix.md).
 
 ### E2E-DOKS Environment Approval Flow
 1. **GitHub Environment**: The workflow is gated by the `e2e-doks` GitHub Environment.
@@ -86,7 +86,7 @@ The workflow does not provision DigitalOcean infrastructure. It consumes CPU and
 Before running the remote E2E workflow:
 1. [ ] Confirm that the target DOKS cluster (default: `draforge-cluster`) exists and is active on DigitalOcean.
 2. [ ] Verify that your `DIGITALOCEAN_TOKEN` secret is configured in the repository settings under **Secrets and variables -> Actions**.
-3. [ ] Go to the **Actions** tab, select the **E2E Tests** workflow, and click **Run workflow**.
+3. [ ] Go to the **Actions** tab, select the **Optional DOKS E2E** workflow, and click **Run workflow**.
 4. [ ] Enter `run-e2e-doks` as confirmation and specify the correct cluster name.
 
 ### Cleanup Behavior after Failure/Cancellation

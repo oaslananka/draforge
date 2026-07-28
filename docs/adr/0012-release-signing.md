@@ -1,9 +1,10 @@
-﻿# ADR-0012: Release and Signing Strategy
+# ADR-0012: Release and signing strategy
 
-- **Status**: Approved
-- **Context**: Releasing open-source binaries requires supply chain trust.
-- **Decision**: Automate the release process using GoReleaser inside a DOKS release Job. Sign all binaries and container images using Cosign and generate SBOMs.
-- **Alternatives**: Manual releases or unsigned binaries.
-- **Consequences**: Fully secure, verifiable, reproducible release process.
-- **Security Considerations**: Release signing keys are stored securely.
-- **Operational Considerations**: Releases will start at version 0.1.0-rc.1.
+- **Status**: Superseded in part by ADR-0013; signing and provenance remain approved
+- **Context**: Open-source binaries and container images require verifiable supply-chain provenance.
+- **Decision**: Use GoReleaser, Cosign, checksums, and SBOMs for release artifacts.
+- **Alternatives**: Manual releases or unsigned artifacts.
+- **Consequences**: Users can verify release integrity and provenance; release automation must preserve reproducibility and public artifact checks.
+- **Security Considerations**: Current release signing uses GitHub Actions OIDC and must not rely on committed or long-lived signing keys.
+- **Operational Considerations**: The release workflow runs after the provider-neutral full install E2E gate and verifies public multi-architecture images.
+- **Supersession**: The earlier requirement to execute releases inside a DOKS Job is removed by ADR-0013. The signing, checksum, and SBOM decisions remain in force.

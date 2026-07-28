@@ -2,6 +2,10 @@
 
 This document explains the core Dynamic Resource Allocation (DRA) object relationship model and details how DRAForge monitors, simulates, and diagnoses accelerator scheduling.
 
+## Provider-neutral deployment boundary
+
+DRAForge is designed around Kubernetes APIs, standard RBAC, Helm, and OCI images. The server, controller, simulator, CLI, and dashboard do not depend on a specific managed Kubernetes provider. A compatible cluster may be hosted by a cloud provider, operated on-premises, self-managed, or created locally for testing. Provider-specific infrastructure and registry integrations are optional showcase adapters and are not part of the core platform contract. See [ADR-0013](adr/0013-provider-neutral-platform.md).
+
 ## The DRA Object Model
 
 Kubernetes DRA introduces a flexible model where resource requests are handled by specific drivers. Below is the hierarchical relationship model implemented by Kubernetes DRA and observed by DRAForge:

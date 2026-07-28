@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/remote-build.sh
-# Submits a Kubernetes Job to build a component container image remotely on DOKS using Kaniko.
+# Optional DOKS showcase helper: builds a component image remotely using Kaniko.
 
 set -euo pipefail
 

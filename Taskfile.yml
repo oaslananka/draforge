@@ -182,12 +182,12 @@ tasks:
       - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
 
   infra:audit:
-    desc: Audit active DigitalOcean resources
+    desc: Audit resources for the optional DigitalOcean showcase
     cmds:
       - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
 
   infra:cost:
-    desc: Estimate active DigitalOcean resource cost
+    desc: Estimate cost for the optional DigitalOcean showcase
     cmds:
       - '{{.BASH_BIN}} scripts/cost-report.sh'
 
@@ -207,7 +207,7 @@ tasks:
       - '{{.BASH_BIN}} scripts/verify-release.sh'
 
   demo:up:
-    desc: Deploy the live showcase demo to DOKS
+    desc: Deploy the optional live showcase demo to DOKS
     cmds:
       - '{{.BASH_BIN}} scripts/audit-cloud-resources.sh'
       - cd infra/terraform/environments/showcase && terraform plan -out=tfplan

@@ -55,11 +55,11 @@ func TestControllerKubeconfigFlagCustom(t *testing.T) {
 	}
 }
 
-func TestControllerVersionVarsNonEmpty(t *testing.T) {
-	if versionVal == "" {
-		t.Error("versionVal must not be empty")
+func TestControllerSourceVersionDefaults(t *testing.T) {
+	if versionVal != "dev" {
+		t.Errorf("source versionVal: got %q, want dev", versionVal)
 	}
-	if commitSHA == "" {
-		t.Error("commitSHA must not be empty")
+	if commitSHA != "unknown" {
+		t.Errorf("source commitSHA: got %q, want unknown", commitSHA)
 	}
 }

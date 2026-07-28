@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	versionVal = "v0.1.0"
-	commitSHA  = "dev"
+	versionVal = "dev"
+	commitSHA  = "unknown"
 )
 
 func main() {

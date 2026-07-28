@@ -5,10 +5,11 @@ need() {
   command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 1; }
 }
 
-for tool in go helm terraform pnpm golangci-lint goreleaser; do
+for tool in go helm terraform pnpm golangci-lint goreleaser python3; do
   need "$tool"
 done
 
+python3 scripts/verify-release-metadata.py --self-test --root .
 go mod tidy
 git diff --exit-code go.mod go.sum
 golangci-lint run ./...

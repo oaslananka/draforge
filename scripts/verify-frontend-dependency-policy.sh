@@ -58,16 +58,19 @@ assert_contains "$dockerfile" "$pnpm_activate"
 
 workspace_copy='COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./'
 vendor_copy='COPY web/vendor ./vendor'
+patch_copy='COPY web/patches ./patches'
 install_command='RUN pnpm install --frozen-lockfile --ignore-scripts'
 assert_contains "$dockerfile" "$workspace_copy"
 assert_contains "$dockerfile" "$vendor_copy"
+assert_contains "$dockerfile" "$patch_copy"
 assert_contains "$dockerfile" "$install_command"
 
 workspace_line=$(grep -Fn -- "$workspace_copy" "$dockerfile" | cut -d: -f1)
 vendor_line=$(grep -Fn -- "$vendor_copy" "$dockerfile" | cut -d: -f1)
+patch_line=$(grep -Fn -- "$patch_copy" "$dockerfile" | cut -d: -f1)
 install_line=$(grep -Fn -- "$install_command" "$dockerfile" | cut -d: -f1)
-if (( workspace_line >= install_line || vendor_line >= install_line )); then
-  fail "Dockerfile must copy workspace policy and local vendor packages before pnpm install"
+if (( workspace_line >= install_line || vendor_line >= install_line || patch_line >= install_line )); then
+  fail "Dockerfile must copy workspace policy, local vendor packages, and pnpm patches before pnpm install"
 fi
 
 node --input-type=module <<'NODE'

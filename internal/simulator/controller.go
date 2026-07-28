@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/oaslananka/draforge/internal/draeval"
 	corev1 "k8s.io/api/core/v1"
@@ -72,25 +71,6 @@ func (r *Reconciler) SetLeader(leader bool) {
 // IsLeader reports whether this process currently owns the active controller lifecycle.
 func (r *Reconciler) IsLeader() bool {
 	return r.leaderState.Load()
-}
-
-// StartReconciliationLoop runs the reconciliation loop periodically.
-func (r *Reconciler) StartReconciliationLoop(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	klog.Infof("Starting SimulatedDevicePool reconciliation loop...")
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := r.Reconcile(ctx); err != nil {
-				klog.Errorf("Reconciliation error: %v", err)
-				atomic.AddInt64(&r.ReconcileErrorsCount, 1)
-			}
-		}
-	}
 }
 
 // Reconcile performs one sync iteration.

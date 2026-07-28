@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -76,19 +75,8 @@ func main() {
 		}
 	}()
 
-	activeController := func(activeContext context.Context) {
-		var active sync.WaitGroup
-		active.Add(2)
-		go func() {
-			defer active.Done()
-			reconciler.StartReconciliationLoop(activeContext, 10*time.Second)
-		}()
-		go func() {
-			defer active.Done()
-			reconciler.StartAllocationSimulator(activeContext, 5*time.Second)
-		}()
-		<-activeContext.Done()
-		active.Wait()
+	activeController := func(activeContext context.Context) error {
+		return reconciler.StartEventDrivenController(activeContext)
 	}
 
 	lifecycleDone := make(chan error, 1)

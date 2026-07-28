@@ -117,6 +117,40 @@ func TestControllerLifecycleRejectsMissingActiveCallback(t *testing.T) {
 	}
 }
 
+func TestControllerLifecycleReturnsActiveRuntimeError(t *testing.T) {
+	activeFailure := errors.New("informer cache failed")
+	for name, options := range map[string]leaderElectionOptions{
+		"single controller": {},
+		"lease leader":      validLeaderElectionOptions("controller-a"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := runControllerLifecycle(
+				context.Background(),
+				fake.NewSimpleClientset(),
+				options,
+				&simulator.Reconciler{},
+				func(context.Context) error { return activeFailure },
+			)
+			if !errors.Is(err, activeFailure) {
+				t.Fatalf("lifecycle error = %v, want wrapped active runtime error", err)
+			}
+		})
+	}
+}
+
+func TestControllerLifecycleRejectsUnexpectedActiveRuntimeStop(t *testing.T) {
+	err := runControllerLifecycle(
+		context.Background(),
+		fake.NewSimpleClientset(),
+		leaderElectionOptions{},
+		&simulator.Reconciler{},
+		func(context.Context) error { return nil },
+	)
+	if err == nil {
+		t.Fatal("expected unexpected active runtime stop to fail the lifecycle")
+	}
+}
+
 func TestControllerLifecycleWithoutLeaderElectionRunsActiveController(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	reconciler := &simulator.Reconciler{}
@@ -124,9 +158,10 @@ func TestControllerLifecycleWithoutLeaderElectionRunsActiveController(t *testing
 	done := make(chan error, 1)
 
 	go func() {
-		done <- runControllerLifecycle(ctx, fake.NewSimpleClientset(), leaderElectionOptions{}, reconciler, func(activeContext context.Context) {
+		done <- runControllerLifecycle(ctx, fake.NewSimpleClientset(), leaderElectionOptions{}, reconciler, func(activeContext context.Context) error {
 			close(started)
 			<-activeContext.Done()
+			return nil
 		})
 	}()
 
@@ -161,7 +196,7 @@ type leaderActivityTracker struct {
 }
 
 func (tracker *leaderActivityTracker) callback(identity string, started chan<- struct{}) controllerActiveFunc {
-	return func(activeContext context.Context) {
+	return func(activeContext context.Context) error {
 		current := tracker.active.Add(1)
 		tracker.recordMaximum(current)
 		tracker.lock.Lock()
@@ -170,6 +205,7 @@ func (tracker *leaderActivityTracker) callback(identity string, started chan<- s
 		started <- struct{}{}
 		<-activeContext.Done()
 		tracker.active.Add(-1)
+		return nil
 	}
 }
 

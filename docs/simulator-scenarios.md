@@ -63,17 +63,23 @@ The current supported allocation subset is:
   quantity capacities inside CEL selectors;
 - healthy simulator-managed devices that are not already allocated by the same
   `<driver, pool, device>` identity;
-- one compatible `NodeName` across all results in a claim.
+- one compatible `NodeName` across all results in a claim;
+- stable scalar `MatchAttribute` constraints for string, integer, boolean, and
+  semantic-version values, including all-request, request, and
+  `<request>/<subrequest>` scopes.
 
 `All` allocation requires complete ResourceSlice coverage for the latest
 pool generation, excludes devices already allocated by exact identity, and
 respects Kubernetes' 32-result claim limit. An empty or oversized `All`
 alternative may fall through to the next ordered `FirstAvailable` alternative.
+`MatchAttribute` uses deterministic, context-aware backtracking and a fixed
+100,000-branch safety budget; exhausting that budget leaves the claim pending
+with an explicit unsupported-request warning instead of approximating a result.
 
 The following features are intentionally fail-closed until their complete
 semantics are implemented: consumable-capacity requests/accounting, multiple
-allocations, claim constraints, admin access, device
-taints/tolerations, list-valued attributes, partitionable/per-device node
+allocations, `DistinctAttribute`, list-valued constraint attributes, admin access,
+device taints/tolerations, partitionable/per-device node
 selection, binding conditions, shared counters, and node-allocatable mappings.
 The claim remains pending and the controller emits a warning event such as
 `SimulationUnsupportedRequest`, `SimulationSelectorError`, or
@@ -130,4 +136,5 @@ The simulator test suite covers:
 - Typed DeviceClass and request-level CEL selector evaluation
 - Ordered `FirstAvailable` fallback without product-name heuristics
 - `All` allocation across complete latest-generation pools, including empty, oversized, and allocated-device cases
-- Fail-closed diagnostics for missing classes, invalid CEL, and unsupported request modes
+- Scalar `MatchAttribute` equality, request/subrequest scope, combination and cross-request backtracking, and bounded-search failure
+- Fail-closed diagnostics for missing classes, invalid CEL, and unsupported request or constraint modes

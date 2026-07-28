@@ -49,6 +49,8 @@ metadata:
     draforge.oaslananka/e2e: "true"
 spec:
   devices:
+    constraints:
+      - matchAttribute: sim.draforge.oaslananka/model
     requests:
       - name: gpu
         exactly:

@@ -326,18 +326,23 @@ func mapDevice(slice *resourcev1.ResourceSlice, specification resourcev1.Device,
 		capacities[string(capacityName)] = capacityValue.Value.Value()
 	}
 
+	typedSpecification := specification.DeepCopy()
+
 	return model.Device{
-		ID:          deviceIdentity(driverName, poolName, nodeName, specification.Name),
-		Name:        specification.Name,
-		Type:        deviceType,
-		Status:      health,
-		DriverName:  driverName,
-		NodeName:    nodeName,
-		PoolName:    poolName,
-		Attributes:  attributes,
-		Capacities:  capacities,
-		IsSynthetic: hasSyntheticLabel(slice.Labels),
-		LastUpdated: slice.CreationTimestamp.Time,
+		ID:                          deviceIdentity(driverName, poolName, nodeName, specification.Name),
+		Name:                        specification.Name,
+		Type:                        deviceType,
+		Status:                      health,
+		DriverName:                  driverName,
+		NodeName:                    nodeName,
+		PoolName:                    poolName,
+		Attributes:                  attributes,
+		Capacities:                  capacities,
+		IsSynthetic:                 hasSyntheticLabel(slice.Labels),
+		LastUpdated:                 slice.CreationTimestamp.Time,
+		DRAAttributes:               typedSpecification.Attributes,
+		DRACapacity:                 typedSpecification.Capacity,
+		DRAAllowMultipleAllocations: typedSpecification.AllowMultipleAllocations,
 	}
 }
 

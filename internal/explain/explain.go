@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/cel-go/cel"
 	"github.com/oaslananka/draforge/internal/discovery"
+	"github.com/oaslananka/draforge/internal/draeval"
 	"github.com/oaslananka/draforge/internal/redaction"
 	"github.com/oaslananka/draforge/pkg/model"
 	resourcev1 "k8s.io/api/resource/v1"
@@ -18,48 +18,7 @@ import (
 
 const claimRequestsFieldPath = ".spec.devices.requests"
 
-// evaluateCEL parses and evaluates simple CEL expressions against device attributes and capacities.
-func evaluateCEL(expression string, attributes map[string]string, capacities map[string]int64) (bool, error) {
-	if strings.TrimSpace(expression) == "" {
-		return true, nil
-	}
-
-	env, err := cel.NewEnv(
-		cel.Variable("device", cel.MapType(cel.StringType, cel.DynType)),
-	)
-	if err != nil {
-		return false, fmt.Errorf("failed to create CEL environment: %w", err)
-	}
-
-	ast, iss := env.Compile(expression)
-	if iss.Err() != nil {
-		return false, fmt.Errorf("CEL compilation error: %w", iss.Err())
-	}
-
-	prg, err := env.Program(ast)
-	if err != nil {
-		return false, fmt.Errorf("CEL program creation error: %w", err)
-	}
-
-	// Prepare data
-	deviceMap := map[string]any{
-		"attributes": attributes,
-		"capacity":   capacities,
-	}
-
-	out, _, err := prg.Eval(map[string]any{
-		"device": deviceMap,
-	})
-	if err != nil {
-		return false, fmt.Errorf("CEL evaluation error: %w", err)
-	}
-
-	if outValue, ok := out.Value().(bool); ok {
-		return outValue, nil
-	}
-
-	return false, fmt.Errorf("CEL expression did not evaluate to a boolean")
-}
+var sharedSelectorEvaluator = draeval.NewEvaluator()
 
 func formatAllocations(allocations []model.ClaimAllocation) string {
 	if len(allocations) == 0 {
@@ -80,13 +39,13 @@ func formatAllocations(allocations []model.ClaimAllocation) string {
 	return strings.Join(formatted, "; ")
 }
 
-func matchesAnyRequestedClass(device model.Device, classes []*resourcev1.DeviceClass, noClassRequested bool) (bool, error) {
+func matchesAnyRequestedClass(ctx context.Context, device model.Device, classes []*resourcev1.DeviceClass, noClassRequested bool) (bool, error) {
 	if noClassRequested {
 		return true, nil
 	}
 	var lastError error
 	for _, deviceClass := range classes {
-		matches, err := matchesDeviceClass(device, deviceClass)
+		matches, err := matchesDeviceClass(ctx, device, deviceClass)
 		if err != nil {
 			lastError = err
 			continue
@@ -98,17 +57,14 @@ func matchesAnyRequestedClass(device model.Device, classes []*resourcev1.DeviceC
 	return false, lastError
 }
 
-func matchesDeviceClass(device model.Device, deviceClass *resourcev1.DeviceClass) (bool, error) {
-	for _, selector := range deviceClass.Spec.Selectors {
-		if selector.CEL == nil {
-			continue
-		}
-		passed, err := evaluateCEL(selector.CEL.Expression, device.Attributes, device.Capacities)
-		if err != nil || !passed {
-			return false, err
-		}
+func matchesDeviceClass(ctx context.Context, device model.Device, deviceClass *resourcev1.DeviceClass) (bool, error) {
+	selectorDevice := resourcev1.Device{
+		Name:                     device.Name,
+		Attributes:               device.DRAAttributes,
+		Capacity:                 device.DRACapacity,
+		AllowMultipleAllocations: device.DRAAllowMultipleAllocations,
 	}
-	return true, nil
+	return sharedSelectorEvaluator.Matches(ctx, device.DriverName, selectorDevice, deviceClass.Spec.Selectors)
 }
 
 func allocationMatchesDevice(allocation model.ClaimAllocation, device model.Device) bool {
@@ -187,7 +143,7 @@ func pendingReason(ctx context.Context, clientset kubernetes.Interface, target m
 	appendAdvancedFeatureReason(&root, liveClaim)
 	appendNodeSelectorReason(&root, liveClaim)
 	requestedClasses := resolveRequestedClasses(ctx, clientset, target, &root, result)
-	stats := evaluateCandidates(devices, claims, requestedClasses, len(target.RequestedClassNames()) == 0)
+	stats := evaluateCandidates(ctx, devices, claims, requestedClasses, len(target.RequestedClassNames()) == 0)
 	appendCandidateReason(&root, result, len(devices), stats)
 	appendEventReasons(ctx, clientset, liveClaim.Namespace, liveClaim.Name, &root)
 	appendConsumerReason(&root, result, liveClaim.Status.ReservedFor)
@@ -289,10 +245,10 @@ type candidateStats struct {
 	lastSelectorError error
 }
 
-func evaluateCandidates(devices []model.Device, claims []model.ResourceClaimInfo, requestedClasses []*resourcev1.DeviceClass, noClassRequested bool) candidateStats {
+func evaluateCandidates(ctx context.Context, devices []model.Device, claims []model.ResourceClaimInfo, requestedClasses []*resourcev1.DeviceClass, noClassRequested bool) candidateStats {
 	var stats candidateStats
 	for _, device := range devices {
-		passed, selectorErr := matchesAnyRequestedClass(device, requestedClasses, noClassRequested)
+		passed, selectorErr := matchesAnyRequestedClass(ctx, device, requestedClasses, noClassRequested)
 		if selectorErr != nil {
 			stats.selectorErrors++
 			stats.lastSelectorError = selectorErr

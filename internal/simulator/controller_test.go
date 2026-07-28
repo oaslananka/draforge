@@ -285,7 +285,7 @@ func TestSimulateAllocationHealthy(t *testing.T) {
 
 	scheme := runtime.NewScheme()
 	dynamicClient := dynfake.NewSimpleDynamicClient(scheme)
-	clientset := fake.NewSimpleClientset(claim, slice)
+	clientset := fake.NewSimpleClientset(claim, slice, allocationClass("gpu-class"))
 	reconciler := NewReconciler(clientset, dynamicClient)
 	ctx := context.Background()
 
@@ -348,7 +348,7 @@ func TestSimulateAllocationExactCount(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(claim, slice)
+	clientset := fake.NewSimpleClientset(claim, slice, allocationClass("gpu-class"))
 	reconciler := NewReconciler(clientset, dynfake.NewSimpleDynamicClient(runtime.NewScheme()))
 
 	err := reconciler.SimulateAllocation(context.Background())
@@ -409,7 +409,12 @@ func TestSimulateAllocationFirstAvailable(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(claim, slice)
+	clientset := fake.NewSimpleClientset(
+		claim,
+		slice,
+		allocationClass("fpga-class", selector("false")),
+		allocationClass("gpu-class", selector("true")),
+	)
 	reconciler := NewReconciler(clientset, dynfake.NewSimpleDynamicClient(runtime.NewScheme()))
 
 	err := reconciler.SimulateAllocation(context.Background())
@@ -468,7 +473,7 @@ func TestSimulateAllocationInsufficientCapacity(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset(claim, slice)
+	clientset := fake.NewSimpleClientset(claim, slice, allocationClass("gpu-class"))
 	reconciler := NewReconciler(clientset, dynfake.NewSimpleDynamicClient(runtime.NewScheme()))
 
 	err := reconciler.SimulateAllocation(context.Background())
@@ -526,7 +531,7 @@ func TestSimulateAllocationUnhealthySkip(t *testing.T) {
 
 	scheme := runtime.NewScheme()
 	dynamicClient := dynfake.NewSimpleDynamicClient(scheme)
-	clientset := fake.NewSimpleClientset(claim, slice)
+	clientset := fake.NewSimpleClientset(claim, slice, allocationClass("gpu-class"))
 	reconciler := NewReconciler(clientset, dynamicClient)
 	ctx := context.Background()
 
@@ -580,7 +585,7 @@ func TestSimulateAllocationNoDuplicate(t *testing.T) {
 
 	scheme := runtime.NewScheme()
 	dynamicClient := dynfake.NewSimpleDynamicClient(scheme)
-	clientset := fake.NewSimpleClientset(claim1, claim2, slice)
+	clientset := fake.NewSimpleClientset(claim1, claim2, slice, allocationClass("gpu-class"))
 	reconciler := NewReconciler(clientset, dynamicClient)
 	ctx := context.Background()
 
@@ -639,7 +644,8 @@ func TestSimulateAllocationTreatsDriverAsPartOfDeviceIdentity(t *testing.T) {
 					{
 						Name: "request",
 						Exactly: &resourcev1.ExactDeviceRequest{
-							Count: 1,
+							DeviceClassName: "shared-class",
+							Count:           1,
 						},
 					},
 				},
@@ -669,6 +675,7 @@ func TestSimulateAllocationTreatsDriverAsPartOfDeviceIdentity(t *testing.T) {
 		pendingClaim,
 		newSlice("driver-a-slice", "driver-a.example"),
 		newSlice("driver-b-slice", "driver-b.example"),
+		allocationClass("shared-class"),
 	)
 	reconciler := NewReconciler(clientset, dynfake.NewSimpleDynamicClient(runtime.NewScheme()))
 	ctx := context.Background()
@@ -706,7 +713,7 @@ func TestSimulateAllocationNoDevice(t *testing.T) {
 	// No ResourceSlices at all
 	scheme := runtime.NewScheme()
 	dynamicClient := dynfake.NewSimpleDynamicClient(scheme)
-	clientset := fake.NewSimpleClientset(claim)
+	clientset := fake.NewSimpleClientset(claim, allocationClass("gpu-class"))
 	reconciler := NewReconciler(clientset, dynamicClient)
 	ctx := context.Background()
 

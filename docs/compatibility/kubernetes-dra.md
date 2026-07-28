@@ -56,10 +56,10 @@ explicitly supports them.
 | Capability | Upstream status as of v1.36 docs | DRAForge 0.2.0 support |
 | --- | --- | --- |
 | Core Dynamic Resource Allocation | Stable since v1.35 | Supported for discovery and visualization |
-| DeviceClass | Stable core DRA | Discovered; selector evaluation is partial |
+| DeviceClass | Stable core DRA | Discovered; class selectors use the exact-version Kubernetes DRA CEL evaluator |
 | ResourceClaim / ResourceClaimTemplate | Stable core DRA | Claims discovered; templates read-only / limited |
 | ResourceSlice | Stable core DRA | Discovered and used for graph/doctor views |
-| CEL device filtering | Stable core behavior | Partial; regex-like evaluator must be replaced |
+| CEL device filtering | Stable core behavior | Supported for driver identity, typed scalar attributes, semantic versions and quantity capacities; unsupported feature-gated values fail closed |
 | ResourceClaim device status | Observability feature | Partial display only |
 | Device health monitoring | Observability feature | Partial; custom health label fallback remains |
 | Admin access | Beta extension | Not implemented |
@@ -82,9 +82,9 @@ explicitly supports them.
 | --- | --- | --- |
 | ResourceSlice discovery | Supported | Uses `resource.k8s.io/v1` and should expose API errors as partial state |
 | ResourceClaim discovery | Supported | Reads status/allocation data and maps claims to Pods where possible |
-| DeviceClass discovery | Partial | DeviceClasses are listed, but full CEL selector behavior is not implemented |
-| Claim allocation explain | Partial | Useful diagnostics exist, but modern DRA selector, taint and binding features are incomplete |
-| Simulator allocation | Partial | Demo allocation exists; full scheduler-compatible DRA semantics are work |
+| DeviceClass discovery | Supported | DeviceClasses are listed and core selectors use `k8s.io/dynamic-resource-allocation/cel` pinned to the repository Kubernetes version |
+| Claim allocation explain | Partial | DeviceClass selectors use the shared Kubernetes evaluator; request-level selectors, taints, binding and consumable-capacity reasoning remain incomplete |
+| Simulator allocation | Partial | Supports existing DeviceClasses, class/request selectors, ordered `FirstAvailable`, default/`ExactCount`, health, complete device identity and one-node selection; advanced modes fail closed |
 | Device health | Partial | Custom label fallback exists; native health status support is incomplete |
 | Consumable capacity | Partial | Values can be displayed; capacity-aware allocation and exhaustion scoring are missing |
 | CDI output | Partial | The simulator can produce CDI-oriented output, but Helm deployment modes must clearly separate demo and host-integrated operation |
@@ -96,14 +96,20 @@ explicitly supports them.
 
 ## Known Limitations
 
-1. **DeviceClass selector evaluation is incomplete.** DRAForge can discover
-   DeviceClasses, but the explain and simulator paths do not yet implement the
-   full Kubernetes CEL matching behavior.
+1. **The supported selector subset is explicit.** DeviceClass selectors and
+   simulator request selectors use the Kubernetes DRA CEL implementation pinned
+   to the same `v0.36.2` module version as the repository APIs. Driver identity,
+   typed scalar attributes, semantic versions and quantity capacities are
+   available. List-valued attributes and feature-gated extensions remain
+   unsupported and produce a fail-closed diagnostic instead of an approximation.
 
-2. **Simulator allocation is not scheduler-equivalent.** It should not be used
-   as a conformance oracle until ResourceClaim request modes, DeviceClass
-   selectors, capacities, taints, binding conditions and reserved-for behavior
-   are fully modeled.
+2. **Simulator allocation is not scheduler-equivalent.** It supports
+   `Exactly`, ordered `FirstAvailable`, and default/`ExactCount` requests over
+   healthy simulator-managed devices on one compatible node. `All`, consumable
+   capacity accounting, claim constraints, admin access, taints/tolerations,
+   partitionable devices, binding conditions and node-allocatable mappings remain
+   unsupported. Unsupported input leaves the claim pending and emits a warning
+   event; the simulator must not be used as a scheduler conformance oracle.
 
 3. **Native health and status features are incomplete.** DRAForge still relies
    on custom labels or simplified status interpretation in some paths.
@@ -138,7 +144,7 @@ DRAForge uses or plans around the following Kubernetes APIs.
 | ResourceClaims | `resource.k8s.io/v1` | Discovery, explain and simulator status paths |
 | ResourceClaimTemplates | `resource.k8s.io/v1` | Read-only discovery |
 | ResourceSlices | `resource.k8s.io/v1` | Discovery, graph, simulator output |
-| DeviceClasses | `resource.k8s.io/v1` | Discovery and future selector evaluation |
+| DeviceClasses | `resource.k8s.io/v1` | Discovery and shared core CEL selector evaluation |
 | SimulatedDevicePools | `draforge.oaslananka/v1alpha1` | DRAForge simulator CRD |
 
 DRAForge does **not** aim to support legacy non-v1 DRA API groups by default.

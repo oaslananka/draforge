@@ -5,6 +5,8 @@ package model
 import (
 	"sort"
 	"time"
+
+	resourcev1 "k8s.io/api/resource/v1"
 )
 
 // Device represents a physical or synthetic device.
@@ -20,6 +22,11 @@ type Device struct {
 	Capacities  map[string]int64  `json:"capacities"`  // Custom consumable capacities
 	IsSynthetic bool              `json:"isSynthetic"` // True if created by DRAForge simulator
 	LastUpdated time.Time         `json:"lastUpdated"`
+
+	// Typed Kubernetes DRA selector inputs are retained for internal reasoning only.
+	DRAAttributes               map[resourcev1.QualifiedName]resourcev1.DeviceAttribute `json:"-"`
+	DRACapacity                 map[resourcev1.QualifiedName]resourcev1.DeviceCapacity  `json:"-"`
+	DRAAllowMultipleAllocations *bool                                                   `json:"-"`
 }
 
 // DevicePool represents a pool of resource devices.

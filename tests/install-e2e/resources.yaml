@@ -13,7 +13,12 @@ metadata:
   labels:
     app.kubernetes.io/part-of: draforge
     draforge.oaslananka/e2e: "true"
-spec: {}
+spec:
+  selectors:
+    - cel:
+        expression: >-
+          device.driver == "sim.draforge.oaslananka" &&
+          device.attributes["sim.draforge.oaslananka"].type == "gpu"
 ---
 apiVersion: draforge.oaslananka/v1alpha1
 kind: SimulatedDevicePool
@@ -48,5 +53,10 @@ spec:
       - name: gpu
         exactly:
           deviceClassName: draforge-e2e-gpu
+          selectors:
+            - cel:
+                expression: >-
+                  device.attributes["sim.draforge.oaslananka"].model == "DRAForge-E2E-GPU" &&
+                  device.capacity["sim.draforge.oaslananka"].memory.compareTo(quantity("8Gi")) >= 0
           allocationMode: ExactCount
           count: 1

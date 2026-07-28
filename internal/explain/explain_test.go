@@ -11,121 +11,62 @@ import (
 	"github.com/oaslananka/draforge/pkg/model"
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestEvaluateCEL(t *testing.T) {
-	tests := []struct {
-		name        string
-		expression  string
-		attributes  map[string]string
-		capacities  map[string]int64
-		expected    bool
-		expectError bool
-	}{
-		{
-			name:       "empty expression",
-			expression: "",
-			attributes: map[string]string{},
-			capacities: map[string]int64{},
-			expected:   true,
+func TestMatchesDeviceClassUsesKubernetesDRAEnvironment(t *testing.T) {
+	integer := int64(3)
+	boolean := true
+	modelName := "neutral-accelerator"
+	version := "1.3.0"
+	device := model.Device{
+		DriverName: "driver.example.com",
+		DRAAttributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
+			"generation": {IntValue: &integer},
+			"secure":     {BoolValue: &boolean},
+			"model":      {StringValue: &modelName},
+			"firmware":   {VersionValue: &version},
 		},
-		{
-			name:       "attribute equality match",
-			expression: `device.attributes["family"] == "h100"`,
-			attributes: map[string]string{"family": "h100"},
-			capacities: map[string]int64{},
-			expected:   true,
+		DRACapacity: map[resourcev1.QualifiedName]resourcev1.DeviceCapacity{
+			"memory": {Value: resource.MustParse("16Gi")},
 		},
-		{
-			name:       "attribute equality mismatch",
-			expression: `device.attributes["family"] == "h100"`,
-			attributes: map[string]string{"family": "a100"},
-			capacities: map[string]int64{},
-			expected:   false,
-		},
-		{
-			name:       "attribute inequality match",
-			expression: `device.attributes["family"] != "h100"`,
-			attributes: map[string]string{"family": "a100"},
-			capacities: map[string]int64{},
-			expected:   true,
-		},
-		{
-			name:        "attribute missing and inequality",
-			expression:  `device.attributes["family"] != "h100"`,
-			attributes:  map[string]string{},
-			capacities:  map[string]int64{},
-			expectError: true, // CEL evaluating missing map key is an error
-		},
-		{
-			name:       "capacity comparison match",
-			expression: `device.capacity["memory"] >= 80000000000`,
-			attributes: map[string]string{},
-			capacities: map[string]int64{"memory": 80000000000},
-			expected:   true,
-		},
-		{
-			name:       "capacity comparison mismatch",
-			expression: `device.capacity["memory"] >= 80000000000`,
-			attributes: map[string]string{},
-			capacities: map[string]int64{"memory": 40000000000},
-			expected:   false,
-		},
-		{
-			name:       "compound expression match",
-			expression: `device.attributes["family"] == "h100" && device.capacity["memory"] >= 80000000000`,
-			attributes: map[string]string{"family": "h100"},
-			capacities: map[string]int64{"memory": 80000000000},
-			expected:   true,
-		},
-		{
-			name:       "list membership match",
-			expression: `device.attributes["family"] in ["a100", "h100"]`,
-			attributes: map[string]string{"family": "h100"},
-			capacities: map[string]int64{},
-			expected:   true,
-		},
-		{
-			name:       "list membership mismatch",
-			expression: `device.attributes["family"] in ["a100", "h100"]`,
-			attributes: map[string]string{"family": "t4"},
-			capacities: map[string]int64{},
-			expected:   false,
-		},
-		{
-			name:        "invalid expression syntax",
-			expression:  `device.attributes["family"] =? "h100"`,
-			attributes:  map[string]string{"family": "h100"},
-			capacities:  map[string]int64{},
-			expectError: true,
-		},
-		{
-			name:        "non-boolean return type",
-			expression:  `device.attributes["family"]`,
-			attributes:  map[string]string{"family": "h100"},
-			capacities:  map[string]int64{},
-			expectError: true,
+	}
+	deviceClass := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{Name: "neutral-class"},
+		Spec: resourcev1.DeviceClassSpec{Selectors: []resourcev1.DeviceSelector{
+			{CEL: &resourcev1.CELDeviceSelector{Expression: `device.driver == "driver.example.com"`}},
+			{CEL: &resourcev1.CELDeviceSelector{Expression: `device.attributes["driver.example.com"].model == "neutral-accelerator"`}},
+			{CEL: &resourcev1.CELDeviceSelector{Expression: `device.attributes["driver.example.com"].generation >= 3 && device.attributes["driver.example.com"].secure`}},
+			{CEL: &resourcev1.CELDeviceSelector{Expression: `device.attributes["driver.example.com"].firmware.isGreaterThan(semver("1.2.0"))`}},
+			{CEL: &resourcev1.CELDeviceSelector{Expression: `device.capacity["driver.example.com"].memory.compareTo(quantity("8Gi")) >= 0`}},
+		}},
+	}
+
+	matched, err := matchesDeviceClass(context.Background(), device, deviceClass)
+	if err != nil {
+		t.Fatalf("matchesDeviceClass returned an error: %v", err)
+	}
+	if !matched {
+		t.Fatal("expected typed Kubernetes DRA selectors to match")
+	}
+}
+
+func TestMatchesDeviceClassFailsClosedForUnsupportedSelector(t *testing.T) {
+	deviceClass := &resourcev1.DeviceClass{
+		ObjectMeta: metav1.ObjectMeta{Name: "unsupported-class"},
+		Spec: resourcev1.DeviceClassSpec{
+			Selectors: []resourcev1.DeviceSelector{{}},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := evaluateCEL(tt.expression, tt.attributes, tt.capacities)
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("evaluateCEL(%q) expected error but got none", tt.expression)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("evaluateCEL(%q) unexpected error: %v", tt.expression, err)
-				}
-				if result != tt.expected {
-					t.Errorf("evaluateCEL(%q) = %v, expected %v", tt.expression, result, tt.expected)
-				}
-			}
-		})
+	matched, err := matchesDeviceClass(context.Background(), model.Device{DriverName: "driver.example.com"}, deviceClass)
+	if err == nil {
+		t.Fatal("expected unsupported selector to return an error")
+	}
+	if matched {
+		t.Fatal("unsupported selector must not match")
 	}
 }
 
@@ -299,7 +240,7 @@ func TestExplainClaim_SelectorMismatchAndCapacity(t *testing.T) {
 			Selectors: []resourcev1.DeviceSelector{
 				{
 					CEL: &resourcev1.CELDeviceSelector{
-						Expression: `device.attributes["family"] == "h100"`,
+						Expression: `device.attributes["gpu-driver"].family == "h100"`,
 					},
 				},
 			},
@@ -578,7 +519,7 @@ func TestExplainClaim_UnhealthyDevices(t *testing.T) {
 			Selectors: []resourcev1.DeviceSelector{
 				{
 					CEL: &resourcev1.CELDeviceSelector{
-						Expression: `device.attributes["family"] == "h100"`,
+						Expression: `device.attributes["gpu-driver"].family == "h100"`,
 					},
 				},
 			},
@@ -691,7 +632,7 @@ func TestExplainClaim_InvalidCEL(t *testing.T) {
 			Selectors: []resourcev1.DeviceSelector{
 				{
 					CEL: &resourcev1.CELDeviceSelector{
-						Expression: `device.attributes["family"] =? "h100"`, // Invalid syntax
+						Expression: `device.attributes["gpu-driver"].family =? "h100"`, // Invalid syntax
 					},
 				},
 			},
@@ -794,7 +735,7 @@ func TestExplainClaim_OmitZeroCountNodes(t *testing.T) {
 			Selectors: []resourcev1.DeviceSelector{
 				{
 					CEL: &resourcev1.CELDeviceSelector{
-						Expression: `device.attributes["family"] == "h100"`,
+						Expression: `device.attributes["gpu-driver"].family == "h100"`,
 					},
 				},
 			},

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Submits a Kubernetes Job to run tagged end-to-end tests remotely on DOKS.
+# Optional DOKS adapter: submits a Kubernetes Job to run the provider-neutral tagged smoke tests.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail

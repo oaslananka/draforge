@@ -1,4 +1,4 @@
-name: E2E Tests
+name: Optional DOKS E2E
 
 on:
   workflow_dispatch:
@@ -28,8 +28,9 @@ concurrency:
 
 # Requirements
 # ------------
-# This workflow is manual-only and runs workloads on an existing billable
-# DigitalOcean Kubernetes cluster. DIGITALOCEAN_TOKEN should use only the kubernetes:read and
+# This optional provider adapter is manual-only and runs workloads on an existing billable
+# DigitalOcean Kubernetes cluster. It is not the provider-neutral release gate.
+# DIGITALOCEAN_TOKEN should use only the kubernetes:read and
 # kubernetes:access_cluster custom scopes required to locate the cluster and save kubeconfig.
 #
 # Safety gates:
@@ -50,7 +51,7 @@ env:
 
 jobs:
   run-e2e:
-    name: Run Remote E2E tests
+    name: Run Optional DOKS Smoke Tests
     if: ${{ github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -119,7 +120,7 @@ jobs:
           retention-days: 7
 
   cleanup:
-    name: Cleanup DOKS Resources
+    name: Cleanup Optional DOKS Resources
     if: ${{ always() && needs.run-e2e.result != 'skipped' && (github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops') }}
     needs: [run-e2e]
     runs-on: ubuntu-latest

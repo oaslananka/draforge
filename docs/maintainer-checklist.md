@@ -42,8 +42,8 @@
 - [ ] Default Helm render contains no Gateway, HTTPRoute, or Ingress
 - [ ] `scripts/verify-sim-driver-cdi.sh` passes for non-root demo and fail-closed host-integrated node modes
 - [ ] Secure public route terminates TLS and targets the identity proxy Service, not DRAForge directly
-- [ ] `docs/assets/` screenshots updated if UI changed
-- [ ] Cleanup verified: `task demo:down` tears down all resources
+- [ ] Any repository-managed screenshots updated if UI changed
+- [ ] If the optional DOKS showcase was used, `task demo:down` tears down its billable resources
 
 ## Security Review Checklist
 
@@ -55,7 +55,9 @@
 - [ ] Dashboard endpoints are read-only; no write paths exposed
 - [ ] Any new dependencies reviewed for known vulnerabilities (`go tool govulncheck ./...`)
 
-## Cloud Cost Checklist
+## Optional Showcase Cloud Cost Checklist
+
+This section applies only when maintainers use the optional DigitalOcean showcase.
 
 - [ ] Provisioned resources align with expected demo/review scope
 - [ ] Unused resources destroyed after testing: `task demo:down`

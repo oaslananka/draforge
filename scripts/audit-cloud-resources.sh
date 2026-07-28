@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/audit-cloud-resources.sh
-# Audits DigitalOcean resources to ensure strict adherence to limits (max 2 worker nodes, max 1 cluster, no GPUs).
+# Audits resources used by the optional DigitalOcean showcase (max 2 worker nodes, max 1 cluster, no GPUs).
 
 set -euo pipefail
 

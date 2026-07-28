@@ -1,6 +1,6 @@
 # DRAForge
 
-DRAForge is a Dynamic Resource Allocation (DRA) observability, simulation, and diagnostics platform for Kubernetes. It allows developers and administrators to model, simulate, and diagnose cluster hardware resource allocations (GPUs, edge devices, smartNICs) dynamically—without requiring physical accelerator hardware.
+DRAForge is a provider-neutral Dynamic Resource Allocation (DRA) observability, simulation, and diagnostics platform for Kubernetes. It allows developers and administrators to model, simulate, and diagnose cluster hardware resource allocations (GPUs, edge devices, smartNICs) dynamically—without requiring physical accelerator hardware or a specific cloud provider.
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/oaslananka/draforge)](https://golang.org)
 [![License](https://img.shields.io/github/license/oaslananka/draforge)](https://www.apache.org/licenses/LICENSE-2.0)
@@ -32,7 +32,7 @@ DRAForge bridges this gap by providing an evidence-based diagnostics registry, a
 
 ```mermaid
 graph TD
-    subgraph DOKS Cluster
+    subgraph Kubernetes Cluster
         Server[DRAForge Server] <--> WebSPA[Vite + React SPA Dashboard]
         Controller[DRAForge Controller] <--> SimulatedDevicePool[SimulatedDevicePool CRD]
         Plugin[Node Plugin DaemonSet] --> ResourceSlice[ResourceSlice Spec]
@@ -42,6 +42,8 @@ graph TD
     end
     CLI[DRAForge CLI] <--> APIServer
 ```
+
+DRAForge components use Kubernetes APIs and Helm contracts rather than provider-specific services. They can run on compatible managed Kubernetes offerings, self-managed clusters, on-premises environments, and local test clusters. Provider-specific Terraform or registry assets in this repository are optional showcases.
 
 ---
 
@@ -86,7 +88,10 @@ To run DRAForge locally using a Go development environment and a `kind` cluster:
    ./bin/draforge tui
    ```
 
-### Quickstart B: DigitalOcean Kubernetes (DOKS) Showcase
+### Quickstart B: Optional DigitalOcean Kubernetes (DOKS) Showcase
+
+This provider-specific path is an optional demonstration of DRAForge on one managed Kubernetes service. It is not required for installation, testing, or releases.
+
 > **⚠️ Billable Resources**: This task provisions a live DOKS cluster and DOCR registry on your DigitalOcean account and incurs cloud costs. Always run `task demo:down` when finished to destroy all billable resources.
 
 To deploy the short-lived DOKS showcase:
@@ -128,7 +133,7 @@ pnpm --dir web test
 task test
 ```
 
-End-to-end tests require a real Kubernetes cluster with DRA feature gate and are gated by `DRAFORGE_E2E=1`:
+The tagged smoke tests run against any compatible Kubernetes cluster that serves the required DRA APIs and are gated by `DRAFORGE_E2E=1`:
 
 ```bash
 DRAFORGE_E2E=1 go test -tags=e2e ./tests/e2e/... -v
@@ -187,12 +192,6 @@ goreleaser release --clean
 | [Maintainers](MAINTAINERS.md) | Current project maintainers |
 | [Governance](GOVERNANCE.md) | Decision-making and roles |
 | [Support](SUPPORT.md) | How to get help |
-
----
-
-## Screenshots
-
-Screenshots of the terminal UI and web dashboard are stored in [docs/assets/](docs/assets/) when available.
 
 ---
 

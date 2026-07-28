@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/remote-test.sh
-# Submits a Kubernetes Job to run Go unit and race tests remotely on DOKS.
+# Optional DOKS showcase helper: runs Go unit and race tests in a Kubernetes Job.
 
 set -euo pipefail
 

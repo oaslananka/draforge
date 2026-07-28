@@ -1,6 +1,6 @@
 # Installation Guide
 
-DRAForge can be deployed in two primary profiles: a **Demo Profile** for rapid local exploration, and a **Production Profile** for robust deployment on a Kubernetes cluster.
+DRAForge is provider-neutral and can be deployed on any compatible Kubernetes cluster. The repository provides two primary profiles: a **Demo Profile** for rapid local exploration and a **Production Profile** for robust Helm deployment.
 
 ## Demo Profile (Local Development)
 
@@ -146,9 +146,9 @@ For an Ingress controller, set `gateway.enabled: false` and `gateway.ingress.ena
 
 Earlier chart defaults created an HTTP Gateway automatically. Upgrades to v0.3 create no external listener unless an explicit profile enables one. Existing public installations must choose either the short-lived local-demo profile or a TLS/authenticated public configuration before upgrading.
 
-### DigitalOcean Showcase Registry Override
+### Optional DigitalOcean Showcase Registry Override
 
-The DOKS showcase build flow publishes component images to a private DigitalOcean Container Registry layout. `task demo:up` creates the `registry-draforge` pull secret in `draforge-system` and installs the chart with:
+This provider-specific showcase is not required for normal DRAForge installations. The optional DOKS showcase build flow publishes component images to a private DigitalOcean Container Registry layout. `task demo:up` creates the `registry-draforge` pull secret in `draforge-system` and installs the chart with:
 
 ```bash
 helm upgrade --install draforge deploy/helm/draforge \

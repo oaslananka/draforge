@@ -170,6 +170,6 @@ Helm does not automatically remove CRDs when a release is uninstalled. To fully 
 kubectl delete -f deploy/crds/simulateddevicepool-crd.yaml
 ```
 
-### Showase / Cloud Resources Cleanup
+### Optional Showcase / Cloud Resources Cleanup
 
 If you deployed the DOKS showcase using the provided Terraform modules, refer to the [Cost Control Guide](cost-control.md) for instructions on tearing down billable infrastructure using `task demo:down` or `terraform destroy`.

@@ -6,7 +6,7 @@ description: Kubernetes Dynamic Resource Allocation observability, simulator, an
 
 # DRAForge
 
-**DRAForge** is a Kubernetes Dynamic Resource Allocation (DRA) observability, simulation, and diagnostics platform for GPU and accelerator workloads.
+**DRAForge** is a provider-neutral Kubernetes Dynamic Resource Allocation (DRA) observability, simulation, and diagnostics platform for GPU and accelerator workloads.
 
 It helps Kubernetes platform engineers model DRA resources, simulate virtual device pools, inspect ResourceClaims and ResourceSlices, and diagnose why dynamic resource allocations succeed or fail.
 
@@ -16,7 +16,7 @@ It helps Kubernetes platform engineers model DRA resources, simulate virtual dev
 - Virtual accelerator simulation for GPU and device-style workloads.
 - Explain engine for allocation troubleshooting and remediation.
 - Terminal UI and React dashboard for resource visualization.
-- Helm, Terraform, and DigitalOcean Kubernetes showcase assets.
+- Provider-neutral Helm deployment for compatible Kubernetes clusters, plus optional Terraform and DigitalOcean Kubernetes showcase assets.
 
 ## Documentation
 
@@ -26,12 +26,12 @@ It helps Kubernetes platform engineers model DRA resources, simulate virtual dev
 - [Troubleshooting Guide](operations/troubleshooting.md)
 - [Dashboard guide](dashboard.md)
 - [Public API and CLI Surface](api.md)
-- [Demo guide](demo.md)
+- [Optional DigitalOcean showcase guide](demo.md)
 - [Simulator scenarios](simulator-scenarios.md)
 - [Kubernetes DRA compatibility](compatibility/kubernetes-dra.md)
 - [Release process](release.md)
 
-## Showcase Demo Notes
+## Optional Showcase Demo Notes
 
 When running the DRAForge showcase demo, the dashboard provides a real-time view of the cluster allocation state.
 
@@ -49,4 +49,4 @@ When running the DRAForge showcase demo, the dashboard provides a real-time view
 
 ## Keywords
 
-Kubernetes DRA, Dynamic Resource Allocation, ResourceClaim, ResourceSlice, device plugin, GPU simulator, accelerator simulator, observability, diagnostics, Kubernetes troubleshooting, Go, React, TypeScript, Helm, Terraform, DigitalOcean Kubernetes.
+Kubernetes DRA, Dynamic Resource Allocation, ResourceClaim, ResourceSlice, device plugin, GPU simulator, accelerator simulator, observability, diagnostics, Kubernetes troubleshooting, managed Kubernetes, on-premises Kubernetes, kind, Go, React, TypeScript, Helm, Terraform.

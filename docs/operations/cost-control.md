@@ -1,6 +1,6 @@
-# Cost Control and Resource Billing Guide
+# Optional DigitalOcean Showcase Cost Control
 
-This document describes all billable DigitalOcean resources used in the **DRAForge** project, their pricing, and management commands to control costs.
+This document applies only to the optional DigitalOcean showcase. DRAForge does not require these resources or this provider. The estimates and commands below help maintainers control costs when they explicitly choose the DOKS/DOCR demo path.
 
 ## Billable Resources
 

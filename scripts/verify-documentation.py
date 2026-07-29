@@ -29,6 +29,7 @@ MATRIX_WORKFLOW_PATH = Path(".github/workflows/e2e-matrix.yml")
 PORTABLE_WORKFLOW_PATH = Path(".github/workflows/e2e-kubernetes.yml")
 DOKS_WORKFLOW_PATH = Path(".github/workflows/e2e.yml")
 RELEASE_WORKFLOW_PATH = Path(".github/workflows/release.yml")
+SCORECARD_WORKFLOW_PATH = Path(".github/workflows/scorecard.yml")
 
 ACTIVE_PATH_PREFIXES = (
     "scripts/",
@@ -439,6 +440,47 @@ def validate_security_accuracy(root: Path) -> list[str]:
     return errors
 
 
+def validate_scorecard_contract(root: Path) -> list[str]:
+    errors: list[str] = []
+    readme = read_text(root, README_PATH, errors)
+    workflow = read_text(root, SCORECARD_WORKFLOW_PATH, errors)
+    errors.extend(
+        require_fragments(
+            README_PATH,
+            readme,
+            (
+                "https://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge",
+                "https://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge",
+            ),
+        )
+    )
+    if "securityscorecards.dev" in readme:
+        errors.append(f"{README_PATH}: legacy OpenSSF Scorecard domain is not allowed")
+    errors.extend(
+        require_fragments(
+            SCORECARD_WORKFLOW_PATH,
+            workflow,
+            (
+                "contents: read",
+                "issues: read",
+                "pull-requests: read",
+                "checks: read",
+                "id-token: write",
+                "security-events: write",
+                "persist-credentials: false",
+                "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
+                "publish_results: true",
+                "github/codeql-action/upload-sarif@",
+            ),
+        )
+    )
+    if any(line == "env:" for line in workflow.splitlines()):
+        errors.append(
+            f"{SCORECARD_WORKFLOW_PATH}: top-level env is incompatible with published Scorecard results"
+        )
+    return errors
+
+
 def validate_root(root: Path) -> list[str]:
     files = markdown_files(root)
     active_files = active_markdown_files(root)
@@ -452,6 +494,7 @@ def validate_root(root: Path) -> list[str]:
     errors.extend(validate_install_contract(root))
     errors.extend(validate_helm_service_contract(root))
     errors.extend(validate_security_accuracy(root))
+    errors.extend(validate_scorecard_contract(root))
     return errors
 
 
@@ -464,7 +507,7 @@ def write_fixture(relative: Path, content: str) -> None:
 def reset_fixture() -> None:
     shutil.rmtree(FIXTURE_ROOT, ignore_errors=True)
     files = {
-        README_PATH: f"[Install]({INSTALL_PATH})\nDRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind\nkubectl port-forward svc/draforge-server -n draforge-system 8080:8080\nkind delete cluster --name draforge-install-e2e\n",
+        README_PATH: f"[Install]({INSTALL_PATH})\nDRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind\nkubectl port-forward svc/draforge-server -n draforge-system 8080:8080\nkind delete cluster --name draforge-install-e2e\nhttps://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge\nhttps://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge\n",
         CONTRIBUTING_PATH: "Kubernetes v1.35+ serves resource.k8s.io/v1.\nhelm upgrade --install draforge deploy/helm/draforge\n",
         SECURITY_PATH: f"| v0.2.x  | Yes       |\n| < v0.2  | No        |\n{MATRIX_WORKFLOW_PATH} runs weekly. {DOKS_WORKFLOW_PATH} is manual-only. Doppler is the secret source.\n",
         CHANGELOG_PATH: "# Changelog\n",
@@ -479,6 +522,7 @@ def reset_fixture() -> None:
         PORTABLE_WORKFLOW_PATH: "on:\n  pull_request:\n  workflow_dispatch:\njobs:\n  external:\n    environment: e2e-kubernetes\n",
         DOKS_WORKFLOW_PATH: "on:\n  workflow_dispatch:\n",
         RELEASE_WORKFLOW_PATH: f"uses: ./{MATRIX_WORKFLOW_PATH}\nprofile: full\n",
+        SCORECARD_WORKFLOW_PATH: "permissions:\n  contents: read\njobs:\n  scorecard:\n    permissions:\n      contents: read\n      issues: read\n      pull-requests: read\n      checks: read\n      security-events: write\n      id-token: write\n    steps:\n      - uses: actions/checkout@sha\n        with:\n          persist-credentials: false\n      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc\n        with:\n          publish_results: true\n      - uses: github/codeql-action/upload-sarif@sha\n",
         CLI_SOURCE_PATH: 'Use:   "discover",\nUse:   "inject-fault",\n',
     }
     for relative, content in files.items():
@@ -536,6 +580,17 @@ def self_test() -> list[str]:
         write_fixture(DOKS_WORKFLOW_PATH, "on:\n  workflow_dispatch:\n  schedule:\n")
         if not has_error("manual-only"):
             return ["scheduled DOKS fixture unexpectedly passed"]
+
+        reset_fixture()
+        readme = FIXTURE_ROOT / README_PATH
+        readme.write_text(
+            readme.read_text(encoding="utf-8").replace(
+                "api.scorecard.dev", "api.securityscorecards.dev"
+            ),
+            encoding="utf-8",
+        )
+        if not has_error("legacy OpenSSF Scorecard domain"):
+            return ["legacy Scorecard domain fixture unexpectedly passed"]
         return []
     finally:
         shutil.rmtree(FIXTURE_ROOT, ignore_errors=True)

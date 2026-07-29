@@ -15,8 +15,11 @@ Only the latest release is actively supported with security updates.
 
 If you discover a security vulnerability, **do not open a public issue**.
 
-Please email `oaslananka@gmail.com` with details. We aim to respond within 48 hours
-and will coordinate a public advisory and fix timeline with you.
+Use [GitHub Private Vulnerability Reporting](https://github.com/oaslananka/draforge/security/advisories/new)
+for the preferred encrypted, repository-scoped reporting path. If that channel is
+unavailable, email `oaslananka@gmail.com`. We aim to acknowledge reports within
+48 hours and will coordinate triage, remediation, and public disclosure with the
+reporter.
 
 Include in your report:
 - Affected version(s) and component(s)
@@ -97,6 +100,24 @@ The following controls reflect the current public repository configuration:
 - Portable smoke testing (`.github/workflows/e2e-kubernetes.yml`) runs credential-free kind for relevant pull requests. Its manual external mode uses a short-lived `KUBECONFIG_B64` delivered through the protected `e2e-kubernetes` Environment from Doppler and removes the kubeconfig after the run.
 - The optional DOKS adapter (`.github/workflows/e2e.yml`) is manual-only, targets an existing billable cluster, and requires the exact confirmation phrase plus protected-environment approval. `DIGITALOCEAN_TOKEN` is sourced from Doppler and should have only `kubernetes:read` and `kubernetes:access_cluster`.
 - The release workflow (`.github/workflows/release.yml`) accepts only immutable annotated release tags on `main`, requires the full credential-free install matrix, and uses the repository-provided `GITHUB_TOKEN` plus GitHub OIDC for package publication and Cosign signing.
+
+## Security Assurance Case
+
+The following claims connect DRAForge's security design to repository-owned
+implementation and verification evidence. They are not a guarantee that defects
+cannot exist; they describe the controls the project relies on and the residual
+risk operators must manage.
+
+| Security claim | Threat addressed | Implemented controls | Verification evidence | Residual risk |
+|---|---|---|---|---|
+| The default dashboard exposure is not public and cannot mutate cluster resources. | Unauthenticated disclosure or mutation of Kubernetes state. | The server API is read-only; the default chart creates no Gateway or Ingress; external access must use an operator-managed identity-aware proxy. | Helm exposure contract, browser/API tests, RBAC templates, and install E2E in required CI. | Authorized viewers can still see sensitive topology and allocation metadata; operators must restrict network and identity access. |
+| Controller replicas produce one active reconciliation stream. | Competing writers causing inconsistent `ResourceSlice` or allocation state. | Kubernetes Lease leader election, deterministic ownership labels/finalizers, bounded retry policy, and graceful event-broadcaster shutdown. | Two-replica kind failover/concurrency gate, race tests, controller metrics tests, and supported Kubernetes install matrix. | A Kubernetes control-plane or Lease outage can pause reconciliation until quorum and API availability return. |
+| Published release artifacts are traceable to an immutable source tag. | Artifact substitution, mutable releases, or registry compromise. | Annotated tags on `main`, tag immutability ruleset, full pre-release E2E, checksums, CycloneDX SBOMs, and keyless Cosign signing through GitHub OIDC. | Release provenance verifier and non-mutating published-release verification workflow. | Consumers must actually verify checksums/signatures and pin image digests where their threat model requires it. |
+| Repository and CI secrets are not source-controlled. | Credential disclosure through commits, logs, artifacts, or untrusted pull requests. | Doppler is the source of truth; secret scanning and push protection are enabled; normal CI is credential-free; cloud workflows are manual and environment-gated. | GitHub security settings, pinned workflow permissions, secret scans, and workload-security contract tests. | A maintainer endpoint or external secret manager compromise remains outside repository controls and requires credential rotation. |
+| Dependency and code vulnerabilities are detected before release. | Shipping publicly known vulnerable code or unsafe workflow changes. | `govulncheck`, pnpm audit, Dependency Review, CodeQL, Semgrep, Sonar, Socket, OpenSSF Scorecard, and full-SHA action pinning. | Required PR checks, scheduled security workflows, and zero-open-alert release preflight. | Scanners have coverage gaps and false negatives; security reports and manual review remain necessary. |
+
+The assurance case is revalidated when a security-sensitive subsystem, release
+process, trust boundary, or supported Kubernetes version changes.
 
 ## Responsible Disclosure
 

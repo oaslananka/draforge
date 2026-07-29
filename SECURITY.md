@@ -46,7 +46,7 @@ The DRAForge web dashboard is intentionally **read-only**, but read-only data ca
 - If you must share configuration for debugging, redact all sensitive values
   before posting.
 - Use Doppler as the source of truth for repository, cloud, and environment secrets. GitHub Environment or Actions secrets are runtime delivery targets, not the canonical store.
-- Dependency advisories are enforced by `govulncheck`, pnpm audit, OSV/security workflows, Dependency Review, and pinned-action checks. Dependabot opens version and security update pull requests, but update automation is not treated as a security boundary.
+- Dependency advisories are enforced by `govulncheck`, pnpm audit, OSV/security workflows, Dependency Review, and pinned-action checks. Automated dependency-update tooling is not treated as a security boundary.
 - GitHub secret scanning and push protection are enabled; never rely on scanners as permission to commit a credential.
 
 ### Host-Integrated CDI Mode
@@ -81,7 +81,7 @@ The following controls reflect the current public repository configuration:
 | Required status checks | Active through rulesets | Blocks merge when required CI or security checks fail |
 | Secret scanning and push protection | Enabled | Detects and blocks supported secret patterns before publication |
 | Code and dependency scanning | Active workflows and PR checks | Runs CodeQL/security analysis, Dependency Review, Semgrep, Socket, and language advisory gates |
-| Dependabot security updates | Enabled | Opens reviewed remediation pull requests for supported vulnerable dependencies |
+| Automated security fixes | Not enabled | Optional automation; CI advisory gates and reviewed updates remain authoritative |
 
 ### Supply-Chain and Workload Controls
 

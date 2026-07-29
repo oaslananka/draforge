@@ -5,13 +5,13 @@ package simulator
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync/atomic"
 
 	"github.com/oaslananka/draforge/internal/draeval"
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -21,7 +21,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	clientcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
 )
 
 var (
@@ -73,135 +72,6 @@ func (r *Reconciler) SetLeader(leader bool) {
 // IsLeader reports whether this process currently owns the active controller lifecycle.
 func (r *Reconciler) IsLeader() bool {
 	return r.leaderState.Load()
-}
-
-// Reconcile performs one sync iteration.
-func (r *Reconciler) Reconcile(ctx context.Context) error {
-	// 1. List SimulatedDevicePools
-	sdps, err := r.dynamicClient.Resource(sdpGVR).Namespace("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		// If CRD is not registered yet, we skip reconciliation silently
-		if strings.Contains(err.Error(), "could not find the scale subresource") || strings.Contains(err.Error(), "not found") {
-			return nil
-		}
-		return fmt.Errorf("failed to list SimulatedDevicePools: %w", err)
-	}
-
-	// Track active slices we manage
-	activeSliceNames := make(map[string]bool)
-	localFaultCount := int64(0)
-
-	for _, sdp := range sdps.Items {
-		spec, found, _ := unstructured.NestedMap(sdp.Object, "spec")
-		if !found {
-			continue
-		}
-
-		driverName, _, _ := unstructured.NestedString(spec, "driverName")
-		poolName, _, _ := unstructured.NestedString(spec, "poolName")
-		if poolName == "" {
-			poolName = sdp.GetName()
-		}
-		deviceType, _, _ := unstructured.NestedString(spec, "deviceType")
-		deviceCount, _, _ := unstructured.NestedInt64(spec, "deviceCount")
-		targetNodes, _, _ := unstructured.NestedStringSlice(spec, "targetNodes")
-		health, _, _ := unstructured.NestedString(spec, "health")
-		if health == "" {
-			health = "healthy"
-		}
-		if health != "healthy" {
-			localFaultCount++
-		}
-
-		// If no target nodes specified, apply to all nodes in the cluster
-		if len(targetNodes) == 0 {
-			nodes, listErr := r.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-			if listErr != nil {
-				return fmt.Errorf("failed to list nodes: %w", listErr)
-			}
-			for _, node := range nodes.Items {
-				targetNodes = append(targetNodes, node.Name)
-			}
-		}
-
-		// Parse custom attributes and capacities
-		rawAttrs, _, _ := unstructured.NestedMap(spec, "attributes")
-		rawCaps, _, _ := unstructured.NestedMap(spec, "capacities")
-
-		attrs := make(map[string]string)
-		for k, v := range rawAttrs {
-			if s, ok := v.(string); ok {
-				attrs[k] = s
-			}
-		}
-		attrs["driver"] = driverName
-		attrs["type"] = deviceType
-
-		caps := make(map[string]resource.Quantity)
-		for k, v := range rawCaps {
-			if s, ok := v.(string); ok {
-				if q, parseErr := resource.ParseQuantity(s); parseErr == nil {
-					caps[k] = q
-				}
-			}
-		}
-
-		var publishedSlices []string
-		var activeFaults []string
-		if health != "healthy" {
-			activeFaults = append(activeFaults, health)
-		}
-
-		// For each target node, ensure ResourceSlice exists
-		for _, nodeName := range targetNodes {
-			sliceName := fmt.Sprintf("sim-slice-%s-%s-%s", sdp.GetName(), nodeName, sdp.GetNamespace())
-			sliceName = strings.ReplaceAll(sliceName, ".", "-")
-
-			if health == "disappear" {
-				// disappear fault -> delete the slice if it exists
-				_ = r.clientset.ResourceV1().ResourceSlices().Delete(ctx, sliceName, metav1.DeleteOptions{})
-				r.eventRecorder.Eventf(&sdp, corev1.EventTypeNormal, "ResourceSliceDeleted", "Deleted ResourceSlice %s due to disappear fault", sliceName)
-				continue
-			}
-
-			activeSliceNames[sliceName] = true
-			publishedSlices = append(publishedSlices, sliceName)
-
-			runDevCount := int(deviceCount)
-			if health == "capacity-exhausted" {
-				runDevCount = 0
-				r.eventRecorder.Eventf(&sdp, corev1.EventTypeWarning, "CapacityExhausted", "Capacity exhausted for pool %s", poolName)
-			}
-
-			if ensureErr := r.ensureResourceSlice(ctx, sliceName, sdp.GetNamespace(), sdp.GetName(), driverName, poolName, nodeName, health, runDevCount, attrs, caps, len(targetNodes)); ensureErr != nil {
-				klog.Errorf("Failed to ensure ResourceSlice %s: %v", sliceName, ensureErr)
-				r.eventRecorder.Eventf(&sdp, corev1.EventTypeWarning, "ResourceSliceEnsureFailed", "Failed to ensure ResourceSlice %s: %v", sliceName, ensureErr)
-			}
-		}
-
-		// Update the status subresource
-		if statusErr := r.updateSDPStatus(ctx, &sdp, publishedSlices, activeFaults); statusErr != nil {
-			// Ignore update errors if status subresource is not yet active/supported
-			_ = statusErr
-		}
-	}
-
-	// 2. Clean up orphaned ResourceSlices created by our controller
-	slices, err := r.clientset.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
-	if err == nil {
-		for _, s := range slices.Items {
-			// Slices managed by simulator have the label: draforge.oaslananka/managed-by: simulator
-			if s.Labels["draforge.oaslananka/managed-by"] == "simulator" {
-				if !activeSliceNames[s.Name] {
-					klog.Infof("Deleting orphaned ResourceSlice: %s", s.Name)
-					_ = r.clientset.ResourceV1().ResourceSlices().Delete(ctx, s.Name, metav1.DeleteOptions{})
-				}
-			}
-		}
-	}
-
-	atomic.StoreInt64(&r.ActiveFaultsCount, localFaultCount)
-	return nil
 }
 
 func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, sdpName, driverName, poolName, nodeName, health string, devCount int, attrs map[string]string, caps map[string]resource.Quantity, sliceCount int) error {
@@ -259,23 +129,27 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 		},
 	}
 
-	// Check if already exists
+	// Check if already exists. Only a real NotFound result permits creation;
+	// authorization, timeout, and transport errors must reach the workqueue policy.
 	existing, err := slicesClient.Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
-		// Update existing
 		slice.ResourceVersion = existing.ResourceVersion
-
 		if equality.Semantic.DeepEqual(existing.Spec, slice.Spec) && equality.Semantic.DeepEqual(existing.Labels, slice.Labels) {
 			return nil
 		}
-
-		_, err = slicesClient.Update(ctx, slice, metav1.UpdateOptions{})
-		return err
+		if _, updateErr := slicesClient.Update(ctx, slice, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("update ResourceSlice %s: %w", name, updateErr)
+		}
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("get ResourceSlice %s: %w", name, err)
 	}
 
-	// Create new
-	_, err = slicesClient.Create(ctx, slice, metav1.CreateOptions{})
-	return err
+	if _, createErr := slicesClient.Create(ctx, slice, metav1.CreateOptions{}); createErr != nil {
+		return fmt.Errorf("create ResourceSlice %s: %w", name, createErr)
+	}
+	return nil
 }
 
 func (r *Reconciler) updateSDPStatus(ctx context.Context, sdp *unstructured.Unstructured, publishedSlices []string, activeFaults []string) error {

@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Helm installs no longer create Gateway or Ingress listeners by default. External dashboard exposure now requires an explicit local-demo or secure-public values profile.
 
 ### Fixed
+- Made interactive SVG graph nodes native sequential-focus targets so Chromium keyboard navigation reliably moves from Reset View to the first node.
 - Updated vulnerable Go and frontend development dependencies and added repeatable advisory gates to pull-request, scheduled security, and local validation workflows.
 - Restored live SSE graph streaming through the full middleware chain while preserving ordinary request timeouts and non-blocking subscriber delivery.
 - Preserved namespace-qualified ResourceClaim identity across dashboard selection, graph navigation, and explain API requests, including duplicate claim names across namespaces.

@@ -478,16 +478,19 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                 const opacity = hoveredNodeId && !isHovered ? 0.3 : 1;
 
                 return (
-                  <g
+                  <a
                     key={node.id}
-                    transform={`translate(${node.x}, ${node.y})`}
+                    href="#"
                     role="button"
                     tabIndex={0}
                     className="graph-node"
                     aria-label={nodeAccessibleName(node)}
                     aria-pressed={selectedNode?.id === node.id}
                     onMouseDown={(event) => handleNodeMouseDown(event, node)}
-                    onClick={() => setSelectedNode(node)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setSelectedNode(node);
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
@@ -496,8 +499,9 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                     }}
                     onMouseEnter={() => setHoveredNodeId(node.id)}
                     onMouseLeave={() => setHoveredNodeId(null)}
-                    style={{ cursor: 'pointer', opacity }}
+                    style={{ cursor: 'pointer' }}
                   >
+                    <g transform={`translate(${node.x}, ${node.y})`} style={{ opacity }}>
                     <circle
                       r={radius}
                       fill={color}
@@ -523,7 +527,8 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                     >
                       {node.label}
                     </text>
-                  </g>
+                    </g>
+                  </a>
                 );
               })}
             </g>

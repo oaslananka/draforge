@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Propagated ResourceSlice, SimulatedDevicePool status, orphan-cleanup, and ResourceClaim status API failures into the controller queue policy while keeping missing deletes idempotent.
 - Added explicit SimulatedDevicePool finalizers and UID-qualified ResourceSlice ownership labels for deterministic cross-scope cleanup.
 - Added controller pipeline attempt, cumulative duration, in-flight, and ready-queue-depth metrics, and idempotent event-broadcaster shutdown during process exit.
+- Added a blocking two-replica kind gate for single-leader enforcement, active-Pod failover, concurrent pool convergence, and post-failover allocation continuity.
 - Synchronized security support, Kubernetes compatibility, local installation, E2E, release, and CLI documentation with repository-enforced contracts and added stable relative-link/command validation.
 - Future release tags must be annotated SemVer or release-candidate tag objects on `main`; protected `v*` tags are immutable after creation.
 - Helm installs no longer create Gateway or Ingress listeners by default. External dashboard exposure now requires an explicit local-demo or secure-public values profile.

@@ -95,6 +95,11 @@ renewDeadline > retryPeriod * 1.2`. Roll back by restoring the previous chart/im
 version; the same Lease name is retained, so only one version can be active at a
 time.
 
+The install-level compatibility gate runs two replicas, confirms the Lease holder
+matches the only replica reporting `draforge_controller_leader 1`, deletes that
+active Pod, and requires a different leader to reconcile a concurrent pool-update
+burst and a new ResourceClaim without changing the original allocation.
+
 ### Event-driven reconciliation
 
 The active controller uses Kubernetes shared informers instead of fixed polling

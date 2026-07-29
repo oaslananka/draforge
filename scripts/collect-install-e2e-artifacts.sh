@@ -39,6 +39,15 @@ capture calico-kube-controllers.log kubectl logs -n kube-system deployment/calic
 } > "$ARTIFACT_DIR/rbac.yaml" 2>&1
 capture events.txt kubectl get events --all-namespaces --sort-by=.metadata.creationTimestamp
 capture pod-descriptions.txt kubectl describe pods --all-namespaces
+capture controller-lease.yaml kubectl get lease.coordination.k8s.io "$RELEASE_NAME-controller" -n "$SYSTEM_NAMESPACE" -o yaml
+capture controller-pods.yaml kubectl get pods -n "$SYSTEM_NAMESPACE" -l app.kubernetes.io/component=controller -o yaml
+
+controller_pods=$(kubectl get pods -n "$SYSTEM_NAMESPACE" -l app.kubernetes.io/component=controller -o name 2>/dev/null || true)
+for pod_resource in $controller_pods; do
+  pod_name=${pod_resource#pod/}
+  capture "controller-${pod_name}.log" kubectl logs -n "$SYSTEM_NAMESPACE" "$pod_resource" --all-containers=true
+  capture "controller-${pod_name}-previous.log" kubectl logs -n "$SYSTEM_NAMESPACE" "$pod_resource" --all-containers=true --previous
+done
 
 for component in server controller; do
   capture "${component}.log" kubectl logs -n "$SYSTEM_NAMESPACE" deployment/"$RELEASE_NAME"-"$component" --all-containers=true

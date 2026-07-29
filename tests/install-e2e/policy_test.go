@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	resourcev1 "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -36,6 +37,18 @@ type matrixEntry struct {
 	NodeImage  string `json:"nodeImage"`
 }
 
+type installValues struct {
+	Controller struct {
+		ReplicaCount   int `yaml:"replicaCount"`
+		LeaderElection struct {
+			Enabled       bool   `yaml:"enabled"`
+			LeaseDuration string `yaml:"leaseDuration"`
+			RenewDeadline string `yaml:"renewDeadline"`
+			RetryPeriod   string `yaml:"retryPeriod"`
+		} `yaml:"leaderElection"`
+	} `yaml:"controller"`
+}
+
 func TestKubernetesVersionPolicy(t *testing.T) {
 	var policy versionPolicy
 	if err := json.Unmarshal(readFixture(t, "kubernetes-versions.json"), &policy); err != nil {
@@ -45,6 +58,43 @@ func TestKubernetesVersionPolicy(t *testing.T) {
 	validateKindVersion(t, policy.KindVersion)
 	validateNetworkPolicyProvider(t, policy.NetworkPolicyProvider)
 	validateProfiles(t, policy.Profiles)
+}
+
+func TestInstallValuesRequireTwoReplicaLeaderElection(t *testing.T) {
+	var values installValues
+	if err := yaml.Unmarshal(readFixture(t, "values.yaml"), &values); err != nil {
+		t.Fatalf("decode install values: %v", err)
+	}
+	if values.Controller.ReplicaCount != 2 {
+		t.Fatalf("install E2E controller replicas = %d, want 2", values.Controller.ReplicaCount)
+	}
+	if !values.Controller.LeaderElection.Enabled {
+		t.Fatal("install E2E must enable controller leader election")
+	}
+	if values.Controller.LeaderElection.LeaseDuration != "5s" ||
+		values.Controller.LeaderElection.RenewDeadline != "3s" ||
+		values.Controller.LeaderElection.RetryPeriod != "1s" {
+		t.Fatalf("unexpected install E2E leader timings: %#v", values.Controller.LeaderElection)
+	}
+}
+
+func TestFailoverClaimFixtureRequestsOneTypedDevice(t *testing.T) {
+	objects := decodeDocuments(t, readFixture(t, "failover-claim.yaml"))
+	claim := typedObject[resourcev1.ResourceClaim](t, indexByKind(t, objects), "ResourceClaim")
+	if claim.Namespace != "draforge-e2e" || claim.Name != "e2e-failover-claim" {
+		t.Fatalf("unexpected failover claim identity %s/%s", claim.Namespace, claim.Name)
+	}
+	if len(claim.Spec.Devices.Requests) != 1 || claim.Spec.Devices.Requests[0].Exactly == nil {
+		t.Fatalf("failover claim must contain one exact request: %#v", claim.Spec.Devices.Requests)
+	}
+	exact := claim.Spec.Devices.Requests[0].Exactly
+	if exact.DeviceClassName != "draforge-e2e-gpu" ||
+		exact.AllocationMode != resourcev1.DeviceAllocationModeExactCount || exact.Count != 1 {
+		t.Fatalf("unexpected failover request: %#v", exact)
+	}
+	if len(exact.Selectors) != 1 || exact.Selectors[0].CEL == nil {
+		t.Fatalf("failover claim must retain the typed CEL selector: %#v", exact.Selectors)
+	}
 }
 
 func TestInstallResourceFixturesUseTypedDRAIdentity(t *testing.T) {

@@ -8,6 +8,12 @@ server:
     pullPolicy: Never
 
 controller:
+  replicaCount: 2
+  leaderElection:
+    enabled: true
+    leaseDuration: 5s
+    renewDeadline: 3s
+    retryPeriod: 1s
   image:
     repository: draforge-e2e/controller
     tag: local

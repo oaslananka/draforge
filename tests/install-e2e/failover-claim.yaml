@@ -1,0 +1,21 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: e2e-failover-claim
+  namespace: draforge-e2e
+  labels:
+    app.kubernetes.io/part-of: draforge
+    draforge.oaslananka/e2e: "true"
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: draforge-e2e-gpu
+          selectors:
+            - cel:
+                expression: >-
+                  device.attributes["sim.draforge.oaslananka"].model == "DRAForge-E2E-GPU" &&
+                  device.capacity["sim.draforge.oaslananka"].memory.compareTo(quantity("8Gi")) >= 0
+          allocationMode: ExactCount
+          count: 1

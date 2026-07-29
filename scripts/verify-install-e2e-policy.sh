@@ -11,6 +11,7 @@ RELEASE_FILE="$ROOT_DIR/.github/workflows/release.yml"
 VALUES_FILE="$ROOT_DIR/tests/install-e2e/values.yaml"
 RESOURCES_FILE="$ROOT_DIR/tests/install-e2e/resources.yaml"
 WORKLOAD_FILE="$ROOT_DIR/tests/install-e2e/workload.yaml"
+FAILOVER_CLAIM_FILE="$ROOT_DIR/tests/install-e2e/failover-claim.yaml"
 DOC_FILE="$ROOT_DIR/docs/e2e-matrix.md"
 
 fail() {
@@ -59,6 +60,10 @@ assert_contains "$VALUES_FILE" "pullPolicy: Never"
 assert_contains "$VALUES_FILE" "networkPolicies:"
 assert_contains "$VALUES_FILE" "enabled: true"
 assert_contains "$VALUES_FILE" "outputMode: demo"
+assert_contains "$VALUES_FILE" "replicaCount: 2"
+assert_contains "$VALUES_FILE" "leaseDuration: 5s"
+assert_contains "$VALUES_FILE" "renewDeadline: 3s"
+assert_contains "$VALUES_FILE" "retryPeriod: 1s"
 
 for kind in Namespace DeviceClass SimulatedDevicePool ResourceClaim; do
   assert_contains "$RESOURCES_FILE" "kind: $kind"
@@ -68,6 +73,10 @@ assert_contains "$RESOURCES_FILE" "name: e2e-gpu-claim"
 assert_contains "$WORKLOAD_FILE" "kind: Pod"
 assert_contains "$WORKLOAD_FILE" "resourceClaimName: e2e-gpu-claim"
 assert_contains "$WORKLOAD_FILE" "claims:"
+assert_contains "$FAILOVER_CLAIM_FILE" "name: e2e-failover-claim"
+assert_contains "$FAILOVER_CLAIM_FILE" "allocationMode: ExactCount"
+assert_contains "$FAILOVER_CLAIM_FILE" "count: 1"
+assert_contains "$ROOT_DIR/scripts/run-install-e2e.sh" 'scripts/verify-controller-ha-e2e.sh'
 assert_contains "$ROOT_DIR/tests/install-e2e/network-policy-probes.yaml" "name: network-policy-allowed"
 assert_contains "$ROOT_DIR/tests/install-e2e/network-policy-probes.yaml" "name: network-policy-denied"
 assert_contains "$ROOT_DIR/tests/install-e2e/network-policy-probes.yaml" 'draforge.oaslananka/metrics-client: "true"'
@@ -90,6 +99,8 @@ for script in \
   kind-install-e2e-matrix.sh \
   test-install-e2e-cni.sh \
   test-install-e2e-harness.sh \
+  test-controller-ha-e2e-harness.sh \
+  verify-controller-ha-e2e.sh \
   verify-install-e2e-policy.sh; do
   [[ -x "$ROOT_DIR/scripts/$script" ]] || fail "scripts/$script must be executable"
 done

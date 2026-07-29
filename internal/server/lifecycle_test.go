@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 type fakeHTTPServer struct {
@@ -119,5 +121,16 @@ func TestRunHTTPServerForcesCloseAfterShutdownTimeout(t *testing.T) {
 	}
 	if server.closeCalls != 1 {
 		t.Fatalf("expected one force Close call, got %d", server.closeCalls)
+	}
+}
+
+func TestServerStartStopsCleanlyWithCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	server := NewServerWithOptions(fake.NewSimpleClientset(), 0, ServerOptions{
+		ShutdownTimeout: 100 * time.Millisecond,
+	})
+	if err := server.Start(ctx); err != nil {
+		t.Fatalf("Start() with canceled context: %v", err)
 	}
 }

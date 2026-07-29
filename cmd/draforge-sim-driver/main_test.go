@@ -3,11 +3,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/kubernetes"
 )
 
 func TestSimDriverHelpOutput(t *testing.T) {
@@ -133,5 +138,89 @@ func TestParseOutputMode(t *testing.T) {
 	}
 	if _, err := parseOutputMode("fallback"); err == nil {
 		t.Fatal("expected invalid output mode to fail")
+	}
+}
+
+func TestParseSimDriverOptions(t *testing.T) {
+	options, err := parseSimDriverOptions(
+		[]string{"--cdi-dir", t.TempDir(), "--output-mode", "demo", "--health-addr", "127.0.0.1:0", "--refresh-interval", "25ms"},
+		func(key string) string {
+			if key == "NODE_NAME" {
+				return "node-from-env"
+			}
+			return ""
+		},
+		func() (string, error) { return "node-from-hostname", nil },
+	)
+	if err != nil {
+		t.Fatalf("parse options: %v", err)
+	}
+	if options.OutputMode != outputModeDemo || options.NodeName != "node-from-env" {
+		t.Fatalf("unexpected options: %+v", options)
+	}
+	if options.RefreshInterval != 25*time.Millisecond {
+		t.Fatalf("refresh interval = %s, want 25ms", options.RefreshInterval)
+	}
+}
+
+func TestParseSimDriverOptionsRejectsInvalidValues(t *testing.T) {
+	for name, args := range map[string][]string{
+		"mode":     {"--output-mode", "invalid"},
+		"interval": {"--refresh-interval", "0s"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseSimDriverOptions(args, func(string) string { return "" }, func() (string, error) { return "node", nil }); err == nil {
+				t.Fatal("expected invalid options to fail")
+			}
+		})
+	}
+}
+
+func TestResolveNodeNameFallbacks(t *testing.T) {
+	if got := resolveNodeName(func(string) string { return "node-env" }, func() (string, error) { return "node-host", nil }); got != "node-env" {
+		t.Fatalf("environment node name = %q", got)
+	}
+	if got := resolveNodeName(func(string) string { return "" }, func() (string, error) { return "node-host", nil }); got != "node-host" {
+		t.Fatalf("hostname node name = %q", got)
+	}
+	if got := resolveNodeName(func(string) string { return "" }, func() (string, error) { return "", errors.New("hostname unavailable") }); got != "node-0" {
+		t.Fatalf("fallback node name = %q", got)
+	}
+}
+
+func TestRunSimDriverDemoLifecycle(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	dir := t.TempDir()
+	if err := runSimDriver(ctx, simDriverOptions{
+		CDIDir:          dir,
+		OutputMode:      outputModeDemo,
+		HealthAddr:      "127.0.0.1:0",
+		RefreshInterval: time.Millisecond,
+		NodeName:        "node-a",
+	}); err != nil {
+		t.Fatalf("run demo driver: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, cdiFileName)); err != nil {
+		t.Fatalf("expected CDI document: %v", err)
+	}
+}
+
+func TestRunSimDriverNodeModeClientFailure(t *testing.T) {
+	original := newKubernetesClient
+	newKubernetesClient = func(string) (kubernetes.Interface, error) {
+		return nil, errors.New("client unavailable")
+	}
+	t.Cleanup(func() { newKubernetesClient = original })
+
+	err := runSimDriver(context.Background(), simDriverOptions{
+		CDIDir:          t.TempDir(),
+		OutputMode:      outputModeNode,
+		HealthAddr:      "127.0.0.1:0",
+		RefreshInterval: time.Second,
+		NodeName:        "node-a",
+	})
+	if err == nil || !strings.Contains(err.Error(), "initialize Kubernetes client") {
+		t.Fatalf("expected client initialization failure, got %v", err)
 	}
 }

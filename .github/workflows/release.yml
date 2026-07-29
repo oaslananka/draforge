@@ -8,9 +8,17 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing annotated release tag to recover
+        description: Existing annotated release tag
         required: true
         type: string
+      operation:
+        description: Recover publication or verify existing artifacts
+        required: true
+        type: choice
+        default: recover
+        options:
+          - recover
+          - verify
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -56,6 +64,7 @@ jobs:
 
   install-e2e:
     needs: validate-tag
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.operation == 'recover' }}
     name: Full install E2E gate
     uses: ./.github/workflows/e2e-matrix.yml
     with:
@@ -67,7 +76,7 @@ jobs:
   goreleaser:
     needs: install-e2e
     name: Run GoReleaser & Signing
-    if: ${{ github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops' }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || inputs.operation == 'recover') && (github.repository_owner == 'oaslananka' || github.repository_owner == 'oaslananka-ops') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -148,11 +157,34 @@ jobs:
       - name: Verify Docker v2 release artifacts
         run: python3 scripts/verify-goreleaser-docker-artifacts.py --self-test --validate
 
-      - name: Log out of GHCR before public pull verification
+      - name: Log out of GHCR after publication
         run: docker logout ghcr.io
 
-      - name: Verify public multi-arch image manifests anonymously
+  verify-published:
+    needs: [validate-tag, goreleaser]
+    name: Verify published release
+    if: ${{ always() && needs.validate-tag.result == 'success' && (needs.goreleaser.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'verify')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.17.3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
+
+      - name: Verify release assets, signatures, and public images
         env:
-          RELEASE_VERSION: ${{ inputs.release_tag || github.ref_name }}
-          VERIFY_REMOTE_IMAGES: "1"
-        run: scripts/verify-chart-images.sh "${RELEASE_VERSION#v}"
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: scripts/verify-published-release.sh "$RELEASE_TAG"

@@ -37,4 +37,4 @@ goreleaser release --snapshot --clean --skip=docker,sbom,sign
 task release:verify
 ```
 
-If a publishing job fails before any asset or image is available, fix the workflow on `main` and use the release workflow's existing-tag recovery input so the immutable tag is revalidated and rebuilt. If assets are already available to users, publish a new patch version rather than replacing them silently.
+If a publishing job fails before any asset or image is available, fix the workflow on `main` and use `operation: recover` so the immutable tag is revalidated and rebuilt. If publication completed but only post-publish verification failed, use `operation: verify`; it must not rebuild or republish. If published payloads are invalid, publish a new patch version rather than replacing them silently.

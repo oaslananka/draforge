@@ -163,6 +163,7 @@ tasks:
       - '{{.BASH_BIN}} scripts/verify-install-e2e-policy.sh'
       - '{{.BASH_BIN}} scripts/test-install-e2e-cni.sh'
       - '{{.BASH_BIN}} scripts/test-install-e2e-harness.sh'
+      - '{{.BASH_BIN}} scripts/test-controller-ha-e2e-harness.sh'
 
   e2e:install-kind:
     desc: Build, install, and verify the complete stack on the pull-request kind baseline

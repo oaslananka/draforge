@@ -216,6 +216,10 @@ kubectl apply -f tests/install-e2e/resources.yaml
 wait_for "simulator ResourceSlice publication" resource_slice_ready
 wait_for "simulated ResourceClaim allocation" claim_allocated
 
+if [[ "${DRAFORGE_INSTALL_E2E_SKIP_CONTROLLER_HA:-0}" != "1" ]]; then
+  "$ROOT_DIR/scripts/verify-controller-ha-e2e.sh"
+fi
+
 echo "Verifying enforced controller metrics NetworkPolicy..."
 kubectl apply -f tests/install-e2e/network-policy-probes.yaml
 kubectl wait --for=condition=Ready pod/network-policy-allowed -n "$SYSTEM_NAMESPACE" --timeout=2m
@@ -265,8 +269,12 @@ kubectl port-forward -n "$SYSTEM_NAMESPACE" service/"$RELEASE_NAME"-controller \
   "$CONTROLLER_PORT:8082" > "$ARTIFACT_DIR/controller-port-forward.log" 2>&1 &
 CONTROLLER_PORT_FORWARD_PID=$!
 wait_for "controller metrics through Service" controller_metrics_ready
-grep -Eq '^draforge_controller_allocations_simulated_total [1-9][0-9]*$' \
-  "$ARTIFACT_DIR/controller-metrics.txt" || fail "controller metrics did not report a simulated allocation"
+grep -Eq '^draforge_controller_leader [01]$' \
+  "$ARTIFACT_DIR/controller-metrics.txt" || fail "controller metrics did not report leader state"
+grep -Fq 'draforge_controller_sync_attempts_total{pipeline="pool"}' \
+  "$ARTIFACT_DIR/controller-metrics.txt" || fail "controller metrics did not report pool synchronization attempts"
+grep -Fq 'draforge_controller_sync_attempts_total{pipeline="allocation"}' \
+  "$ARTIFACT_DIR/controller-metrics.txt" || fail "controller metrics did not report allocation synchronization attempts"
 
 set +e
 curl -fsSN --max-time 8 "$SERVER_URL/api/stream" > "$ARTIFACT_DIR/sse.txt"

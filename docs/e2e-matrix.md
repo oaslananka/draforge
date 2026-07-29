@@ -21,6 +21,8 @@ The node images are digest-pinned. The same policy pins the NetworkPolicy provid
 
 ## What the install-level suite verifies
 
+The suite also runs two controller replicas and verifies one active Lease holder, leadership transfer after active-pod deletion, and post-failover reconciliation/allocation continuity.
+
 `.github/workflows/e2e-matrix.yml` creates a kind cluster with Dynamic Resource Allocation enabled and the default CNI disabled, installs the digest-verified Calico manifest from the compatibility policy, builds the local server, controller, and sim-driver images, loads them into kind, and runs `scripts/run-install-e2e.sh`. This ensures NetworkPolicy assertions execute on an enforcing data plane rather than merely checking that policy objects exist.
 
 The verifier:

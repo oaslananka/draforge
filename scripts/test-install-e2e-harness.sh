@@ -202,7 +202,9 @@ JSON
     ;;
   http://127.0.0.1:18082/metrics)
     cat <<'METRICS'
-draforge_controller_allocations_simulated_total 1
+draforge_controller_leader 0
+draforge_controller_sync_attempts_total{pipeline="pool"} 0
+draforge_controller_sync_attempts_total{pipeline="allocation"} 0
 METRICS
     ;;
   */metrics)
@@ -239,6 +241,7 @@ run_case() {
     DRAFORGE_INSTALL_E2E_ARTIFACT_DIR="$case_dir/artifacts" \
     DRAFORGE_INSTALL_E2E_WAIT_ATTEMPTS=1 \
     DRAFORGE_INSTALL_E2E_WAIT_INTERVAL=0 \
+    DRAFORGE_INSTALL_E2E_SKIP_CONTROLLER_HA=1 \
     "$@" bash scripts/run-install-e2e.sh
   ) > "$case_dir/stdout.log" 2> "$case_dir/stderr.log"
   local status=$?

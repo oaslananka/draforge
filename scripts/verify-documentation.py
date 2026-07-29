@@ -481,6 +481,22 @@ def validate_scorecard_contract(root: Path) -> list[str]:
     return errors
 
 
+def validate_best_practices_badge_contract(root: Path) -> list[str]:
+    errors: list[str] = []
+    readme = read_text(root, README_PATH, errors)
+    errors.extend(
+        require_fragments(
+            README_PATH,
+            readme,
+            (
+                "https://www.bestpractices.dev/projects/13404/badge",
+                "https://www.bestpractices.dev/projects/13404",
+            ),
+        )
+    )
+    return errors
+
+
 def validate_root(root: Path) -> list[str]:
     files = markdown_files(root)
     active_files = active_markdown_files(root)
@@ -495,6 +511,7 @@ def validate_root(root: Path) -> list[str]:
     errors.extend(validate_helm_service_contract(root))
     errors.extend(validate_security_accuracy(root))
     errors.extend(validate_scorecard_contract(root))
+    errors.extend(validate_best_practices_badge_contract(root))
     return errors
 
 
@@ -507,7 +524,7 @@ def write_fixture(relative: Path, content: str) -> None:
 def reset_fixture() -> None:
     shutil.rmtree(FIXTURE_ROOT, ignore_errors=True)
     files = {
-        README_PATH: f"[Install]({INSTALL_PATH})\nDRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind\nkubectl port-forward svc/draforge-server -n draforge-system 8080:8080\nkind delete cluster --name draforge-install-e2e\nhttps://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge\nhttps://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge\n",
+        README_PATH: f"[Install]({INSTALL_PATH})\nDRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind\nkubectl port-forward svc/draforge-server -n draforge-system 8080:8080\nkind delete cluster --name draforge-install-e2e\nhttps://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge\nhttps://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge\nhttps://www.bestpractices.dev/projects/13404/badge\nhttps://www.bestpractices.dev/projects/13404\n",
         CONTRIBUTING_PATH: "Kubernetes v1.35+ serves resource.k8s.io/v1.\nhelm upgrade --install draforge deploy/helm/draforge\n",
         SECURITY_PATH: f"| v0.2.x  | Yes       |\n| < v0.2  | No        |\n{MATRIX_WORKFLOW_PATH} runs weekly. {DOKS_WORKFLOW_PATH} is manual-only. Doppler is the secret source.\n",
         CHANGELOG_PATH: "# Changelog\n",

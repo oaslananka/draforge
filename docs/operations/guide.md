@@ -125,6 +125,32 @@ The current workers re-read authoritative API state on each coalesced pass;
 informer events are the trigger, not a scheduler-equivalent cached allocation
 model.
 
+### ResourceSlice ownership and deletion
+
+`SimulatedDevicePool` is namespaced while `ResourceSlice` is cluster-scoped, so
+Kubernetes does not permit a valid owner reference from a ResourceSlice to its
+pool. DRAForge therefore uses an explicit ownership contract instead:
+
+- the pool carries the `draforge.oaslananka/resourceslice-cleanup` finalizer;
+- every managed ResourceSlice carries `draforge.oaslananka/sdp-name`,
+  `draforge.oaslananka/sdp-namespace`, and `draforge.oaslananka/sdp-uid` labels;
+- the controller removes the finalizer only after every matching ResourceSlice
+  has been deleted successfully.
+
+Deletion failures retain the finalizer and return the Kubernetes API error to
+the bounded queue policy. A missing ResourceSlice is an idempotent success.
+UID matching prevents a deleting pool from removing a same-name slice owned by
+a different pool incarnation. During upgrade, an ordinary reconciliation pass
+adopts deterministic legacy slices by adding the namespace and UID labels.
+While finalizing a legacy pool, the controller may also remove its exact
+spec-derived deterministic slice names when the older UID labels are absent.
+
+The controller ClusterRole has `update` and `patch` access to the main
+SimulatedDevicePool resource only for finalizer management; status writes remain
+in the separate status-subresource rule. Rollback to a pre-finalizer controller
+should be performed only after managed pools have finished reconciliation or
+been deleted, because an older binary cannot remove the new cleanup finalizer.
+
 ## Observability
 
 DRAForge provides native support for monitoring and logging to assist operators in maintaining cluster health.

@@ -64,6 +64,7 @@ awk 'BEGIN { RS="---"; ORS="" } /kind: ClusterRole/ && /name: draforge-controlle
   "$manifest" > "$controller_role"
 [[ -s "$controller_role" ]] || fail "rendered controller ClusterRole was not found"
 assert_rule "$controller_role" "resourceclaims/binding" '"update"'
+assert_rule "$controller_role" "simulateddevicepools" '"get", "list", "watch", "update", "patch"'
 assert_absent "$manifest" 'resources: ["*"]'
 assert_absent "$manifest" 'verbs: ["*"]'
 assert_count "$manifest" 'resources: ["resourceclaims/binding"]' 1

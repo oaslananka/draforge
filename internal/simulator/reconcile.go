@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -59,6 +58,15 @@ func (r *Reconciler) reconcileSimulatedDevicePool(
 	sdp *unstructured.Unstructured,
 	activeSliceNames map[string]bool,
 ) (int64, error) {
+	if sdp.GetDeletionTimestamp() != nil {
+		return 0, r.finalizeDeletingSimulatedDevicePool(ctx, sdp)
+	}
+	finalizedSDP, err := r.ensureResourceSliceCleanupFinalizer(ctx, sdp)
+	if err != nil {
+		return 0, err
+	}
+	sdp = finalizedSDP
+
 	spec, found := decodeSimulatedDevicePoolSpec(sdp)
 	if !found {
 		return 0, nil
@@ -192,20 +200,18 @@ func (r *Reconciler) reconcilePoolResourceSlice(
 		deviceCount = 0
 		r.eventRecorder.Eventf(sdp, corev1.EventTypeWarning, "CapacityExhausted", "Capacity exhausted for pool %s", spec.poolName)
 	}
-	if err := r.ensureResourceSlice(
-		ctx,
-		sliceName,
-		sdp.GetNamespace(),
-		sdp.GetName(),
-		spec.driverName,
-		spec.poolName,
-		nodeName,
-		spec.health,
-		deviceCount,
-		spec.attributes,
-		spec.capacities,
-		sliceCount,
-	); err != nil {
+	if err := r.ensureResourceSlice(ctx, desiredResourceSlice{
+		name:        sliceName,
+		sdp:         sdp,
+		driverName:  spec.driverName,
+		poolName:    spec.poolName,
+		nodeName:    nodeName,
+		health:      spec.health,
+		deviceCount: deviceCount,
+		attributes:  spec.attributes,
+		capacities:  spec.capacities,
+		sliceCount:  sliceCount,
+	}); err != nil {
 		klog.Errorf("Failed to ensure ResourceSlice %s: %v", sliceName, err)
 		r.eventRecorder.Eventf(sdp, corev1.EventTypeWarning, "ResourceSliceEnsureFailed", "Failed to ensure ResourceSlice %s: %v", sliceName, err)
 		return "", false, fmt.Errorf("ensure ResourceSlice %s: %w", sliceName, err)
@@ -233,12 +239,4 @@ func (r *Reconciler) cleanupOrphanedResourceSlices(ctx context.Context, activeSl
 		}
 	}
 	return nil
-}
-
-func (r *Reconciler) deleteResourceSlice(ctx context.Context, name string) error {
-	err := r.clientset.ResourceV1().ResourceSlices().Delete(ctx, name, metav1.DeleteOptions{})
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-	return err
 }

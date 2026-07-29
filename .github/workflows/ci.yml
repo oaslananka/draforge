@@ -104,7 +104,7 @@ jobs:
         run: |
           cov=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total coverage: $cov%"
-          awk -v cov="$cov" 'BEGIN { if (cov + 0 < 50.0) { print "Error: Coverage is below 50.0%"; exit 1 } }'
+          awk -v cov="$cov" 'BEGIN { if (cov + 0 < 80.0) { print "Error: Coverage is below 80.0%"; exit 1 } }'
 
       - name: Upload Go coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0

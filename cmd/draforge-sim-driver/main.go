@@ -45,44 +45,54 @@ func main() {
 }
 
 func runMain() error {
-	var cdiDir string
-	var kubeconfigPath string
-	var modeValue string
-	var healthAddr string
-	var refreshInterval time.Duration
-	flag.StringVar(&cdiDir, "cdi-dir", "/var/lib/kubelet/device-plugins/cdi", "Directory to write CDI spec JSONs")
-	flag.StringVar(&kubeconfigPath, "kubeconfig", "", "Path to kubeconfig file")
-	flag.StringVar(&modeValue, "output-mode", string(outputModeNode), "CDI output mode: demo or node")
-	flag.StringVar(&healthAddr, "health-addr", ":8083", "Address for liveness and readiness endpoints")
-	flag.DurationVar(&refreshInterval, "refresh-interval", 3*time.Second, "Interval between CDI refresh attempts")
-	flag.Parse()
-
-	mode, err := parseOutputMode(modeValue)
+	options, err := parseSimDriverOptions(os.Args[1:], os.Getenv, os.Hostname)
+	if errors.Is(err, flag.ErrHelp) {
+		return nil
+	}
 	if err != nil {
 		return err
-	}
-	if refreshInterval <= 0 {
-		return errors.New("refresh interval must be positive")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return runSimDriver(ctx, simDriverOptions{
-		CDIDir:          cdiDir,
-		KubeconfigPath:  kubeconfigPath,
-		OutputMode:      mode,
-		HealthAddr:      healthAddr,
-		RefreshInterval: refreshInterval,
-		NodeName:        resolveNodeName(),
-	})
+	return runSimDriver(ctx, options)
 }
 
-func resolveNodeName() string {
-	if nodeName := os.Getenv("NODE_NAME"); nodeName != "" {
+func parseSimDriverOptions(
+	args []string,
+	getenv func(string) string,
+	hostname func() (string, error),
+) (simDriverOptions, error) {
+	fs := flag.NewFlagSet("draforge-sim-driver", flag.ContinueOnError)
+	var options simDriverOptions
+	var modeValue string
+	fs.StringVar(&options.CDIDir, "cdi-dir", "/var/lib/kubelet/device-plugins/cdi", "Directory to write CDI spec JSONs")
+	fs.StringVar(&options.KubeconfigPath, "kubeconfig", "", "Path to kubeconfig file")
+	fs.StringVar(&modeValue, "output-mode", string(outputModeNode), "CDI output mode: demo or node")
+	fs.StringVar(&options.HealthAddr, "health-addr", ":8083", "Address for liveness and readiness endpoints")
+	fs.DurationVar(&options.RefreshInterval, "refresh-interval", 3*time.Second, "Interval between CDI refresh attempts")
+	if err := fs.Parse(args); err != nil {
+		return simDriverOptions{}, err
+	}
+
+	mode, err := parseOutputMode(modeValue)
+	if err != nil {
+		return simDriverOptions{}, err
+	}
+	if options.RefreshInterval <= 0 {
+		return simDriverOptions{}, errors.New("refresh interval must be positive")
+	}
+	options.OutputMode = mode
+	options.NodeName = resolveNodeName(getenv, hostname)
+	return options, nil
+}
+
+func resolveNodeName(getenv func(string) string, hostname func() (string, error)) string {
+	if nodeName := getenv("NODE_NAME"); nodeName != "" {
 		return nodeName
 	}
-	if hostname, err := os.Hostname(); err == nil && hostname != "" {
-		return hostname
+	if resolved, err := hostname(); err == nil && resolved != "" {
+		return resolved
 	}
 	return "node-0"
 }

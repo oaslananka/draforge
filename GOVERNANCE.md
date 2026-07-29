@@ -32,19 +32,26 @@ All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md
 
 ## Maintainer and Access Continuity
 
-The current human maintainers and their public contact details are listed in
-[MAINTAINERS.md](MAINTAINERS.md). Repository administration, package publication,
-security response, and Doppler access are granted to named humans only through
-the relevant platform; automation identities do not count as substitute
-maintainers or reviewers.
+DRAForge intentionally operates with one human maintainer. A second maintainer is
+not required by the project's continuity model, and automation identities are not
+treated as human maintainers or independent reviewers.
 
-A maintainer who becomes unavailable should be replaced through a public
-nomination and consensus decision recorded in an issue or pull request. Before a
-new maintainer is granted access, the existing maintainer verifies the minimum
-required GitHub, release, security-advisory, and secret-management roles and
-records the non-secret access inventory in the private operations system.
+Continuity is handled through a private, encrypted succession package kept
+outside the public repository. The package records the non-secret recovery and
+transfer procedures for GitHub administration, releases and packages, private
+security advisories, project domains and documentation, and the Doppler project
+inventory. Secret values remain in Doppler or the relevant platform's protected
+recovery mechanism and are never copied into repository files or issue text.
 
-DRAForge currently has one human maintainer. This is an acknowledged continuity
-and bus-factor risk: the project will not claim multi-person access continuity or
-independent review until a second qualified human maintainer has accepted the
-role and the required platform access has been verified.
+The succession package also identifies where emergency recovery material is held,
+provides the release and security-response runbooks needed to continue operations,
+and includes the legal authorization required for a designated executor to
+transfer project stewardship if the maintainer dies or becomes incapacitated.
+The maintainer reviews this continuity material after material access or release
+process changes and at least annually.
+
+If the maintainer becomes unavailable, the designated executor uses that package
+to restore administrative access, preserve security response, and transfer
+stewardship to a successor. This continuity mechanism is separate from the
+project's bus factor: DRAForge may remain a single-maintainer project while still
+maintaining a documented succession path.

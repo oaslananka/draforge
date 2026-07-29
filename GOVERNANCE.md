@@ -29,3 +29,22 @@ via GitHub Issues and discussed before implementation.
 ## Code of Conduct
 
 All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Maintainer and Access Continuity
+
+The current human maintainers and their public contact details are listed in
+[MAINTAINERS.md](MAINTAINERS.md). Repository administration, package publication,
+security response, and Doppler access are granted to named humans only through
+the relevant platform; automation identities do not count as substitute
+maintainers or reviewers.
+
+A maintainer who becomes unavailable should be replaced through a public
+nomination and consensus decision recorded in an issue or pull request. Before a
+new maintainer is granted access, the existing maintainer verifies the minimum
+required GitHub, release, security-advisory, and secret-management roles and
+records the non-secret access inventory in the private operations system.
+
+DRAForge currently has one human maintainer. This is an acknowledged continuity
+and bus-factor risk: the project will not claim multi-person access continuity or
+independent review until a second qualified human maintainer has accepted the
+role and the required platform access has been verified.

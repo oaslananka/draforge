@@ -32,19 +32,26 @@ All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md
 
 ## Maintainer and Access Continuity
 
-The current human maintainers and their public contact details are listed in
-[MAINTAINERS.md](MAINTAINERS.md). Repository administration, package publication,
-security response, and Doppler access are granted to named humans only through
-the relevant platform; automation identities do not count as substitute
-maintainers or reviewers.
+DRAForge intentionally operates with one human maintainer. Appointing a second
+maintainer is not part of the project's continuity model, and automation
+identities do not count as human maintainers, independent reviewers, or
+continuity successors.
 
-A maintainer who becomes unavailable should be replaced through a public
-nomination and consensus decision recorded in an issue or pull request. Before a
-new maintainer is granted access, the existing maintainer verifies the minimum
-required GitHub, release, security-advisory, and secret-management roles and
-records the non-secret access inventory in the private operations system.
+The selected access-continuity path is a solo-maintainer succession mechanism. A
+designated executor, identified outside the public repository, must be able to
+use a private encrypted succession package if the maintainer dies or becomes
+incapacitated. That package must identify where protected recovery material is
+held, include the non-secret GitHub administration, release/package,
+security-response, documentation/domain, and Doppler recovery runbooks, and
+provide the legal authority needed to transfer project stewardship.
 
-DRAForge currently has one human maintainer. This is an acknowledged continuity
-and bus-factor risk: the project will not claim multi-person access continuity or
-independent review until a second qualified human maintainer has accepted the
-role and the required platform access has been verified.
+Secret values, tokens, recovery codes, and private infrastructure details remain
+in Doppler or the relevant platform recovery mechanism and are never copied into
+public repository files or issues.
+
+This continuity mechanism is considered verified only after a non-destructive
+exercise demonstrates that issues can be managed, a change can be accepted, and
+the documented release and security-response paths can be recovered within one
+week. Until that evidence is complete, OpenSSF `access_continuity` remains
+unmet. The separate Silver `bus_factor` SHOULD criterion is recorded as justified
+unmet for this intentionally single-maintainer project and does not block Silver.

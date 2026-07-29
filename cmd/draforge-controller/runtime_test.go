@@ -63,6 +63,53 @@ func TestControllerMetricsExposeLeaderState(t *testing.T) {
 	}
 }
 
+func TestControllerMetricsExposePipelineRuntimeMetrics(t *testing.T) {
+	reconciler := &simulator.Reconciler{
+		PoolMetrics: simulator.PipelineMetrics{
+			Attempts:            2,
+			DurationNanoseconds: int64(1500 * time.Millisecond),
+			InFlight:            1,
+			QueueDepth:          3,
+		},
+		AllocationMetrics: simulator.PipelineMetrics{
+			Attempts:            4,
+			DurationNanoseconds: int64(2500 * time.Millisecond),
+			InFlight:            0,
+			QueueDepth:          1,
+		},
+	}
+	runtimeServer := newRuntimeServer(":0", reconciler, nil)
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	response := httptest.NewRecorder()
+	runtimeServer.Handler.ServeHTTP(response, request)
+
+	body := response.Body.String()
+	for _, header := range []string{
+		"# TYPE draforge_controller_sync_attempts_total counter\n",
+		"# TYPE draforge_controller_sync_duration_seconds_total counter\n",
+		"# TYPE draforge_controller_sync_in_flight gauge\n",
+		"# TYPE draforge_controller_queue_depth gauge\n",
+	} {
+		if count := strings.Count(body, header); count != 1 {
+			t.Fatalf("metrics header %q count = %d, want 1:\n%s", header, count, body)
+		}
+	}
+
+	for _, expected := range []string{
+		`draforge_controller_sync_attempts_total{pipeline="pool"} 2`,
+		`draforge_controller_sync_attempts_total{pipeline="allocation"} 4`,
+		`draforge_controller_sync_duration_seconds_total{pipeline="pool"} 1.500000000`,
+		`draforge_controller_sync_duration_seconds_total{pipeline="allocation"} 2.500000000`,
+		`draforge_controller_sync_in_flight{pipeline="pool"} 1`,
+		`draforge_controller_queue_depth{pipeline="pool"} 3`,
+		`draforge_controller_queue_depth{pipeline="allocation"} 1`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("metrics body missing %q:\n%s", expected, body)
+		}
+	}
+}
+
 func TestControllerMetricsExposeQueueErrorPolicyCounters(t *testing.T) {
 	reconciler := &simulator.Reconciler{
 		ReconcileRetriesCount: 3,

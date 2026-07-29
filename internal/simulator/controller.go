@@ -5,6 +5,7 @@ package simulator
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/oaslananka/draforge/internal/draeval"
@@ -31,10 +32,19 @@ var (
 	}
 )
 
+// PipelineMetrics captures cumulative and current runtime state for one controller pipeline.
+type PipelineMetrics struct {
+	Attempts            int64
+	DurationNanoseconds int64
+	InFlight            int64
+	QueueDepth          int64
+}
+
 // Reconciler watches SimulatedDevicePools and creates/updates Kubernetes ResourceSlices.
 type Reconciler struct {
 	selectorEvaluator     *draeval.Evaluator
 	eventRecorder         record.EventRecorder
+	eventBroadcaster      record.EventBroadcaster
 	clientset             kubernetes.Interface
 	dynamicClient         dynamic.Interface
 	ReconcileErrorsCount  int64
@@ -42,12 +52,25 @@ type Reconciler struct {
 	TerminalErrorsCount   int64
 	AllocationsSimulated  int64
 	ActiveFaultsCount     int64
+	PoolMetrics           PipelineMetrics
+	AllocationMetrics     PipelineMetrics
 	leaderState           atomic.Bool
+	closeOnce             sync.Once
 }
 
 // NewReconciler creates a Reconciler instance.
 func NewReconciler(clientset kubernetes.Interface, dyn dynamic.Interface) *Reconciler {
-	eventBroadcaster := record.NewBroadcaster()
+	return newReconcilerWithBroadcaster(clientset, dyn, record.NewBroadcaster())
+}
+
+func newReconcilerWithBroadcaster(
+	clientset kubernetes.Interface,
+	dyn dynamic.Interface,
+	eventBroadcaster record.EventBroadcaster,
+) *Reconciler {
+	if eventBroadcaster == nil {
+		eventBroadcaster = record.NewBroadcaster()
+	}
 	eventBroadcaster.StartStructuredLogging(0)
 	var eventRecorder record.EventRecorder
 	if clientset != nil {
@@ -61,7 +84,20 @@ func NewReconciler(clientset kubernetes.Interface, dyn dynamic.Interface) *Recon
 		clientset:         clientset,
 		dynamicClient:     dyn,
 		eventRecorder:     eventRecorder,
+		eventBroadcaster:  eventBroadcaster,
 	}
+}
+
+// Close releases the event broadcaster exactly once.
+func (r *Reconciler) Close() {
+	if r == nil {
+		return
+	}
+	r.closeOnce.Do(func() {
+		if r.eventBroadcaster != nil {
+			r.eventBroadcaster.Shutdown()
+		}
+	})
 }
 
 // SetLeader records whether this process currently owns the active controller lifecycle.

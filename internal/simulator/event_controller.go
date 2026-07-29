@@ -16,9 +16,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
+type controllerPipeline string
+
 const (
 	poolSyncKey       = "pool-sync"
 	allocationSyncKey = "allocation-sync"
+
+	controllerPipelinePool       controllerPipeline = "pool"
+	controllerPipelineAllocation controllerPipeline = "allocation"
 )
 
 var (
@@ -77,27 +82,33 @@ func newEventController(reconciler *Reconciler) (*eventController, error) {
 	classInformer := typedFactory.Resource().V1().DeviceClasses().Informer()
 	poolInformer := dynamicFactory.ForResource(sdpGVR).Informer()
 
-	if err := addQueueEventHandler(poolInformer, poolQueue, poolSyncKey); err != nil {
+	poolEnqueue := func() {
+		controller.enqueue(controllerPipelinePool, poolQueue, poolSyncKey)
+	}
+	allocationEnqueue := func() {
+		controller.enqueue(controllerPipelineAllocation, allocationQueue, allocationSyncKey)
+	}
+	if err := addQueueEventHandler(poolInformer, poolEnqueue); err != nil {
 		controller.shutDownQueues()
 		return nil, fmt.Errorf("register SimulatedDevicePool event handler: %w", err)
 	}
-	if err := addQueueEventHandler(nodeInformer, poolQueue, poolSyncKey); err != nil {
+	if err := addQueueEventHandler(nodeInformer, poolEnqueue); err != nil {
 		controller.shutDownQueues()
 		return nil, fmt.Errorf("register Node event handler: %w", err)
 	}
-	if err := addQueueEventHandler(sliceInformer, poolQueue, poolSyncKey); err != nil {
+	if err := addQueueEventHandler(sliceInformer, poolEnqueue); err != nil {
 		controller.shutDownQueues()
 		return nil, fmt.Errorf("register ResourceSlice pool event handler: %w", err)
 	}
-	if err := addQueueEventHandler(claimInformer, allocationQueue, allocationSyncKey); err != nil {
+	if err := addQueueEventHandler(claimInformer, allocationEnqueue); err != nil {
 		controller.shutDownQueues()
 		return nil, fmt.Errorf("register ResourceClaim event handler: %w", err)
 	}
-	if err := addQueueEventHandler(sliceInformer, allocationQueue, allocationSyncKey); err != nil {
+	if err := addQueueEventHandler(sliceInformer, allocationEnqueue); err != nil {
 		controller.shutDownQueues()
 		return nil, fmt.Errorf("register ResourceSlice allocation event handler: %w", err)
 	}
-	if err := addQueueEventHandler(classInformer, allocationQueue, allocationSyncKey); err != nil {
+	if err := addQueueEventHandler(classInformer, allocationEnqueue); err != nil {
 		controller.shutDownQueues()
 		return nil, fmt.Errorf("register DeviceClass event handler: %w", err)
 	}
@@ -122,20 +133,16 @@ func newControllerQueue(name string) workqueue.TypedRateLimitingInterface[string
 	)
 }
 
-func addQueueEventHandler(
-	informer cache.SharedIndexInformer,
-	queue workqueue.TypedRateLimitingInterface[string],
-	key string,
-) error {
+func addQueueEventHandler(informer cache.SharedIndexInformer, enqueue func()) error {
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(any) {
-			queue.Add(key)
+			enqueue()
 		},
 		UpdateFunc: func(_, _ any) {
-			queue.Add(key)
+			enqueue()
 		},
 		DeleteFunc: func(any) {
-			queue.Add(key)
+			enqueue()
 		},
 	})
 	return err
@@ -153,18 +160,18 @@ func (controller *eventController) Run(ctx context.Context) error {
 	}
 
 	controller.syncedOnce.Do(func() { close(controller.synced) })
-	controller.poolQueue.Add(poolSyncKey)
-	controller.allocationQueue.Add(allocationSyncKey)
+	controller.enqueue(controllerPipelinePool, controller.poolQueue, poolSyncKey)
+	controller.enqueue(controllerPipelineAllocation, controller.allocationQueue, allocationSyncKey)
 
 	var workers sync.WaitGroup
 	workers.Add(2)
 	go func() {
 		defer workers.Done()
-		controller.runWorker(ctx, controller.poolQueue, controller.reconciler.Reconcile)
+		controller.runWorker(ctx, controllerPipelinePool, controller.poolQueue, controller.reconciler.Reconcile)
 	}()
 	go func() {
 		defer workers.Done()
-		controller.runWorker(ctx, controller.allocationQueue, controller.reconciler.SimulateAllocation)
+		controller.runWorker(ctx, controllerPipelineAllocation, controller.allocationQueue, controller.reconciler.SimulateAllocation)
 	}()
 
 	<-ctx.Done()
@@ -173,8 +180,18 @@ func (controller *eventController) Run(ctx context.Context) error {
 	return nil
 }
 
+func (controller *eventController) enqueue(
+	pipeline controllerPipeline,
+	queue workqueue.TypedRateLimitingInterface[string],
+	key string,
+) {
+	queue.Add(key)
+	atomic.StoreInt64(&controller.pipelineMetrics(pipeline).QueueDepth, int64(queue.Len()))
+}
+
 func (controller *eventController) runWorker(
 	ctx context.Context,
+	pipeline controllerPipeline,
 	queue workqueue.TypedRateLimitingInterface[string],
 	syncFn func(context.Context) error,
 ) {
@@ -183,17 +200,28 @@ func (controller *eventController) runWorker(
 		if shutdown {
 			return
 		}
-		controller.processQueueItem(ctx, queue, key, syncFn)
+		controller.processQueueItem(ctx, pipeline, queue, key, syncFn)
 	}
 }
 
 func (controller *eventController) processQueueItem(
 	ctx context.Context,
+	pipeline controllerPipeline,
 	queue workqueue.TypedRateLimitingInterface[string],
 	key string,
 	syncFn func(context.Context) error,
 ) {
-	defer queue.Done(key)
+	metrics := controller.pipelineMetrics(pipeline)
+	started := time.Now()
+	atomic.AddInt64(&metrics.Attempts, 1)
+	atomic.AddInt64(&metrics.InFlight, 1)
+	atomic.StoreInt64(&metrics.QueueDepth, int64(queue.Len()))
+	defer func() {
+		atomic.AddInt64(&metrics.DurationNanoseconds, time.Since(started).Nanoseconds())
+		atomic.AddInt64(&metrics.InFlight, -1)
+		queue.Done(key)
+		atomic.StoreInt64(&metrics.QueueDepth, int64(queue.Len()))
+	}()
 	if err := syncFn(ctx); err != nil {
 		if ctx.Err() != nil {
 			queue.Forget(key)
@@ -215,7 +243,16 @@ func (controller *eventController) processQueueItem(
 	queue.Forget(key)
 }
 
+func (controller *eventController) pipelineMetrics(pipeline controllerPipeline) *PipelineMetrics {
+	if pipeline == controllerPipelineAllocation {
+		return &controller.reconciler.AllocationMetrics
+	}
+	return &controller.reconciler.PoolMetrics
+}
+
 func (controller *eventController) shutDownQueues() {
 	controller.poolQueue.ShutDown()
 	controller.allocationQueue.ShutDown()
+	atomic.StoreInt64(&controller.reconciler.PoolMetrics.QueueDepth, 0)
+	atomic.StoreInt64(&controller.reconciler.AllocationMetrics.QueueDepth, 0)
 }

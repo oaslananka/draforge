@@ -167,6 +167,10 @@ Key controller lifecycle metrics include:
 - `draforge_controller_reconcile_errors_total`: synchronization attempts that returned an error.
 - `draforge_controller_reconcile_retries_total`: rate-limited retries scheduled by the queue policy.
 - `draforge_controller_terminal_errors_total`: errors forgotten immediately or after the retry limit.
+- `draforge_controller_sync_attempts_total{pipeline=...}`: pool or allocation synchronizations started.
+- `draforge_controller_sync_duration_seconds_total{pipeline=...}`: cumulative synchronization time for each pipeline.
+- `draforge_controller_sync_in_flight{pipeline=...}`: synchronization workers currently executing.
+- `draforge_controller_queue_depth{pipeline=...}`: ready items waiting in each workqueue; rate-limited delayed retries are not included until ready.
 
 
 #### Allow a restricted monitoring peer

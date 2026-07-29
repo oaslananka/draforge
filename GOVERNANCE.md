@@ -36,23 +36,14 @@ DRAForge intentionally operates as a single-human-maintainer project. Automation
 identities do not count as human maintainers, independent reviewers, or
 continuity successors.
 
-The selected access-continuity path is a solo-maintainer succession mechanism. A
-designated executor, identified outside the public repository, must be able to
-use a private encrypted succession package if the maintainer dies or becomes
-incapacitated. That package must identify where protected recovery material is
-held, include the non-secret GitHub administration, release/package,
-security-response, documentation/domain, and Doppler recovery runbooks, and
-provide the legal authority needed to transfer project stewardship.
-
-Secret values, tokens, recovery codes, and private infrastructure details remain
-in Doppler or the relevant platform recovery mechanism and are never copied into
+The project does not maintain a designated executor, succession package, legal
+transfer arrangement, or recovery exercise solely to satisfy an external badge
+criterion. Secrets and operational credentials continue to be managed through
+Doppler and the relevant platform recovery mechanisms; they are never stored in
 public repository files or issues.
 
-This continuity mechanism is considered verified only after a non-destructive
-exercise demonstrates that issues can be managed, a change can be accepted, and
-the documented release and security-response paths can be recovered within one week.
-Until that evidence is complete, OpenSSF `access_continuity` remains unmet. The
-separate Silver `bus_factor` SHOULD criterion is recorded as justified unmet for
-this intentionally single-maintainer project and does not block Silver. The
-non-secret completion evidence is tracked in
-[issue #144](https://github.com/oaslananka/draforge/issues/144).
+OpenSSF Best Practices `access_continuity` and `bus_factor` are intentionally
+recorded as Unmet for this project. DRAForge does not currently claim or pursue
+the Silver or Gold badge levels. This decision does not change the project's
+runtime security, release verification, vulnerability reporting, or maintenance
+practices.

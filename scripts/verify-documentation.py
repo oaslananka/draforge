@@ -450,18 +450,21 @@ def validate_governance_continuity(root: Path) -> list[str]:
             governance,
             (
                 "single-human-maintainer project",
-                "solo-maintainer succession mechanism",
-                "designated executor",
-                "private encrypted succession package",
-                "legal authority",
-                "within one week",
-                "`bus_factor` SHOULD",
-                "does not block Silver",
-                "issues/144",
+                "does not maintain a designated executor",
+                "OpenSSF Best Practices `access_continuity` and `bus_factor` are intentionally",
+                "recorded as Unmet",
+                "does not currently claim or pursue",
+                "Silver or Gold badge levels",
+                "Doppler",
             ),
         )
     )
     forbidden = (
+        "solo-maintainer succession mechanism",
+        "private encrypted succession package",
+        "legal authority needed to transfer",
+        "non-destructive exercise",
+        "issues/144",
         "second qualified human",
         "second maintainer",
         "two valid ways",
@@ -470,7 +473,7 @@ def validate_governance_continuity(root: Path) -> list[str]:
     for phrase in forbidden:
         if phrase.lower() in governance.lower():
             errors.append(
-                f"{GOVERNANCE_PATH}: second-maintainer continuity path is not allowed: {phrase}"
+                f"{GOVERNANCE_PATH}: discontinued continuity commitment is not allowed: {phrase}"
             )
     return errors
 
@@ -563,7 +566,7 @@ def reset_fixture() -> None:
         README_PATH: f"[Install]({INSTALL_PATH})\nDRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind\nkubectl port-forward svc/draforge-server -n draforge-system 8080:8080\nkind delete cluster --name draforge-install-e2e\nhttps://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge\nhttps://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge\nhttps://www.bestpractices.dev/projects/13404/badge\nhttps://www.bestpractices.dev/projects/13404\n",
         CONTRIBUTING_PATH: "Kubernetes v1.35+ serves resource.k8s.io/v1.\nhelm upgrade --install draforge deploy/helm/draforge\n",
         SECURITY_PATH: f"| v0.2.x  | Yes       |\n| < v0.2  | No        |\n{MATRIX_WORKFLOW_PATH} runs weekly. {DOKS_WORKFLOW_PATH} is manual-only. Doppler is the secret source.\n",
-        GOVERNANCE_PATH: "single-human-maintainer project\nsolo-maintainer succession mechanism\ndesignated executor\nprivate encrypted succession package\nlegal authority\nwithin one week\n`bus_factor` SHOULD\ndoes not block Silver\nhttps://github.com/oaslananka/draforge/issues/144\n",
+        GOVERNANCE_PATH: "single-human-maintainer project\ndoes not maintain a designated executor\nOpenSSF Best Practices `access_continuity` and `bus_factor` are intentionally\nrecorded as Unmet\ndoes not currently claim or pursue\nSilver or Gold badge levels\nDoppler\n",
         CHANGELOG_PATH: "# Changelog\n",
         TASKFILE_PATH: "tasks:\n  e2e:install-kind:\n    cmds: []\n",
         CHART_PATH: 'version: 0.2.0\nappVersion: "0.2.0"\n',
@@ -650,11 +653,11 @@ def self_test() -> list[str]:
         governance = FIXTURE_ROOT / GOVERNANCE_PATH
         governance.write_text(
             governance.read_text(encoding="utf-8")
-            + "The project recognizes two valid ways. A second qualified human may be appointed.\n",
+            + "A private encrypted succession package is maintained for badge eligibility.\n",
             encoding="utf-8",
         )
-        if not has_error("second-maintainer continuity path is not allowed"):
-            return ["second-maintainer continuity fixture unexpectedly passed"]
+        if not has_error("discontinued continuity commitment is not allowed"):
+            return ["succession-commitment fixture unexpectedly passed"]
         return []
     finally:
         shutil.rmtree(FIXTURE_ROOT, ignore_errors=True)

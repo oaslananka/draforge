@@ -200,8 +200,16 @@ func (controller *eventController) processQueueItem(
 			return
 		}
 		atomic.AddInt64(&controller.reconciler.ReconcileErrorsCount, 1)
-		klog.Errorf("Controller queue item %q failed: %v", key, err)
-		queue.AddRateLimited(key)
+		requeues := queue.NumRequeues(key)
+		if classifyControllerError(err, requeues) == controllerErrorRetry {
+			atomic.AddInt64(&controller.reconciler.ReconcileRetriesCount, 1)
+			klog.Errorf("Controller queue item %q failed; retry %d/%d scheduled: %v", key, requeues+1, maxControllerQueueRetries, err)
+			queue.AddRateLimited(key)
+			return
+		}
+		atomic.AddInt64(&controller.reconciler.TerminalErrorsCount, 1)
+		queue.Forget(key)
+		klog.Errorf("Controller queue item %q reached a terminal failure after %d retries: %v", key, requeues, err)
 		return
 	}
 	queue.Forget(key)

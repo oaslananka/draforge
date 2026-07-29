@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced simulator product-name allocation heuristics and the explain engine's flat CEL map with the exact-version Kubernetes DRA CEL evaluator, typed selector inputs, ordered `FirstAvailable` handling, same-node `ExactCount` selection, complete latest-generation `All` allocation, bounded scalar `MatchAttribute` backtracking, exclusive and shareable capacity accounting with `ShareID`/`ConsumedCapacity`, and fail-closed warning events for unsupported requests.
 - Added Kubernetes Lease leader election for the simulation controller, with single-active lifecycle cancellation, a leader-state metric, least-privilege namespaced Lease RBAC, and Helm safeguards for multi-replica deployments.
 - Replaced fixed controller polling loops with shared informers and typed rate-limited workqueues for pool and allocation synchronization.
+- Added bounded controller queue retries, Kubernetes API terminal-error classification, and Prometheus counters for retries and terminal failures.
 - Synchronized security support, Kubernetes compatibility, local installation, E2E, release, and CLI documentation with repository-enforced contracts and added stable relative-link/command validation.
 - Future release tags must be annotated SemVer or release-candidate tag objects on `main`; protected `v*` tags are immutable after creation.
 - Helm installs no longer create Gateway or Ingress listeners by default. External dashboard exposure now requires an explicit local-demo or secure-public values profile.

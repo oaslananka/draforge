@@ -44,6 +44,9 @@ describe('InteractiveGraph accessibility', () => {
     const claimNode = await screen.findByRole('button', {
       name: 'ResourceClaim shared in namespace team-b, status Allocated',
     });
+    expect(claimNode.tagName.toLowerCase()).toBe('a');
+    expect(claimNode.getAttribute('href')).toBe('#');
+
     claimNode.focus();
     fireEvent.keyDown(claimNode, { key: 'Enter' });
 

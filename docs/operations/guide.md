@@ -115,9 +115,15 @@ capped at 30 seconds. Retry history is cleared after success; otherwise the item
 becomes terminal after eight retries. Authorization, validation, bad-request,
 not-found, unsupported-method, and request-size errors are terminal immediately.
 `draforge_controller_reconcile_retries_total` counts scheduled retries and
-`draforge_controller_terminal_errors_total` counts terminal decisions. The
-current workers re-read authoritative API state on each coalesced pass; informer
-events are the trigger, not a scheduler-equivalent cached allocation model.
+`draforge_controller_terminal_errors_total` counts terminal decisions.
+ResourceSlice get/create/update/delete operations, SimulatedDevicePool status
+writes, orphan-cleanup list/deletes, and ResourceClaim allocation-status writes
+return their Kubernetes API errors to this queue policy instead of logging and
+continuing. A delete that reports `NotFound` remains an idempotent success. The
+allocation counter advances only after the ResourceClaim status write succeeds.
+The current workers re-read authoritative API state on each coalesced pass;
+informer events are the trigger, not a scheduler-equivalent cached allocation
+model.
 
 ## Observability
 

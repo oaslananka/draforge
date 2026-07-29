@@ -5,9 +5,19 @@ on:
     tags:
       - 'v*.*.*'
       - 'v*.*.*-rc.*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing annotated release tag to recover
+        required: true
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+concurrency:
+  group: release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   validate-tag:
@@ -16,9 +26,21 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Validate recovery invocation source
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$WORKFLOW_REF" == "refs/heads/main" ]] || {
+            echo "ERROR: release recovery must be dispatched from main" >&2
+            exit 1
+          }
+
       - name: Checkout release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          ref: ${{ inputs.release_tag || github.ref }}
           fetch-depth: 0
 
       - name: Fetch protected release refs
@@ -28,7 +50,7 @@ jobs:
 
       - name: Verify annotated tag and main ancestry
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
           RELEASE_MAIN_REF: origin/main
         run: bash scripts/verify-release-tag.sh
 
@@ -38,6 +60,7 @@ jobs:
     uses: ./.github/workflows/e2e-matrix.yml
     with:
       profile: full
+      ref: ${{ inputs.release_tag || github.ref }}
     permissions:
       contents: read
 
@@ -54,6 +77,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          ref: ${{ inputs.release_tag || github.ref }}
           fetch-depth: 0
 
       - name: Setup Go
@@ -102,18 +126,20 @@ jobs:
 
       - name: Verify chart metadata and image references
         env:
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.release_tag || github.ref_name }}
         run: scripts/verify-chart-images.sh "${RELEASE_VERSION#v}"
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.16.0
+          install-only: true
 
       - name: Verify GoReleaser Docker v2 contract
         run: python3 scripts/verify-goreleaser-docker-v2.py --self-test --check
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
-        with:
-          distribution: goreleaser
-          version: v2.16.0
-          args: release --clean
+        run: goreleaser release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COSIGN_EXPERIMENTAL: "true"
@@ -127,6 +153,6 @@ jobs:
 
       - name: Verify public multi-arch image manifests anonymously
         env:
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.release_tag || github.ref_name }}
           VERIFY_REMOTE_IMAGES: "1"
         run: scripts/verify-chart-images.sh "${RELEASE_VERSION#v}"

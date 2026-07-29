@@ -64,6 +64,7 @@ func main() {
 
 	// 2. Initialize Reconciler
 	reconciler := simulator.NewReconciler(clientset, dynamicClient)
+	defer reconciler.Close()
 
 	readiness := health.NewKubernetesReadinessProbe(clientset, readinessTimeout, readinessGracePeriod)
 	runtimeServer := newRuntimeServer(metricsAddr, reconciler, readiness)

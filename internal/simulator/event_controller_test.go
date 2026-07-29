@@ -215,7 +215,7 @@ func TestEventControllerRateLimitsAndForgetsFailedItems(t *testing.T) {
 	if shutdown {
 		t.Fatal("queue shut down before first item")
 	}
-	controller.processQueueItem(context.Background(), queue, key, func(context.Context) error {
+	controller.processQueueItem(context.Background(), controllerPipelinePool, queue, key, func(context.Context) error {
 		return errors.New("temporary API failure")
 	})
 	if retries := queue.NumRequeues(key); retries != 1 {
@@ -243,7 +243,7 @@ func TestEventControllerRateLimitsAndForgetsFailedItems(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("rate-limited item was not requeued")
 	}
-	controller.processQueueItem(context.Background(), queue, key, func(context.Context) error {
+	controller.processQueueItem(context.Background(), controllerPipelinePool, queue, key, func(context.Context) error {
 		return nil
 	})
 	if retries := queue.NumRequeues(key); retries != 0 {
@@ -262,7 +262,7 @@ func TestEventControllerForgetsTerminalItems(t *testing.T) {
 	if shutdown {
 		t.Fatal("queue shut down before terminal item")
 	}
-	controller.processQueueItem(context.Background(), queue, key, func(context.Context) error {
+	controller.processQueueItem(context.Background(), controllerPipelinePool, queue, key, func(context.Context) error {
 		return apierrors.NewForbidden(controllerTestResource, "claim-a", errors.New("forbidden"))
 	})
 	if retries := queue.NumRequeues(key); retries != 0 {
@@ -286,7 +286,7 @@ func TestEventControllerStopsRetryingAtLimit(t *testing.T) {
 		if shutdown {
 			t.Fatalf("queue shut down at attempt %d", attempt)
 		}
-		controller.processQueueItem(context.Background(), queue, key, func(context.Context) error {
+		controller.processQueueItem(context.Background(), controllerPipelineAllocation, queue, key, func(context.Context) error {
 			return errors.New("unknown transport error")
 		})
 	}

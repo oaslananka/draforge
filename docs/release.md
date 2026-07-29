@@ -88,7 +88,8 @@ Update `CHANGELOG.md`, chart `version` and `appVersion`, web package metadata, c
 Choose the new version after the release commit is on `main`:
 
 ```bash
-release_tag=v0.3.0
+NEXT_VERSION="${NEXT_VERSION:?set NEXT_VERSION to the intended SemVer, for example 0.3.1}"
+release_tag="v${NEXT_VERSION}"
 release_version=${release_tag#v}
 ```
 

@@ -223,7 +223,8 @@ task release:local
 For maintainers cutting a tagged release:
 
 ```bash
-release_tag=v0.3.0
+NEXT_VERSION="${NEXT_VERSION:?set NEXT_VERSION to the intended SemVer, for example 0.3.1}"
+release_tag="v${NEXT_VERSION}"
 git tag -a "$release_tag" -m "DRAForge $release_tag"
 RELEASE_TAG="$release_tag" RELEASE_MAIN_REF=main bash scripts/verify-release-tag.sh
 git push origin "$release_tag"

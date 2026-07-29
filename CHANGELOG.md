@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-29
+
 ### Added
 - Added a blocking Playwright accessibility and compatibility gate for Chromium, Firefox, WebKit, reduced-motion behavior, keyboard graph interaction, and a representative mobile viewport.
 - Operator-grade documentation in `docs/operations/` (install, guide, troubleshooting).
@@ -110,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Controller and sim-driver binaries**: These are headless and do not expose a `version` readout at runtime — version is embedded at build time via ldflags and visible only in the binary metadata (`go version -m`).
 - **GoReleaser signing disabled by default**: Cosign signing is configured in `.goreleaser.yaml` but requires manual cosign setup and key management. Snapshot builds skip signing.
 
-[Unreleased]: https://github.com/oaslananka/draforge/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/oaslananka/draforge/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/oaslananka/draforge/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/oaslananka/draforge/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/oaslananka/draforge/releases/tag/v0.1.0

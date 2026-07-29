@@ -1,8 +1,8 @@
 # Kubernetes DRA Compatibility
 
-> **Last updated:** 2026-07-28
+> **Last updated:** 2026-07-29
 > **Kubernetes reference:** v1.35 through v1.36
-> **DRAForge version:** 0.2.0
+> **DRAForge version:** 0.3.0
 
 ---
 
@@ -53,7 +53,7 @@ The table below captures the compatibility model DRAForge should use as of
 baseline; alpha/beta extensions are discovered or explained only when the code
 explicitly supports them.
 
-| Capability | Upstream status as of v1.36 docs | DRAForge 0.2.0 support |
+| Capability | Upstream status as of v1.36 docs | DRAForge 0.3.0 support |
 | --- | --- | --- |
 | Core Dynamic Resource Allocation | Stable since v1.35 | Supported for discovery and visualization |
 | DeviceClass | Stable core DRA | Discovered; class selectors use the exact-version Kubernetes DRA CEL evaluator |

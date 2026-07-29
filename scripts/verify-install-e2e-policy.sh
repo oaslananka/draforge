@@ -25,6 +25,17 @@ assert_contains() {
   grep -Fq -- "$text" "$file" || fail "$file is missing: $text"
 }
 
+assert_before() {
+  local file=$1
+  local first=$2
+  local second=$3
+  local first_line second_line
+  first_line=$(grep -nF -- "$first" "$file" | head -1 | cut -d: -f1)
+  second_line=$(grep -nF -- "$second" "$file" | head -1 | cut -d: -f1)
+  [[ -n "$first_line" && -n "$second_line" && $first_line -lt $second_line ]] || \
+    fail "$file must place '$first' before '$second'"
+}
+
 command -v jq >/dev/null 2>&1 || fail "jq is required"
 
 jq -e '
@@ -51,10 +62,19 @@ assert_contains "$WORKFLOW_FILE" "scripts/collect-install-e2e-artifacts.sh"
 assert_contains "$WORKFLOW_FILE" "if: failure()"
 assert_contains "$WORKFLOW_FILE" "retention-days: 7"
 assert_contains "$WORKFLOW_FILE" "timeout-minutes: 55"
+assert_contains "$WORKFLOW_FILE" "ref: \${{ inputs.ref || github.ref }}"
+assert_contains "$WORKFLOW_FILE" "target_sha: \${{ steps.target.outputs.sha }}"
+assert_contains "$WORKFLOW_FILE" "DRAFORGE_INSTALL_E2E_COMMIT: \${{ needs.matrix.outputs.target_sha }}"
 
+assert_contains "$RELEASE_FILE" "workflow_dispatch:"
+assert_contains "$RELEASE_FILE" "release_tag:"
 assert_contains "$RELEASE_FILE" "uses: ./.github/workflows/e2e-matrix.yml"
 assert_contains "$RELEASE_FILE" "profile: full"
+assert_contains "$RELEASE_FILE" "ref: \${{ inputs.release_tag || github.ref }}"
 assert_contains "$RELEASE_FILE" "needs: install-e2e"
+assert_contains "$RELEASE_FILE" "install-only: true"
+assert_contains "$RELEASE_FILE" "run: goreleaser release --clean"
+assert_before "$RELEASE_FILE" "install-only: true" "python3 scripts/verify-goreleaser-docker-v2.py --self-test --check"
 
 assert_contains "$VALUES_FILE" "pullPolicy: Never"
 assert_contains "$VALUES_FILE" "networkPolicies:"

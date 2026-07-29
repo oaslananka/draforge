@@ -121,6 +121,8 @@ git push origin "$release_tag"
 
 The tag push starts `.github/workflows/release.yml`. The workflow first validates the tag object and `main` ancestry, then runs the full install E2E matrix. GoReleaser publishes only after those gates pass. Do not run a second manual production GoReleaser publish for the same version.
 
+If the workflow stops before GoReleaser publishes any release asset or image, merge the workflow-only correction to `main` and dispatch `Release` from `main` with the existing immutable `release_tag`. The recovery path checks out that tag, repeats provenance and the full install matrix, and publishes the same reviewed commit. Never move or recreate the tag. If any public asset or image was already published, use a new patch version instead of recovery.
+
 The publish job:
 
 1. builds all three binaries for their configured operating systems and architectures;

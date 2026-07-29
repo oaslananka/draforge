@@ -74,7 +74,30 @@ func (r *Reconciler) IsLeader() bool {
 	return r.leaderState.Load()
 }
 
-func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, sdpName, driverName, poolName, nodeName, health string, devCount int, attrs map[string]string, caps map[string]resource.Quantity, sliceCount int) error {
+type desiredResourceSlice struct {
+	name        string
+	sdp         *unstructured.Unstructured
+	driverName  string
+	poolName    string
+	nodeName    string
+	health      string
+	deviceCount int
+	attributes  map[string]string
+	capacities  map[string]resource.Quantity
+	sliceCount  int
+}
+
+func (r *Reconciler) ensureResourceSlice(ctx context.Context, desired desiredResourceSlice) error {
+	name := desired.name
+	sdp := desired.sdp
+	driverName := desired.driverName
+	poolName := desired.poolName
+	nodeName := desired.nodeName
+	health := desired.health
+	devCount := desired.deviceCount
+	attrs := desired.attributes
+	caps := desired.capacities
+	sliceCount := desired.sliceCount
 	slicesClient := r.clientset.ResourceV1().ResourceSlices()
 
 	// Build device list
@@ -110,12 +133,10 @@ func (r *Reconciler) ensureResourceSlice(ctx context.Context, name, namespace, s
 	slice := &resourcev1.ResourceSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
-			Labels: map[string]string{
-				"draforge.oaslananka/managed-by": "simulator",
-				"draforge.oaslananka/sdp-name":   sdpName,
-				"draforge.oaslananka/health":     health,
-				"project":                        "draforge",
-			},
+			Labels: mergeStringMaps(resourceSliceOwnershipLabels(sdp), map[string]string{
+				"draforge.oaslananka/health": health,
+				"project":                    "draforge",
+			}),
 		},
 		Spec: resourcev1.ResourceSliceSpec{
 			Driver:   driverName,

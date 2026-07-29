@@ -60,7 +60,7 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["draforge.oaslananka"]
     resources: ["simulateddevicepools"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: ["draforge.oaslananka"]
     resources: ["simulateddevicepools/status"]
     verbs: ["get", "update", "patch"]

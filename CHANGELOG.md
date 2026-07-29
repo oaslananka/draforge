@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced fixed controller polling loops with shared informers and typed rate-limited workqueues for pool and allocation synchronization.
 - Added bounded controller queue retries, Kubernetes API terminal-error classification, and Prometheus counters for retries and terminal failures.
 - Propagated ResourceSlice, SimulatedDevicePool status, orphan-cleanup, and ResourceClaim status API failures into the controller queue policy while keeping missing deletes idempotent.
+- Added explicit SimulatedDevicePool finalizers and UID-qualified ResourceSlice ownership labels for deterministic cross-scope cleanup.
 - Synchronized security support, Kubernetes compatibility, local installation, E2E, release, and CLI documentation with repository-enforced contracts and added stable relative-link/command validation.
 - Future release tags must be annotated SemVer or release-candidate tag objects on `main`; protected `v*` tags are immutable after creation.
 - Helm installs no longer create Gateway or Ingress listeners by default. External dashboard exposure now requires an explicit local-demo or secure-public values profile.

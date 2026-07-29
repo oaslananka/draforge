@@ -169,10 +169,14 @@ jobs:
       contents: read
       packages: read
     steps:
-      - name: Checkout release tag
+      - name: Checkout verification tooling
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Checkout immutable release source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ inputs.release_tag || github.ref }}
+          path: release-source
           fetch-depth: 0
 
       - name: Setup Helm
@@ -187,4 +191,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+          RELEASE_SOURCE_DIR: ${{ github.workspace }}/release-source
         run: scripts/verify-published-release.sh "$RELEASE_TAG"

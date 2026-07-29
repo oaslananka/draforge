@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root_dir=$(cd "$script_dir/.." && pwd)
+release_source=${RELEASE_SOURCE_DIR:-$root_dir}
 release_tag=${1:-}
 repository=${GITHUB_REPOSITORY:-oaslananka/draforge}
 max_attempts=${RELEASE_VERIFY_ATTEMPTS:-12}
@@ -23,8 +26,13 @@ done
   fail "release tag must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.NUMBER"
 [[ "$max_attempts" =~ ^[1-9][0-9]*$ ]] || fail "RELEASE_VERIFY_ATTEMPTS must be a positive integer"
 [[ "$retry_seconds" =~ ^[0-9]+$ ]] || fail "RELEASE_VERIFY_RETRY_SECONDS must be a non-negative integer"
+[[ -f "$release_source/deploy/helm/draforge/Chart.yaml" ]] || fail "immutable release source is unavailable"
 
 release_version=${release_tag#v}
+source_version=$(awk '$1 == "appVersion:" {gsub(/"/, "", $2); print $2; exit}' \
+  "$release_source/deploy/helm/draforge/Chart.yaml")
+[[ "$source_version" == "$release_version" ]] || \
+  fail "release source version $source_version does not match tag version $release_version"
 tag_pattern=${release_tag//./\\.}
 identity_pattern="^https://github\\.com/oaslananka/draforge/\\.github/workflows/release\\.yml@refs/(heads/main|tags/${tag_pattern})$"
 
@@ -68,7 +76,8 @@ cosign verify-blob \
 
 verified_images=0
 for attempt in $(seq 1 "$max_attempts"); do
-  if VERIFY_REMOTE_IMAGES=1 scripts/verify-chart-images.sh "$release_version"; then
+  if CHART_DIR="$release_source/deploy/helm/draforge" VERIFY_REMOTE_IMAGES=1 \
+      "$script_dir/verify-chart-images.sh" "$release_version"; then
     verified_images=1
     break
   fi

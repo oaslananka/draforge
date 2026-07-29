@@ -32,26 +32,26 @@ All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md
 
 ## Maintainer and Access Continuity
 
-DRAForge intentionally operates with one human maintainer. A second maintainer is
-not required by the project's continuity model, and automation identities are not
-treated as human maintainers or independent reviewers.
+DRAForge currently has one human maintainer. Automation identities do not count
+as human maintainers, independent reviewers, or continuity successors.
 
-Continuity is handled through a private, encrypted succession package kept
-outside the public repository. The package records the non-secret recovery and
-transfer procedures for GitHub administration, releases and packages, private
-security advisories, project domains and documentation, and the Doppler project
-inventory. Secret values remain in Doppler or the relevant platform's protected
-recovery mechanism and are never copied into repository files or issue text.
+The project recognizes two valid ways to satisfy access continuity after the
+loss or incapacity of the maintainer:
 
-The succession package also identifies where emergency recovery material is held,
-provides the release and security-response runbooks needed to continue operations,
-and includes the legal authorization required for a designated executor to
-transfer project stewardship if the maintainer dies or becomes incapacitated.
-The maintainer reviews this continuity material after material access or release
-process changes and at least annually.
+1. A second qualified human has verified least-privilege access to repository
+   administration, releases and packages, private security advisories, and the
+   Doppler-managed recovery path; or
+2. A designated executor holds a private encrypted succession package outside
+   the public repository. That package must identify the protected recovery
+   material, include the non-secret release and security-response runbooks, and
+   provide the legal authority needed to transfer project stewardship.
 
-If the maintainer becomes unavailable, the designated executor uses that package
-to restore administrative access, preserve security response, and transfer
-stewardship to a successor. This continuity mechanism is separate from the
-project's bus factor: DRAForge may remain a single-maintainer project while still
-maintaining a documented succession path.
+Secret values, tokens, recovery codes, and private infrastructure details remain
+in Doppler or the relevant platform recovery mechanism and are never copied into
+public repository files or issues.
+
+Neither continuity path is considered verified until a non-destructive exercise
+shows that issues can be managed, a change can be accepted, and a release can be
+recovered within the required timeframe. DRAForge therefore keeps OpenSSF
+`access_continuity` and `bus_factor` marked as unmet until the evidence tracked in
+[issue #144](https://github.com/oaslananka/draforge/issues/144) is complete.

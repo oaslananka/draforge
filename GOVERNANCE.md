@@ -32,19 +32,26 @@ All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md
 
 ## Maintainer and Access Continuity
 
-The current human maintainers and their public contact details are listed in
-[MAINTAINERS.md](MAINTAINERS.md). Repository administration, package publication,
-security response, and Doppler access are granted to named humans only through
-the relevant platform; automation identities do not count as substitute
-maintainers or reviewers.
+DRAForge currently has one human maintainer. Automation identities do not count
+as human maintainers, independent reviewers, or continuity successors.
 
-A maintainer who becomes unavailable should be replaced through a public
-nomination and consensus decision recorded in an issue or pull request. Before a
-new maintainer is granted access, the existing maintainer verifies the minimum
-required GitHub, release, security-advisory, and secret-management roles and
-records the non-secret access inventory in the private operations system.
+The project recognizes two valid ways to satisfy access continuity after the
+loss or incapacity of the maintainer:
 
-DRAForge currently has one human maintainer. This is an acknowledged continuity
-and bus-factor risk: the project will not claim multi-person access continuity or
-independent review until a second qualified human maintainer has accepted the
-role and the required platform access has been verified.
+1. A second qualified human has verified least-privilege access to repository
+   administration, releases and packages, private security advisories, and the
+   Doppler-managed recovery path; or
+2. A designated executor holds a private encrypted succession package outside
+   the public repository. That package must identify the protected recovery
+   material, include the non-secret release and security-response runbooks, and
+   provide the legal authority needed to transfer project stewardship.
+
+Secret values, tokens, recovery codes, and private infrastructure details remain
+in Doppler or the relevant platform recovery mechanism and are never copied into
+public repository files or issues.
+
+Neither continuity path is considered verified until a non-destructive exercise
+shows that issues can be managed, a change can be accepted, and a release can be
+recovered within the required timeframe. DRAForge therefore keeps OpenSSF
+`access_continuity` and `bus_factor` marked as unmet until the evidence tracked in
+[issue #144](https://github.com/oaslananka/draforge/issues/144) is complete.

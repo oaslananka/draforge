@@ -14,16 +14,31 @@ trap cleanup EXIT
 cat > "$TEST_ROOT/docker" <<'DOCKER'
 #!/usr/bin/env bash
 set -euo pipefail
-command_group="${1:-} ${2:-} ${3:-}"
-image="${4:-}"
-[[ "$command_group" == "buildx imagetools inspect" ]] || exit 2
-cat <<OUT
-Name: $image
-Manifests:
-  Platform: linux/amd64
-OUT
+command_group="${1:-} ${2:-}"
+image="${3:-}"
+[[ "$command_group" == "manifest inspect" ]] || exit 2
 if [[ "${FAKE_MANIFEST_MODE:-complete}" == "complete" ]]; then
-    echo "  Platform: linux/arm64"
+    cat <<OUT
+{
+  "schemaVersion": 2,
+  "manifests": [
+    {"platform": {"architecture": "amd64", "os": "linux"}},
+    {"platform": {"architecture": "arm64", "os": "linux"}},
+    {"platform": {"architecture": "unknown", "os": "unknown"}}
+  ],
+  "name": "$image"
+}
+OUT
+else
+    cat <<OUT
+{
+  "schemaVersion": 2,
+  "manifests": [
+    {"platform": {"architecture": "amd64", "os": "linux"}}
+  ],
+  "name": "$image"
+}
+OUT
 fi
 DOCKER
 chmod +x "$TEST_ROOT/docker"

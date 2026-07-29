@@ -121,7 +121,9 @@ git push origin "$release_tag"
 
 The tag push starts `.github/workflows/release.yml`. The workflow first validates the tag object and `main` ancestry, then runs the full install E2E matrix. GoReleaser publishes only after those gates pass. Do not run a second manual production GoReleaser publish for the same version.
 
-If the workflow stops before GoReleaser publishes any release asset or image, merge the workflow-only correction to `main` and dispatch `Release` from `main` with the existing immutable `release_tag`. The recovery path checks out that tag, repeats provenance and the full install matrix, and publishes the same reviewed commit. Never move or recreate the tag. If any public asset or image was already published, use a new patch version instead of recovery.
+If the workflow stops before GoReleaser publishes any release asset or image, merge the workflow-only correction to `main` and dispatch `Release` from `main` with the existing immutable `release_tag` and `operation: recover`. The recovery path checks out that tag, repeats provenance and the full install matrix, and publishes the same reviewed commit. Never move or recreate the tag.
+
+If publication succeeds but the post-publish registry or signature check fails, dispatch `Release` from `main` with the same `release_tag` and `operation: verify`. Verification downloads and checks the existing release assets, retries anonymous manifest inspection, and validates checksum and container signatures without rebuilding or publishing anything. If published payloads are actually invalid, use a new patch version instead of replacing them.
 
 The publish job:
 
@@ -199,7 +201,7 @@ Do not reset or force-push shared `main`.
 
 ### After pushing the tag
 
-A pushed `v*` tag is immutable even when the workflow fails before publication. Do not delete, move, or recreate it. Diagnose the failed run, fix the repository through a pull request, increment the version, and create a new annotated tag.
+A pushed `v*` tag is immutable even when the workflow fails. Do not delete, move, or recreate it. If no public asset or image exists, fix the workflow through a pull request and use `operation: recover` for the same tag. If publication completed and only post-publish verification failed, use `operation: verify`. Create a new patch or release-candidate tag only when published payloads are invalid or must be superseded.
 
 ### After publication
 

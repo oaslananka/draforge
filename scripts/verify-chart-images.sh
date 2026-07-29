@@ -94,12 +94,15 @@ secret_count=$(grep -c 'name: registry-draforge' "$showcase_manifest" || true)
 [[ "$secret_count" -eq 3 ]] || fail "showcase override must render registry-draforge for all three workloads"
 
 if [[ "$VERIFY_REMOTE_IMAGES" == "1" ]]; then
+    command -v jq >/dev/null 2>&1 || fail "jq is required for remote image verification"
     for component in server controller sim-driver; do
         image="ghcr.io/oaslananka/draforge-$component:$EXPECTED_VERSION"
-        inspect_file="$work_dir/${component}.inspect"
-        "$DOCKER_BIN" buildx imagetools inspect "$image" > "$inspect_file"
-        grep -Fq 'Platform: linux/amd64' "$inspect_file" || fail "$image is missing linux/amd64"
-        grep -Fq 'Platform: linux/arm64' "$inspect_file" || fail "$image is missing linux/arm64"
+        inspect_file="$work_dir/${component}.inspect.json"
+        "$DOCKER_BIN" manifest inspect "$image" > "$inspect_file"
+        jq -e 'any(.manifests[]?; .platform.os == "linux" and .platform.architecture == "amd64")' \
+            "$inspect_file" >/dev/null || fail "$image is missing linux/amd64"
+        jq -e 'any(.manifests[]?; .platform.os == "linux" and .platform.architecture == "arm64")' \
+            "$inspect_file" >/dev/null || fail "$image is missing linux/arm64"
     done
 fi
 

@@ -68,6 +68,9 @@ assert_contains "$WORKFLOW_FILE" "DRAFORGE_INSTALL_E2E_COMMIT: \${{ needs.matrix
 
 assert_contains "$RELEASE_FILE" "workflow_dispatch:"
 assert_contains "$RELEASE_FILE" "release_tag:"
+assert_contains "$RELEASE_FILE" "operation:"
+assert_contains "$RELEASE_FILE" "Verify published release"
+assert_contains "$RELEASE_FILE" "scripts/verify-published-release.sh"
 assert_contains "$RELEASE_FILE" "uses: ./.github/workflows/e2e-matrix.yml"
 assert_contains "$RELEASE_FILE" "profile: full"
 assert_contains "$RELEASE_FILE" "ref: \${{ inputs.release_tag || github.ref }}"
@@ -121,7 +124,8 @@ for script in \
   test-install-e2e-harness.sh \
   test-controller-ha-e2e-harness.sh \
   verify-controller-ha-e2e.sh \
-  verify-install-e2e-policy.sh; do
+  verify-install-e2e-policy.sh \
+  verify-published-release.sh; do
   [[ -x "$ROOT_DIR/scripts/$script" ]] || fail "scripts/$script must be executable"
 done
 

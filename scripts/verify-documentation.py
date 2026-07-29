@@ -15,6 +15,7 @@ FIXTURE_ROOT = ROOT / "artifacts" / "documentation-contract-fixture"
 README_PATH = Path("README.md")
 CONTRIBUTING_PATH = Path("CONTRIBUTING.md")
 SECURITY_PATH = Path("SECURITY.md")
+GOVERNANCE_PATH = Path("GOVERNANCE.md")
 CHANGELOG_PATH = Path("CHANGELOG.md")
 TASKFILE_PATH = Path("Taskfile.yml")
 COMPATIBILITY_PATH = Path("docs/compatibility/kubernetes-dra.md")
@@ -440,6 +441,40 @@ def validate_security_accuracy(root: Path) -> list[str]:
     return errors
 
 
+def validate_governance_continuity(root: Path) -> list[str]:
+    errors: list[str] = []
+    governance = read_text(root, GOVERNANCE_PATH, errors)
+    errors.extend(
+        require_fragments(
+            GOVERNANCE_PATH,
+            governance,
+            (
+                "single-human-maintainer project",
+                "solo-maintainer succession mechanism",
+                "designated executor",
+                "private encrypted succession package",
+                "legal authority",
+                "within one week",
+                "`bus_factor` SHOULD",
+                "does not block Silver",
+                "issues/144",
+            ),
+        )
+    )
+    forbidden = (
+        "second qualified human",
+        "second maintainer",
+        "two valid ways",
+        "Path A",
+    )
+    for phrase in forbidden:
+        if phrase.lower() in governance.lower():
+            errors.append(
+                f"{GOVERNANCE_PATH}: second-maintainer continuity path is not allowed: {phrase}"
+            )
+    return errors
+
+
 def validate_scorecard_contract(root: Path) -> list[str]:
     errors: list[str] = []
     readme = read_text(root, README_PATH, errors)
@@ -510,6 +545,7 @@ def validate_root(root: Path) -> list[str]:
     errors.extend(validate_install_contract(root))
     errors.extend(validate_helm_service_contract(root))
     errors.extend(validate_security_accuracy(root))
+    errors.extend(validate_governance_continuity(root))
     errors.extend(validate_scorecard_contract(root))
     errors.extend(validate_best_practices_badge_contract(root))
     return errors
@@ -527,6 +563,7 @@ def reset_fixture() -> None:
         README_PATH: f"[Install]({INSTALL_PATH})\nDRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind\nkubectl port-forward svc/draforge-server -n draforge-system 8080:8080\nkind delete cluster --name draforge-install-e2e\nhttps://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge\nhttps://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge\nhttps://www.bestpractices.dev/projects/13404/badge\nhttps://www.bestpractices.dev/projects/13404\n",
         CONTRIBUTING_PATH: "Kubernetes v1.35+ serves resource.k8s.io/v1.\nhelm upgrade --install draforge deploy/helm/draforge\n",
         SECURITY_PATH: f"| v0.2.x  | Yes       |\n| < v0.2  | No        |\n{MATRIX_WORKFLOW_PATH} runs weekly. {DOKS_WORKFLOW_PATH} is manual-only. Doppler is the secret source.\n",
+        GOVERNANCE_PATH: "single-human-maintainer project\nsolo-maintainer succession mechanism\ndesignated executor\nprivate encrypted succession package\nlegal authority\nwithin one week\n`bus_factor` SHOULD\ndoes not block Silver\nhttps://github.com/oaslananka/draforge/issues/144\n",
         CHANGELOG_PATH: "# Changelog\n",
         TASKFILE_PATH: "tasks:\n  e2e:install-kind:\n    cmds: []\n",
         CHART_PATH: 'version: 0.2.0\nappVersion: "0.2.0"\n',
@@ -608,6 +645,16 @@ def self_test() -> list[str]:
         )
         if not has_error("legacy OpenSSF Scorecard domain"):
             return ["legacy Scorecard domain fixture unexpectedly passed"]
+
+        reset_fixture()
+        governance = FIXTURE_ROOT / GOVERNANCE_PATH
+        governance.write_text(
+            governance.read_text(encoding="utf-8")
+            + "The project recognizes two valid ways. A second qualified human may be appointed.\n",
+            encoding="utf-8",
+        )
+        if not has_error("second-maintainer continuity path is not allowed"):
+            return ["second-maintainer continuity fixture unexpectedly passed"]
         return []
     finally:
         shutil.rmtree(FIXTURE_ROOT, ignore_errors=True)

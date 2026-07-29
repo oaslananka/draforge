@@ -32,26 +32,27 @@ All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md
 
 ## Maintainer and Access Continuity
 
-DRAForge currently has one human maintainer. Automation identities do not count
-as human maintainers, independent reviewers, or continuity successors.
+DRAForge intentionally operates as a single-human-maintainer project. Automation
+identities do not count as human maintainers, independent reviewers, or
+continuity successors.
 
-The project recognizes two valid ways to satisfy access continuity after the
-loss or incapacity of the maintainer:
-
-1. A second qualified human has verified least-privilege access to repository
-   administration, releases and packages, private security advisories, and the
-   Doppler-managed recovery path; or
-2. A designated executor holds a private encrypted succession package outside
-   the public repository. That package must identify the protected recovery
-   material, include the non-secret release and security-response runbooks, and
-   provide the legal authority needed to transfer project stewardship.
+The selected access-continuity path is a solo-maintainer succession mechanism. A
+designated executor, identified outside the public repository, must be able to
+use a private encrypted succession package if the maintainer dies or becomes
+incapacitated. That package must identify where protected recovery material is
+held, include the non-secret GitHub administration, release/package,
+security-response, documentation/domain, and Doppler recovery runbooks, and
+provide the legal authority needed to transfer project stewardship.
 
 Secret values, tokens, recovery codes, and private infrastructure details remain
 in Doppler or the relevant platform recovery mechanism and are never copied into
 public repository files or issues.
 
-Neither continuity path is considered verified until a non-destructive exercise
-shows that issues can be managed, a change can be accepted, and a release can be
-recovered within the required timeframe. DRAForge therefore keeps OpenSSF
-`access_continuity` and `bus_factor` marked as unmet until the evidence tracked in
-[issue #144](https://github.com/oaslananka/draforge/issues/144) is complete.
+This continuity mechanism is considered verified only after a non-destructive
+exercise demonstrates that issues can be managed, a change can be accepted, and
+the documented release and security-response paths can be recovered within one week.
+Until that evidence is complete, OpenSSF `access_continuity` remains unmet. The
+separate Silver `bus_factor` SHOULD criterion is recorded as justified unmet for
+this intentionally single-maintainer project and does not block Silver. The
+non-secret completion evidence is tracked in
+[issue #144](https://github.com/oaslananka/draforge/issues/144).

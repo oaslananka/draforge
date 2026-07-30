@@ -32,6 +32,7 @@ pnpm --dir web build
 helm lint deploy/helm/draforge
 helm template draforge deploy/helm/draforge >/tmp/draforge-helm-template.yaml
 scripts/verify-github-action-pins.sh
+scripts/verify-ci-privilege-boundaries.sh
 scripts/verify-workload-security.sh
 scripts/verify-frontend-dependency-policy.sh
 scripts/test-prepare-remote-e2e-kubeconfig.sh

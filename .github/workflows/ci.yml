@@ -15,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -105,6 +104,27 @@ jobs:
           cov=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total coverage: $cov%"
           awk -v cov="$cov" 'BEGIN { if (cov + 0 < 80.0) { print "Error: Coverage is below 80.0%"; exit 1 } }'
+
+      - name: Stage Go coverage for isolated upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: go-coverage
+          path: coverage.out
+          if-no-files-found: error
+          retention-days: 1
+
+  coverage-upload:
+    name: Upload Go Coverage
+    needs: go
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download verified coverage artifact
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: go-coverage
 
       - name: Upload Go coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
@@ -228,6 +248,9 @@ jobs:
       - name: Verify GitHub Action SHA pins
         run: scripts/verify-github-action-pins.sh
 
+      - name: Verify CI privilege boundaries
+        run: scripts/verify-ci-privilege-boundaries.sh
+
       - name: Verify workload security contracts
         run: scripts/verify-workload-security.sh
 
@@ -340,7 +363,7 @@ jobs:
 
   ci-pass:
     name: CI Pass
-    needs: [go, web, browser, helm, goreleaser, infra]
+    needs: [go, coverage-upload, web, browser, helm, goreleaser, infra]
     runs-on: ubuntu-latest
     steps:
       - name: Complete

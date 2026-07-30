@@ -27,6 +27,10 @@ Include in your report:
 - Steps to reproduce (if applicable)
 - Any proposed mitigation (optional)
 
+## Public Vulnerability Disclosure
+
+After coordinated remediation, confirmed vulnerabilities are published through [GitHub Security Advisories](https://github.com/oaslananka/draforge/security/advisories). A CVE is requested when the issue warrants one. The advisory and the corresponding release notes or `CHANGELOG.md` identify affected and fixed versions, explain how consumers can determine exposure, and provide mitigation or remediation instructions. Vulnerability details are not moved to a public issue before coordinated disclosure.
+
 ## Public Dashboard Security Model
 
 The DRAForge web dashboard is intentionally **read-only**, but read-only data can still be sensitive:
@@ -76,9 +80,10 @@ The following controls reflect the current public repository configuration:
 
 | Feature | Repository state | Security purpose |
 |---------|------------------|------------------|
-| `main` ruleset | Active | Blocks force-push/deletion and requires the repository's merge checks |
+| Actions default workflow permissions | Read; pull-request approval disabled | Gives jobs the lowest default token permissions unless a workflow explicitly declares a narrower or necessary grant |
+| `main` ruleset | Active | Blocks force-push/deletion, requires pull requests, and has no bypass actor |
 | Release-tag ruleset | Active for `refs/tags/v*` | Blocks update and deletion of published release tags |
-| Required status checks | Active through rulesets | Blocks merge when required CI or security checks fail |
+| Required status checks | `dependency-review` and `CI Pass` | Blocks merge until dependency review and the aggregate automated test/build gate succeed |
 | Secret scanning and push protection | Enabled | Detects and blocks supported secret patterns before publication |
 | Code and dependency scanning | Active workflows and PR checks | Runs CodeQL/security analysis, Dependency Review, Semgrep, Socket, and language advisory gates |
 | Automated security fixes | Not enabled | Optional automation; CI advisory gates and reviewed updates remain authoritative |

@@ -2,6 +2,21 @@
 
 This document explains the core Dynamic Resource Allocation (DRA) object relationship model and details how DRAForge monitors, simulates, and diagnoses accelerator scheduling.
 
+## System actors and actions
+
+| Actor | Trust boundary | Actions |
+|---|---|---|
+| Dashboard user | Browser to DRAForge server | Reads summaries, pools, devices, claims, graph data, diagnostics, metrics, health, readiness, and SSE updates. The dashboard exposes no mutation endpoint. |
+| Cluster operator / CLI user | Local process using the operator's kubeconfig | Reads Kubernetes DRA resources; may apply or reset simulator scenarios and inject or clear faults when explicitly requested. |
+| DRAForge server | Pod service account to Kubernetes API | Performs read-only discovery and watch operations, builds graph and diagnostic models, and serves the HTTP/SSE interface. |
+| DRAForge controller | Pod service account to Kubernetes API | Reconciles `SimulatedDevicePool`, publishes simulated `ResourceSlice` objects, and allocates eligible simulated claims under leader election. |
+| DRAForge node plugin | Node-scoped Pod to Kubernetes API and optional CDI directory | Reads node allocation state and writes an atomic CDI document only when host-integrated mode is explicitly enabled. |
+| Kubernetes API server | External authoritative control plane | Authenticates and authorizes Kubernetes requests, stores DRA and simulator resources, and emits watch events consumed by DRAForge. |
+| Identity-aware proxy / TLS gateway | Optional external access boundary | Authenticates users and terminates TLS before forwarding permitted read-only dashboard traffic; it is operator-managed and not deployed by default. |
+| GitHub Actions release automation | Repository workflow identity using scoped `GITHUB_TOKEN` and OIDC | Tests reviewed source, builds artifacts and images, generates checksums and SBOMs, signs release outputs, publishes immutable versioned assets, and verifies the public result. |
+
+The detailed external software interfaces are maintained in [Public API and CLI Surface](api.md). Security claims, threats, controls, evidence, and residual risks are maintained in [SECURITY.md](../SECURITY.md).
+
 ## Provider-neutral deployment boundary
 
 DRAForge is designed around Kubernetes APIs, standard RBAC, Helm, and OCI images. The server, controller, simulator, CLI, and dashboard do not depend on a specific managed Kubernetes provider. A compatible cluster may be hosted by a cloud provider, operated on-premises, self-managed, or created locally for testing. Provider-specific infrastructure and registry integrations are optional showcase adapters and are not part of the core platform contract. See [ADR-0013](adr/0013-provider-neutral-platform.md).

@@ -70,6 +70,19 @@ Automatic peer installation is disabled; required peers must be declared explici
 | Syft | latest | SBOM generation (release only) |
 | kind | policy-pinned | Install-level Kubernetes E2E; see `tests/install-e2e/kubernetes-versions.json` |
 
+## Dependency Management
+
+DRAForge uses standard ecosystem tooling and reviewable manifests for every dependency class:
+
+- **Go dependencies** are selected explicitly in `go.mod`, integrity-pinned in `go.sum`, obtained with the Go module toolchain, and changed with `go get <module>@<version>` followed by `go mod tidy`. `govulncheck`, `go vet`, tests, and the module-alignment contract validate changes.
+- **Web dependencies** are selected in `web/package.json`, fully resolved in `web/pnpm-lock.yaml`, and obtained with `pnpm install --frozen-lockfile`. The repository enforces a package-maturity window, explicit peer dependencies, audited lifecycle scripts, and high-severity advisory checks.
+- **GitHub Actions** are selected from maintained upstream projects and pinned to a full commit SHA. The pin verifier rejects mutable tag-only references.
+- **Tracking and release evidence** come from the committed manifests and lockfiles, reviewed dependency-update pull requests, CI advisory gates, and CycloneDX SBOMs attached to releases. `renovate.json` defines grouped update policy when the Renovate GitHub App is available; automation never bypasses review or CI.
+
+## Contributor Authorization
+
+Every contribution is submitted through GitHub. Under the [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service), a contributor is responsible for having the right to post the submitted content and, when contributing to a licensed repository, agrees that the contribution is licensed under the repository's license. DRAForge relies on this platform-level assertion for every commit and pull request rather than requiring a separate CLA or DCO bot. Do not submit third-party code, generated content, or copied material unless you are authorized to do so and its license is compatible with Apache-2.0.
+
 ## Common Commands
 
 ```bash

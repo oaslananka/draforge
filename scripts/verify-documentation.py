@@ -16,6 +16,7 @@ README_PATH = Path("README.md")
 CONTRIBUTING_PATH = Path("CONTRIBUTING.md")
 SECURITY_PATH = Path("SECURITY.md")
 GOVERNANCE_PATH = Path("GOVERNANCE.md")
+ARCHITECTURE_PATH = Path("docs/architecture.md")
 CHANGELOG_PATH = Path("CHANGELOG.md")
 TASKFILE_PATH = Path("Taskfile.yml")
 COMPATIBILITY_PATH = Path("docs/compatibility/kubernetes-dra.md")
@@ -441,6 +442,60 @@ def validate_security_accuracy(root: Path) -> list[str]:
     return errors
 
 
+
+def validate_osps_baseline_documentation(root: Path) -> list[str]:
+    errors: list[str] = []
+    contributing = read_text(root, CONTRIBUTING_PATH, errors)
+    architecture = read_text(root, ARCHITECTURE_PATH, errors)
+    security = read_text(root, SECURITY_PATH, errors)
+    errors.extend(
+        require_fragments(
+            CONTRIBUTING_PATH,
+            contributing,
+            (
+                "## Dependency Management",
+                "go.mod",
+                "web/package.json",
+                "web/pnpm-lock.yaml",
+                "full commit SHA",
+                "## Contributor Authorization",
+                "GitHub Terms of Service",
+                "platform-level assertion for every commit and pull request",
+            ),
+        )
+    )
+    errors.extend(
+        require_fragments(
+            ARCHITECTURE_PATH,
+            architecture,
+            (
+                "## System actors and actions",
+                "| Actor | Trust boundary | Actions |",
+                "Dashboard user",
+                "Cluster operator / CLI user",
+                "DRAForge server",
+                "DRAForge controller",
+                "DRAForge node plugin",
+                "GitHub Actions release automation",
+            ),
+        )
+    )
+    errors.extend(
+        require_fragments(
+            SECURITY_PATH,
+            security,
+            (
+                "## Public Vulnerability Disclosure",
+                "GitHub Security Advisories",
+                "affected and fixed versions",
+                "mitigation or remediation instructions",
+                "Actions default workflow permissions",
+                "`dependency-review` and `CI Pass`",
+            ),
+        )
+    )
+    return errors
+
 def validate_governance_continuity(root: Path) -> list[str]:
     errors: list[str] = []
     governance = read_text(root, GOVERNANCE_PATH, errors)
@@ -548,6 +603,7 @@ def validate_root(root: Path) -> list[str]:
     errors.extend(validate_install_contract(root))
     errors.extend(validate_helm_service_contract(root))
     errors.extend(validate_security_accuracy(root))
+    errors.extend(validate_osps_baseline_documentation(root))
     errors.extend(validate_governance_continuity(root))
     errors.extend(validate_scorecard_contract(root))
     errors.extend(validate_best_practices_badge_contract(root))
@@ -564,9 +620,10 @@ def reset_fixture() -> None:
     shutil.rmtree(FIXTURE_ROOT, ignore_errors=True)
     files = {
         README_PATH: f"[Install]({INSTALL_PATH})\nDRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind\nkubectl port-forward svc/draforge-server -n draforge-system 8080:8080\nkind delete cluster --name draforge-install-e2e\nhttps://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge\nhttps://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge\nhttps://www.bestpractices.dev/projects/13404/badge\nhttps://www.bestpractices.dev/projects/13404\n",
-        CONTRIBUTING_PATH: "Kubernetes v1.35+ serves resource.k8s.io/v1.\nhelm upgrade --install draforge deploy/helm/draforge\n",
-        SECURITY_PATH: f"| v0.2.x  | Yes       |\n| < v0.2  | No        |\n{MATRIX_WORKFLOW_PATH} runs weekly. {DOKS_WORKFLOW_PATH} is manual-only. Doppler is the secret source.\n",
+        CONTRIBUTING_PATH: "Kubernetes v1.35+ serves resource.k8s.io/v1.\nhelm upgrade --install draforge deploy/helm/draforge\n## Dependency Management\ngo.mod\nweb/package.json\nweb/pnpm-lock.yaml\nfull commit SHA\n## Contributor Authorization\nGitHub Terms of Service\nplatform-level assertion for every commit and pull request\n",
+        SECURITY_PATH: f"| v0.2.x  | Yes       |\n| < v0.2  | No        |\n{MATRIX_WORKFLOW_PATH} runs weekly. {DOKS_WORKFLOW_PATH} is manual-only. Doppler is the secret source.\n## Public Vulnerability Disclosure\nGitHub Security Advisories\naffected and fixed versions\nmitigation or remediation instructions\nActions default workflow permissions\n`dependency-review` and `CI Pass`\n",
         GOVERNANCE_PATH: "single-human-maintainer project\ndoes not maintain a designated executor\nOpenSSF Best Practices `access_continuity` and `bus_factor` are intentionally\nrecorded as Unmet\ndoes not currently claim or pursue\nSilver or Gold badge levels\nDoppler\n",
+        ARCHITECTURE_PATH: "## System actors and actions\n| Actor | Trust boundary | Actions |\nDashboard user\nCluster operator / CLI user\nDRAForge server\nDRAForge controller\nDRAForge node plugin\nGitHub Actions release automation\n",
         CHANGELOG_PATH: "# Changelog\n",
         TASKFILE_PATH: "tasks:\n  e2e:install-kind:\n    cmds: []\n",
         CHART_PATH: 'version: 0.2.0\nappVersion: "0.2.0"\n',

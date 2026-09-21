@@ -32,7 +32,7 @@
     "linkedom": "0.18.13",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@11.5.2"
 }

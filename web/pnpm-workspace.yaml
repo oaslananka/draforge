@@ -32,7 +32,7 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/visitor-keys@8.71.0'
   - 'obug@2.1.4'
   # Security upgrades from PR #167 clearing 7 dependency alerts and high audit.
-  # Owner: @oaslananka. Remove after 2026-10-12T11:25:41Z; tracked in #325.
+  # Owner: @oaslananka. Remove after 2026-10-12T11:25:41Z.
   - 'baseline-browser-mapping@2.11.27'
   - 'browserslist@4.29.3'
   - 'caniuse-lite@1.0.30001814'

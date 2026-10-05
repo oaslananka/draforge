@@ -15,7 +15,7 @@ COPY web/ ./
 RUN pnpm build
 
 # Stage 2: Build Go API Server
-FROM golang:1.26.5 AS backend-builder
+FROM golang:1.26.6 AS backend-builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download

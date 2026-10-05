@@ -27,7 +27,7 @@ Add `~/go/bin` (or `$(go env GOPATH)/bin`) to `PATH` for Task, golangci-lint, Go
 task build              # Build all three binaries
 task vet                # go vet ./...
 task test:unit          # go test ./... (fast, no race)
-go test -race ./pkg/... # One package with race detector
+go test -race ./pkg/... # All packages under pkg/ with race detector
 
 # Web (if web/ changed)
 cd web
@@ -76,6 +76,38 @@ These run in CI; run locally when touching related areas.
 | `task security:verify-workloads` | `scripts/verify-workload-security.sh` | Workload token + ephemeral-storage limits |
 | `task security:verify-frontend-dependencies` | `scripts/verify-frontend-dependency-policy.sh` | Peer, local adapter, Docker install policy |
 | `task docs:verify` | `python3 scripts/verify-documentation.py --self-test` | Links, commands, paths, versions, workflow claims |
+
+### CI-only verification commands without Task aliases
+
+Run these when reproducing the full protected CI contract locally:
+
+```bash
+python3 scripts/verify-release-metadata.py --self-test --root .
+scripts/verify-ci-privilege-boundaries.sh
+scripts/test-remote-build.sh
+
+shellcheck \
+  scripts/prepare-remote-e2e-kubeconfig.sh \
+  scripts/remote-e2e.sh \
+  scripts/run-remote-e2e-tests.sh \
+  scripts/test-prepare-remote-e2e-kubeconfig.sh \
+  scripts/test-remote-e2e-harness.sh \
+  scripts/e2e-matrix.sh \
+  scripts/install-e2e-cni.sh \
+  scripts/build-install-e2e-images.sh \
+  scripts/run-install-e2e.sh \
+  scripts/collect-install-e2e-artifacts.sh \
+  scripts/kind-install-e2e.sh \
+  scripts/kind-install-e2e-matrix.sh \
+  scripts/test-install-e2e-cni.sh \
+  scripts/test-install-e2e-harness.sh \
+  scripts/verify-install-e2e-policy.sh \
+  scripts/verify-release-tag.sh \
+  scripts/test-verify-release-tag.sh \
+  scripts/verify-kubernetes-module-alignment.sh
+```
+
+For the broad workstation gate, run `bash scripts/local-quality-gate.sh`; it covers the repository-owned release/documentation contracts, Go checks, frontend checks, Helm contracts, Terraform validation, and the GoReleaser snapshot.
 
 ## Helm Commands (via Task)
 

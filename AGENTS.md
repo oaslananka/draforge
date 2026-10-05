@@ -6,14 +6,14 @@ This file documents the exact commands ephemeral workers must use to build, lint
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Go | 1.26.5 (per `go.mod`) | `go install golang.org/dl/go1.26.5@latest && go1.26.5 download` |
+| Go | 1.26.6 (per `go.mod`) | `go install golang.org/dl/go1.26.6@latest && go1.26.6 download` |
 | Task | latest | `go install github.com/go-task/task/v3/cmd/task@latest` |
 | pnpm | 11.5.2 (per `web/package.json`) | `corepack enable && corepack prepare pnpm@11.5.2 --activate` |
 | Node | 22 (per CI) | `nvm install 22` or system package |
 | Docker | current stable | Required for `goreleaser`, `kind` E2E |
-| kind | policy-pinned | `go install sigs.k8s.io/kind@latest` (version per `tests/install-e2e/kubernetes-versions.json`) |
+| kind | v0.32.0 (policy-pinned) | `go install sigs.k8s.io/kind@v0.32.0` (pin source: `tests/install-e2e/kubernetes-versions.json`) |
 | golangci-lint | v2.12.2 (per CI) | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2` |
-| GoReleaser | v2.x | `go install github.com/goreleaser/goreleaser/v2@latest` |
+| GoReleaser | v2.16.0 (per CI) | `go install github.com/goreleaser/goreleaser/v2@v2.16.0` |
 | Syft | latest | `go install github.com/anchore/syft/v2/cmd/syft@latest` |
 | Helm | v3.17.3 (per CI) | `go install helm.sh/helm/v3/cmd/helm@v3.17.3` |
 | shellcheck | latest | System package (`apt-get install shellcheck`) |
@@ -94,7 +94,7 @@ These run in CI; run locally when touching related areas.
 |------|-------------|
 | `task e2e:install-contract` | Orchestration contract tests (no cluster) |
 | `task e2e:install-kind` | Full stack on PR baseline kind cluster (requires Docker, kind, kubectl, Helm) |
-| `task e2e:install-kind-full` | All compatibility targets (billable, skip locally) |
+| `task e2e:install-kind-full` | Run every policy-pinned local kind compatibility target sequentially |
 
 ## Infrastructure Commands (via Task)
 

@@ -46,6 +46,42 @@ Before changing behavior, read the relevant implementation/tests plus:
 
 The checked-in scripts and tests are executable policy. If documentation and enforcement drift, fix them together rather than bypassing either side.
 
+
+## Verified toolchain and common commands
+
+Use repository pins instead of floating `latest` installs when a version is governed by the repository:
+
+- Go `1.26.6` from `go.mod`;
+- Node.js `22` and pnpm `11.5.2` in CI;
+- kind `v0.32.0` from `tests/install-e2e/kubernetes-versions.json`;
+- golangci-lint `v2.12.2`;
+- Helm `v3.17.3`;
+- Terraform `1.7.0`;
+- GoReleaser `v2.16.0`.
+
+Common local checks:
+
+```text
+task build
+task lint
+task vet
+task vuln
+task test:unit
+task test:race
+
+task web:install
+task web:audit
+task web:test
+task web:lint
+task web:build
+
+task docs:verify
+task e2e:install-contract
+task e2e:install-kind
+```
+
+`task e2e:install-kind-full` runs every policy-pinned local kind compatibility target sequentially; it is expensive but not a cloud/billable workflow. For the broad workstation gate, run `bash scripts/local-quality-gate.sh`.
+
 ## Product truth
 
 - DRAForge observes and simulates Kubernetes DRA behavior; it does not prove real hardware availability or vendor-driver correctness.
@@ -70,7 +106,7 @@ The checked-in scripts and tests are executable policy. If documentation and enf
 - Production public dashboard access requires operator-managed TLS and authentication/identity-aware proxying.
 - Preserve hostPath, service-account-token, seccomp, read-only-rootfs, privilege-escalation, capability, and resource-limit controls documented in `SECURITY.md`.
 - Do not weaken path traversal/symlink protections in Terraform-plan, archive, artifact, or filesystem validation.
-- Remote and cloud e2e paths are privileged/billable. Do not run them unless the task explicitly requires that environment and its protected credentials/approval.
+- External-cluster e2e paths are privileged and environment-dependent; cloud showcase e2e paths are additionally billable. Do not run either without explicit task intent and the required protected credentials/approval.
 
 ## Local verification
 
@@ -80,8 +116,11 @@ Use the narrowest relevant checks first:
 task test:unit
 task test:race
 task vet
+task vuln
+task web:audit
 task web:test
 task web:lint
+task web:build
 task build
 ```
 

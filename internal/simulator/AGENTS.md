@@ -7,7 +7,7 @@ This package owns simulated allocation/controller behavior and can mutate Kubern
 ## Reconciliation
 
 - Reconciliation must be deterministic and idempotent under retries.
-- Preserve Kubernetes ownership/conflict semantics and never overwrite state owned by another controller without an explicit contract.
+- Preserve the current Create/Update + resourceVersion conflict semantics and never overwrite state owned by another controller without an explicit contract. Do not switch to Server-Side Apply or introduce a Field Manager unless that ownership model is an explicit reviewed design change with focused conflict tests.
 - Unknown, malformed, unsupported, or conflicting allocation facts must not be converted into a successful allocation.
 - Keep capacity accounting bounded and consistent across retries.
 - Preserve complete device identity and request/result relationships.

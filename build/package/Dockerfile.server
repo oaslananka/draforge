@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for draforge-server
 # Stage 1: Build React Frontend Dashboard
 # node:22.23.1-alpine
-ARG NODE_IMAGE=node@sha256:39cff0f037088f0d8faf3e5a3ca055d653a15b66faaba8af3daf72f0102f375f
+ARG NODE_IMAGE=node@sha256:9965105b7a4e201d7f07268402bb4971670592b46c9b9058cc643961199a1ab6
 FROM ${NODE_IMAGE} AS frontend-builder
 WORKDIR /web
 RUN npm install --global --ignore-scripts --force corepack@0.35.0 && \

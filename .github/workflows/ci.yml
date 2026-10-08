@@ -139,6 +139,8 @@ jobs:
   web:
     name: Web Test, Lint & Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -215,6 +217,8 @@ jobs:
   helm:
     name: Helm Chart Lint & Template
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -287,6 +291,8 @@ jobs:
   goreleaser:
     name: GoReleaser Dry-Run
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -337,6 +343,8 @@ jobs:
   infra:
     name: Terraform Validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -365,6 +373,8 @@ jobs:
     name: CI Pass
     needs: [go, coverage-upload, web, browser, helm, goreleaser, infra]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Complete
         run: echo "All CI checks passed successfully!"

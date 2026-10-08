@@ -85,7 +85,7 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0
         with:
-          version: v1.35.5
+          version: v1.37.1
 
       - name: Install pinned kind
         run: |
@@ -181,7 +181,7 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0
         with:
-          version: v1.35.5
+          version: v1.37.1
 
       - name: Prepare short-lived kubeconfig
         env:

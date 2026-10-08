@@ -85,7 +85,7 @@ The following controls reflect the current public repository configuration:
 | Release-tag ruleset | Active for `refs/tags/v*` | Blocks update and deletion of published release tags |
 | Required status checks | `dependency-review` and `CI Pass` | Blocks merge until dependency review and the aggregate automated test/build gate succeed |
 | Secret scanning and push protection | Enabled | Detects and blocks supported secret patterns before publication |
-| Code and dependency scanning | Active workflows and PR checks | Runs CodeQL/security analysis, Dependency Review, Semgrep, Socket, and language advisory gates |
+| Code and dependency scanning | GitHub CodeQL default setup; active security workflows and PR checks | Runs default CodeQL analysis for Actions, Go, JavaScript/TypeScript, and Python; separate dependency audits, Dependency Review, Semgrep, and Socket checks |
 | Automated security fixes | Not enabled | Optional automation; CI advisory gates and reviewed updates remain authoritative |
 
 ### Supply-Chain and Workload Controls
@@ -98,6 +98,18 @@ The following controls reflect the current public repository configuration:
 - Remote test and E2E containers run as UID/GID 1000 with read-only root filesystems and bounded writable cache/tmp volumes. The Kaniko build executor is the documented exception: image unpacking and root-owned Dockerfile steps require UID 0 and a writable rootfs, so it uses an immutable maintained-fork digest with no service-account token, no privilege escalation, RuntimeDefault seccomp, and the unnecessary `NET_RAW` capability removed.
 - Helm and remote Jobs define ephemeral-storage requests, limits, and bounded `emptyDir` volumes to reduce node disk exhaustion risk.
 - Terraform plan validation accepts only bounded JSON files that resolve inside the repository, preventing path traversal and symlink escapes.
+
+### CodeQL Ownership
+
+GitHub **CodeQL default setup** is the active code-scanning owner for this
+repository; its configuration and results are managed in GitHub's code-scanning
+settings. It covers GitHub Actions, Go, JavaScript/TypeScript, and Python.
+Do not concurrently enable the advanced CodeQL upload job against this default
+setup: GitHub rejects its results. The `Security Analysis` workflow remains
+responsible for scheduled and post-merge **Go and frontend dependency
+vulnerability audits**; removing the duplicate CodeQL job must not disable
+those audits. Before changing the CodeQL setup, verify that equivalent language
+coverage and analysis uploads remain active.
 
 ### CI/CD Security
 

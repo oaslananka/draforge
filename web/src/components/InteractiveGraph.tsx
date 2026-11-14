@@ -1,8 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ResourceGraph } from '../api/types';
 import type { ClaimIdentity } from '../claims/identity';
 import { claimIdentityFromGraphNode } from '../claims/identity';
-import { deterministicInitialPosition } from '../graph/layout';
+import { deterministicInitialPosition, reducedMotionLayout } from '../graph/layout';
 import usePrefersReducedMotion from '../hooks/usePrefersReducedMotion';
 
 interface NodePosition {
@@ -158,6 +158,11 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
   const height = 500;
   const graphDescriptionId = useId();
   const prefersReducedMotion = usePrefersReducedMotion();
+  const staticLayout = useMemo(
+    () => reducedMotionLayout((graphData?.nodes ?? []).map((node) => node.id), width, height),
+    [graphData],
+  );
+  const canvasHeight = prefersReducedMotion ? staticLayout.height : height;
 
   const [nodes, setNodes] = useState<NodePosition[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodePosition | null>(null);
@@ -191,15 +196,18 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
     const currentNodes = [...nodesRef.current];
     const newNodes: NodePosition[] = safeNodes.map(n => {
       const existing = currentNodes.find(cn => cn.id === n.id);
+      const fixedPosition = prefersReducedMotion ? staticLayout.positions.get(n.id) : undefined;
       if (existing) {
         return {
           ...existing,
+          x: fixedPosition?.x ?? existing.x,
+          y: fixedPosition?.y ?? existing.y,
           type: n.type,
           label: n.label,
           metadata: n.metadata,
         };
       }
-      const position = deterministicInitialPosition(n.id, width, height);
+      const position = fixedPosition ?? deterministicInitialPosition(n.id, width, height);
       return {
         id: n.id,
         x: position.x,
@@ -214,7 +222,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
 
     nodesRef.current = newNodes;
     setNodes(newNodes);
-  }, [graphData]);
+  }, [graphData, prefersReducedMotion, staticLayout]);
 
   // Physics Simulation loop
   useEffect(() => {
@@ -387,7 +395,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
         </div>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           {prefersReducedMotion
-            ? 'Reduced motion is active; graph nodes use fixed positions.'
+            ? 'Reduced motion is active; graph nodes use fixed, separated positions. Scroll inside the graph to reach more nodes.'
             : 'Use mouse wheel to zoom, drag background to pan. Use Tab and Enter or Space to inspect nodes.'}
         </span>
       </div>
@@ -398,7 +406,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
           aria-label="Resource relationship graph"
           aria-describedby={graphDescriptionId}
           data-motion={prefersReducedMotion ? 'reduced' : 'full'}
-          style={{ flex: 2, minWidth: '300px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-light)', overflow: 'hidden', position: 'relative' }}
+          style={{ flex: 2, minWidth: '300px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-light)', overflow: prefersReducedMotion ? 'auto' : 'hidden', maxHeight: prefersReducedMotion ? '680px' : undefined, position: 'relative' }}
         >
           <p id={graphDescriptionId} className="sr-only">
             Interactive relationship graph. Use Tab to reach nodes, Enter or Space to select one, and the details panel to inspect relationships or diagnose a ResourceClaim.
@@ -406,14 +414,14 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
           <svg
             ref={svgRef}
             width="100%"
-            height={height}
-            viewBox={`0 0 ${width} ${height}`}
+            height={canvasHeight}
+            viewBox={`0 0 ${width} ${canvasHeight}`}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             onMouseDown={handleSvgMouseDown}
             onWheel={handleWheel}
-            style={{ cursor: isPanningRef.current ? 'grabbing' : 'grab', display: 'block' }}
+            style={{ cursor: isPanningRef.current ? 'grabbing' : 'grab', display: 'block', minWidth: prefersReducedMotion ? String(width) + 'px' : undefined }}
           >
             <title>Resource relationship graph</title>
             <desc>Interactive graph of DRA resources and their relationships.</desc>

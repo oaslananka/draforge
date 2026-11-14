@@ -62,6 +62,11 @@ The Vitest + repository-owned linkedom environment + React Testing Library suite
 - automatic pending-to-allocated claim reconciliation after changed SSE frames, including selected Explain refresh, error recovery, and no redundant fetch on identical frames;
 - diagnostics rendering and active-tab accessibility;
 - keyboard selection of SVG graph nodes.
+- reduced-motion graph layout uses a deterministic, separated grid rather than
+  overlapping the 100px hash-seeded starting positions; dense graphs scroll
+  inside the panel horizontally/vertically without shrinking targets.
+  Browser regression checks pointer hit targets across 19 nodes and mobile
+  scrolling across 75 nodes.
 
 Run the same required CI gate locally with `pnpm --dir web test`. Lint and production build remain separate required checks.
 

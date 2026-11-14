@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A task-first GitHub Pages landing page with separate local kind simulation and compatible Kubernetes setup paths, complete commands and boundaries; an accessible documentation-wide light/dark theme that follows the operating system until the visitor chooses a preference; a labeled dashboard screenshot using simulated data.
+- Real kind Kubernetes API/SSE allocation recovery acceptance, Windows/WSL first-run checks, and dense reduced-motion graph interaction regression coverage.
+
+### Changed
+- Local kind onboarding refuses to overwrite existing clusters, cleans up only clusters created by the current run, and reports missing host prerequisites and unreachable Docker daemon before cluster operations.
+- The dashboard refreshes Claims, Pools, Devices and Explain when live graph state changes, without unnecessary polling.
+
+### Fixed
+- Restored `draforge discover -o json` output to stdout and improved CLI validation, cancellation and error handling.
+- Prevented overlapping interactive graph nodes when reduced motion is enabled; preserved keyboard selection and added internally scrollable layouts for dense/mobile graphs.
+- Resolved actionable Go/frontend dependency and code scanning alerts without suppressing open review/branch-policy governance findings.
+
 ## [0.3.0] - 2026-07-29
 
 ### Added

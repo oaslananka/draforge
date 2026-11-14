@@ -7,7 +7,7 @@ description: Diagnose Kubernetes ResourceClaim allocation, explore simulated dev
 <link rel="stylesheet" href="{{ '/assets/css/landing.css' | relative_url }}">
 
 <div class="df-home">
-  <header class="df-hero" aria-labelledby="df-hero-title">
+  <div class="df-hero" aria-labelledby="df-hero-title">
     <p class="df-eyebrow">Kubernetes Dynamic Resource Allocation · Operator toolkit</p>
     <h2 id="df-hero-title">Find out why a ResourceClaim is pending.</h2>
     <p class="df-hero-description">Inspect device pools, follow allocation decisions, and test a fix against simulated accelerators. Run locally without a physical GPU or connect to your existing compatible Kubernetes cluster.</p>
@@ -20,7 +20,7 @@ description: Diagnose Kubernetes ResourceClaim allocation, explore simulated dev
       <div><dt>Dashboard access</dt><dd>Read-only, internal by default</dd></div>
       <div><dt>Kubernetes baseline</dt><dd>v1.35+ · <code>resource.k8s.io/v1</code></dd></div>
     </dl>
-  </header>
+  </div>
 
   <section class="df-section" aria-labelledby="df-paths-title">
     <p class="df-section-label">FIRST RUN</p>
@@ -74,6 +74,16 @@ DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 bash scripts/kind-install-e2e.sh pull-reques
     <a class="df-more" href="{{ '/e2e-matrix.html' | relative_url }}">See what the install test actually verifies</a>
   </section>
 
+  <section class="df-section" aria-labelledby="df-preview-title">
+    <p class="df-section-label">PRODUCT PREVIEW</p>
+    <h2 id="df-preview-title">Explore relationships at a glance</h2>
+    <p class="df-section-intro">The dashboard shows claims, devices, pools and diagnostic relationships in one place.</p>
+    <figure class="df-preview">
+      <img src="{{ '/assets/dashboard-simulation.webp' | relative_url }}" width="1440" height="900" loading="lazy" decoding="async" alt="DRAForge interactive graph showing a selected simulated ResourceClaim, connected devices, and its diagnosis action">
+      <figcaption>Actual DRAForge interface, shown with synthetic demo data; no public cluster or physical GPU is connected.</figcaption>
+    </figure>
+  </section>
+
   <section class="df-section" aria-labelledby="df-docs-title">
     <p class="df-section-label">REFERENCE</p>
     <h2 id="df-docs-title">Go directly to the right guide</h2>
@@ -87,7 +97,7 @@ DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 bash scripts/kind-install-e2e.sh pull-reques
     </div>
   </section>
 
-  <footer class="df-footer">
+  <div class="df-footer">
     <p>DRAForge is open source and provider-neutral. The hosted site is documentation, <strong>not a running dashboard connected to a public cluster</strong>.</p>
     <nav aria-label="Project resources">
       <a href="https://github.com/oaslananka/draforge">Source code</a>
@@ -95,5 +105,5 @@ DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 bash scripts/kind-install-e2e.sh pull-reques
       <a href="https://github.com/oaslananka/draforge/blob/main/SECURITY.md">Security</a>
       <a href="https://github.com/oaslananka/draforge/blob/main/CONTRIBUTING.md">Contribute</a>
     </nav>
-  </footer>
+  </div>
 </div>

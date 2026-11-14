@@ -1,0 +1,177 @@
+/* Scoped overrides for GitHub Pages' bundled Primer Jekyll theme.
+   The light palette remains the existing theme; dark mode covers all pages. */
+html {
+  --docs-surface: #ffffff;
+  --docs-border: #d8e1eb;
+  --docs-text: #26374b;
+  --docs-muted: #52647b;
+  --docs-control: #f5f8fc;
+  --docs-control-hover: #e9f1fa;
+  --docs-focus: #126de3;
+}
+html[data-docs-theme="dark"] {
+  color-scheme: dark;
+  background: #0d1522;
+  --docs-surface: #0d1522;
+  --docs-border: #34465c;
+  --docs-text: #e4edf8;
+  --docs-muted: #b3c5d9;
+  --docs-control: #19283b;
+  --docs-control-hover: #263a53;
+  --docs-focus: #8acaff;
+}
+.docs-site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-bottom: 1.4rem;
+  padding: 0 0 1rem;
+  border-bottom: 1px solid var(--docs-border);
+}
+.markdown-body .docs-site-header h1 {
+  font-size: 1.05rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+}
+.markdown-body .docs-site-header h1 a {
+  color: var(--docs-text);
+  text-decoration: none;
+}
+.markdown-body .docs-site-header h1 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.docs-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--docs-border);
+  border-radius: 9px;
+  font: 650 0.88rem/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--docs-text);
+  background: var(--docs-control);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.docs-theme-toggle:hover { background: var(--docs-control-hover); }
+.docs-theme-toggle:focus-visible {
+  outline: 3px solid var(--docs-focus);
+  outline-offset: 3px;
+}
+html[data-docs-theme="dark"] body,
+html[data-docs-theme="dark"] .markdown-body {
+  background: #0d1522;
+  color: #e4edf8;
+}
+html[data-docs-theme="dark"] .markdown-body h1,
+html[data-docs-theme="dark"] .markdown-body h2,
+html[data-docs-theme="dark"] .markdown-body h3,
+html[data-docs-theme="dark"] .markdown-body h4,
+html[data-docs-theme="dark"] .markdown-body h5,
+html[data-docs-theme="dark"] .markdown-body h6 {
+  color: #f0f6ff;
+  border-color: #34465c;
+}
+html[data-docs-theme="dark"] .markdown-body a { color: #8bc8ff; }
+html[data-docs-theme="dark"] .markdown-body a:focus-visible {
+  outline: 3px solid var(--docs-focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+html[data-docs-theme="dark"] .markdown-body p,
+html[data-docs-theme="dark"] .markdown-body li,
+html[data-docs-theme="dark"] .markdown-body td {
+  color: #d9e5f3;
+}
+html[data-docs-theme="dark"] .markdown-body hr {
+  background: #34465c;
+  border-color: #34465c;
+}
+html[data-docs-theme="dark"] .markdown-body blockquote {
+  color: #b5c9df;
+  border-left-color: #5d819f;
+}
+html[data-docs-theme="dark"] .markdown-body table,
+html[data-docs-theme="dark"] .markdown-body table th,
+html[data-docs-theme="dark"] .markdown-body table td,
+html[data-docs-theme="dark"] .markdown-body table tr {
+  color: #e0eaf7;
+  background: #111f30;
+  border-color: #3a4c61;
+}
+html[data-docs-theme="dark"] .markdown-body table tr:nth-child(2n) {
+  background: #17283c;
+}
+html[data-docs-theme="dark"] .markdown-body code,
+html[data-docs-theme="dark"] .markdown-body tt {
+  color: #f0d8a5;
+  background: #1b2c40;
+}
+html[data-docs-theme="dark"] .markdown-body pre,
+html[data-docs-theme="dark"] .markdown-body .highlight pre {
+  color: #e7edf5;
+  background: #132439;
+  border: 1px solid #34465c;
+}
+html[data-docs-theme="dark"] .markdown-body pre code {
+  color: inherit;
+  background: transparent;
+}
+html[data-docs-theme="dark"] .markdown-body kbd {
+  color: #ecf5ff;
+  background: #21354c;
+  border-color: #52708e;
+  box-shadow: inset 0 -1px 0 #49617a;
+}
+html[data-docs-theme="dark"] .markdown-body img {
+  background: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .docs-site-header *, .docs-site-header *::before, .docs-site-header *::after {
+    transition: none !important;
+  }
+}
+
+/* Underline inline links so meaning never depends on hue alone. */
+.markdown-body p a,
+.markdown-body li a,
+.markdown-body blockquote a,
+.markdown-body .footer a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+html[data-docs-theme="dark"] .markdown-body .footer {
+  color: #c9d8e8 !important;
+  border-color: #34465c !important;
+}
+/* GitHub Pages' bundled Rouge syntax colors were designed for light code
+   blocks. Keep syntax tokens readable on both modern document palettes. */
+html[data-docs-theme="light"] .markdown-body .highlight .nv,
+html[data-docs-theme="light"] .markdown-body .highlight .nt,
+html[data-docs-theme="light"] .markdown-body .highlight .nb,
+html[data-docs-theme="light"] .markdown-body .highlight .na {
+  color: #145875;
+}
+html[data-docs-theme="dark"] .markdown-body .highlight .nv,
+html[data-docs-theme="dark"] .markdown-body .highlight .nt,
+html[data-docs-theme="dark"] .markdown-body .highlight .nb,
+html[data-docs-theme="dark"] .markdown-body .highlight .na {
+  color: #a8e2fb;
+}
+.markdown-body pre:focus-visible {
+  outline: 3px solid var(--docs-focus);
+  outline-offset: 2px;
+}
+
+/* Primer renders blockquote text muted; inline API names still need 4.5:1. */
+html[data-docs-theme="light"] .markdown-body blockquote code {
+  color: #213a53;
+  background: #e8eff7;
+}

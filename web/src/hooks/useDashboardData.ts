@@ -85,7 +85,14 @@ function reportSectionError(
 async function loadSection<T>(options: SectionLoadOptions<T>) {
   try {
     const value = await options.request();
-    if (options.isActive()) options.apply(value);
+    if (options.isActive()) {
+      options.apply(value);
+      // Clear stale error messages after the API becomes healthy again.
+      options.setErrors((current) => {
+        if (current[options.section] === undefined) return current;
+        return { ...current, [options.section]: undefined };
+      });
+    }
   } catch (error: unknown) {
     if (options.isActive()) {
       reportSectionError(
@@ -113,7 +120,7 @@ async function loadVersion(
   }
 }
 
-export default function useDashboardData(): DashboardDataState {
+export default function useDashboardData(resourceRevision = 0): DashboardDataState {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [pools, setPools] = useState<DevicePool[]>([]);
@@ -130,13 +137,21 @@ export default function useDashboardData(): DashboardDataState {
 
     void Promise.allSettled([
       loadSection({ section: 'summary', request: fetchSummary, apply: setSummary, fallback: 'Failed to load summary', ...common }),
-      loadVersion(isActive, setVersionInfo),
       loadSection({ section: 'pools', request: fetchPools, apply: setPools, fallback: 'Failed to load device pools', ...common }),
       loadSection({ section: 'devices', request: fetchDevices, apply: setDevices, fallback: 'Failed to load devices', ...common }),
       loadSection({ section: 'claims', request: fetchClaims, apply: setClaims, fallback: 'Failed to load ResourceClaims', ...common }),
       loadSection({ section: 'doctor', request: fetchDoctor, apply: setDoctorReport, fallback: 'Failed to load diagnostics', ...common }),
     ]);
 
+    return () => {
+      active = false;
+    };
+  }, [resourceRevision]);
+
+  // Build metadata is constant across graph updates; load it once only.
+  useEffect(() => {
+    let active = true;
+    void loadVersion(() => active, setVersionInfo);
     return () => {
       active = false;
     };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ResourceGraph, TabId } from './api/types';
 import type { ClaimIdentity } from './claims/identity';
 import {
@@ -16,9 +16,21 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [graphData, setGraphData] = useState<ResourceGraph | null>(null);
   const [selectedClaim, setSelectedClaim] = useState<ClaimIdentity | null>(null);
-  const data = useDashboardData();
-  const sseStatus = useSSE(setGraphData);
-  const explanation = useClaimExplanation(selectedClaim);
+  const [resourceRevision, setResourceRevision] = useState(0);
+  const lastGraphSnapshot = useRef<string | null>(null);
+  const data = useDashboardData(resourceRevision);
+
+  // The SSE stream already contains a consistent graph of current resources.
+  // Refresh the read-only panels only on real graph changes, not every frame.
+  const sseStatus = useSSE((nextGraph) => {
+    const snapshot = JSON.stringify(nextGraph);
+    if (snapshot === lastGraphSnapshot.current) return;
+    const isUpdate = lastGraphSnapshot.current !== null;
+    lastGraphSnapshot.current = snapshot;
+    setGraphData(nextGraph);
+    if (isUpdate) setResourceRevision((current) => current + 1);
+  });
+  const explanation = useClaimExplanation(selectedClaim, resourceRevision);
 
   useEffect(() => {
     setSelectedClaim((current) => {

@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import type {
   DoctorReport,
+  ResourceGraph,
   ExplainResult,
   ResourceClaimInfo,
   SSEStatus,
@@ -189,6 +190,92 @@ describe('App critical dashboard flows', () => {
     expect(screen.getByRole('heading', { name: 'Cluster Diagnostics (Doctor)' }).isConnected).toBe(true);
     expect(screen.getByText('ResourceClaims API is unavailable.').isConnected).toBe(true);
     expect(screen.getByText(/Enable the resource.k8s.io\/v1 API/).isConnected).toBe(true);
+  });
+
+  it('refreshes claim status and selected explanation after a changed live graph, without polling unchanged frames', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('button', { name: 'CLAIMS' });
+    await waitFor(() => {
+      expect(mockFetchClaims).toHaveBeenCalledTimes(1);
+      expect(mockFetchExplain).toHaveBeenCalledWith('shared', 'team-a');
+    });
+
+    const pendingGraph: ResourceGraph = {
+      nodes: [{ id: 'claim/team-a/shared', type: 'ResourceClaim', label: 'shared', metadata: { namespace: 'team-a', status: 'Pending' } }],
+      edges: [],
+    };
+    const onGraph = () => mockUseSSE.mock.lastCall?.[0];
+    const sendGraph = (graph: ResourceGraph) => {
+      act(() => {
+        const callback = onGraph();
+        if (!callback) throw new Error('SSE handler not installed');
+        callback(graph);
+      });
+    };
+    sendGraph(pendingGraph);
+    sendGraph({ ...pendingGraph, nodes: [...pendingGraph.nodes] });
+    expect(mockFetchClaims).toHaveBeenCalledTimes(1);
+
+    const recoveredClaims: ResourceClaimInfo[] = [
+      { ...duplicateClaims[0], status: 'Allocated', allocations: [{
+        request: 'gpu',
+        driverName: 'driver.example',
+        poolName: 'recovery-pool',
+        deviceName: 'recovered-gpu',
+        nodeName: 'worker-a',
+      }] },
+      duplicateClaims[1],
+    ];
+    mockFetchClaims.mockResolvedValue(recoveredClaims);
+    mockFetchExplain.mockResolvedValue({
+      ...explainResult,
+      allocated: true,
+      reasonTree: { ...explainResult.reasonTree, message: 'Claim is allocated.', evidence: 'Recovered from pending state.' },
+      remedy: [],
+    });
+
+    const recoveredGraph: ResourceGraph = {
+      nodes: [{ ...pendingGraph.nodes[0], metadata: { namespace: 'team-a', status: 'Allocated', allocationCount: 1 } }],
+      edges: [],
+    };
+    sendGraph(recoveredGraph);
+    await waitFor(() => {
+      expect(mockFetchClaims).toHaveBeenCalledTimes(2);
+      expect(mockFetchExplain).toHaveBeenCalledTimes(2);
+    });
+    await user.click(screen.getByRole('button', { name: 'CLAIMS' }));
+    const recoveredRow = screen.getByRole('row', { name: /shared team-a/ });
+    expect(within(recoveredRow).getByText('Allocated')).toBeTruthy();
+    expect(within(recoveredRow).getByText(/recovery-pool/)).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'EXPLAIN' }));
+    expect(screen.getByText('Claim is allocated.')).toBeTruthy();
+    const claimReads = mockFetchClaims.mock.calls.length;
+    const explainReads = mockFetchExplain.mock.calls.length;
+    sendGraph({ ...recoveredGraph, nodes: [...recoveredGraph.nodes] });
+    expect(mockFetchClaims).toHaveBeenCalledTimes(claimReads);
+    expect(mockFetchExplain).toHaveBeenCalledTimes(explainReads);
+  });
+
+  it('clears a transient section error when the live resource graph changes and the API recovers', async () => {
+    mockFetchSummary.mockRejectedValueOnce(new Error('summary temporarily unavailable'));
+    render(<App />);
+    expect(await screen.findByText('summary temporarily unavailable')).toBeTruthy();
+
+    const sendGraph = (status: string) => {
+      act(() => {
+        const callback = mockUseSSE.mock.lastCall?.[0];
+        if (!callback) throw new Error('SSE handler not installed');
+        callback({ nodes: [{ id: 'claim/team-a/shared', type: 'ResourceClaim', label: 'shared', metadata: { status } }], edges: [] });
+      });
+    };
+    sendGraph('Pending');
+    sendGraph('Allocated');
+    await waitFor(() => {
+      expect(mockFetchSummary).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText('summary temporarily unavailable')).toBeNull();
+    });
   });
 
   it('announces the live stream state through a status role', async () => {

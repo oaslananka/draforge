@@ -11,6 +11,7 @@ export interface ClaimExplanationState {
 
 export default function useClaimExplanation(
   selectedClaim: ClaimIdentity | null,
+  resourceRevision = 0,
 ): ClaimExplanationState {
   const [result, setResult] = useState<ExplainResult | null>(null);
   const [error, setError] = useState('');
@@ -47,7 +48,7 @@ export default function useClaimExplanation(
     return () => {
       active = false;
     };
-  }, [selectedClaim?.name, selectedClaim?.namespace]);
+  }, [selectedClaim?.name, selectedClaim?.namespace, resourceRevision]);
 
   return { result, error, loading };
 }

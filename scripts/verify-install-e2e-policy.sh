@@ -129,6 +129,7 @@ for script in \
   kind-install-e2e-matrix.sh \
   test-install-e2e-cni.sh \
   test-install-e2e-harness.sh \
+  test-kind-install-e2e-ownership.sh \
   test-controller-ha-e2e-harness.sh \
   verify-controller-ha-e2e.sh \
   verify-install-e2e-policy.sh \

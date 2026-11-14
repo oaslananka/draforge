@@ -45,6 +45,7 @@ PATH_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/:-"
 )
 LINK_PATTERN = re.compile(r"\]\(([^)\n]+)\)")
+JEKYLL_LINK_PATTERN = re.compile(r"\{\{\s*'(/[^']+)'\s*\|\s*relative_url\s*\}\}")
 SEMVER_PATTERN = re.compile(r"(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2}")
 CLI_USE_PATTERN = re.compile(r'Use:\s+"([a-z][a-z-]*)')
 
@@ -96,6 +97,16 @@ def validate_markdown_links(root: Path, files: list[Path]) -> list[str]:
                 errors.append(f"{relative}: relative link escapes repository: {target}")
             elif not resolved.exists():
                 errors.append(f"{relative}: missing relative link target: {target}")
+        # GitHub Pages links written with Jekyll's relative_url filter are
+        # not Markdown links, but must still resolve to checked-in docs/assets.
+        for match in JEKYLL_LINK_PATTERN.finditer(text):
+            target = normalize_link_target(match.group(1)).lstrip("/")
+            source = Path(target)
+            if source.suffix == ".html":
+                source = source.with_suffix(".md")
+            resolved = (root / "docs" / source).resolve()
+            if not resolved.is_relative_to((root / "docs").resolve()) or not resolved.is_file():
+                errors.append(f"{relative}: missing Jekyll relative_url target: {target}")
     return errors
 
 
@@ -665,6 +676,11 @@ def self_test() -> list[str]:
         write_fixture(README_PATH, "[Missing](docs/missing.md)\n")
         if not has_error("missing relative link"):
             return ["broken-link fixture unexpectedly passed"]
+
+        reset_fixture()
+        write_fixture(Path("docs/index.md"), """<a href="{{ '/missing.html' | relative_url }}">Missing page</a>""")
+        if not has_error("missing Jekyll relative_url target"):
+            return ["missing Jekyll documentation link fixture unexpectedly passed"]
 
         reset_fixture()
         write_fixture(README_PATH, "task missing:task\n")

@@ -54,9 +54,9 @@ Every pull request to `main` receives the reduced v1.35 install gate. A weekly s
 
 Required tools:
 
-- Docker with daemon access;
+- Bash (WSL on Windows) and Docker with daemon access;
 - kind at the version declared in `tests/install-e2e/kubernetes-versions.json`;
-- kubectl, Helm, jq, curl, Go, Node.js, and pnpm.
+- kubectl, Helm, jq, curl and sha256sum; Task is optional. Go is only needed for standalone binary builds; Node.js/pnpm for the optional local live-browser test.
 
 Run the fast orchestration contract:
 
@@ -80,7 +80,7 @@ task e2e:install-kind-full
 scripts/kind-install-e2e-matrix.sh full
 ```
 
-The local entry point deletes its kind cluster after the run. Preserve a failed cluster for investigation with:
+The local entry point deletes only a cluster it successfully created after the run. It refuses to overwrite a cluster with the chosen name: inspect the existing cluster, choose a fresh name, or explicitly delete it before retrying. Preserve a failed cluster for investigation with:
 
 ```bash
 DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 scripts/kind-install-e2e.sh pull-request

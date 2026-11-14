@@ -24,7 +24,7 @@ async function tabUntilFocused(page: Page, target: Locator, maxTabs = 24): Promi
       return;
     }
   }
-  throw new Error('Expected interactive graph control to be reachable by keyboard Tab navigation');
+  expect(false, 'Expected interactive graph control to be reachable by keyboard Tab navigation').toBe(true);
 }
 
 test.beforeEach(async ({ page }) => {

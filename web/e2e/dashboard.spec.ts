@@ -93,6 +93,76 @@ test('@desktop critical dashboard flow is keyboard operable with visible focus a
   await expect(page.getByText('ResourceClaims API is unavailable.')).toBeVisible();
 });
 
+test('@desktop claim recovery updates the visible dashboard and explanation without a reload', async ({ page }) => {
+  let status = 'Pending';
+  let claimReads = 0;
+  await page.route('**/api/claims', async (route) => {
+    claimReads += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        name: 'shared',
+        namespace: 'team-b',
+        status,
+        requests: [],
+        allocations: status === 'Allocated' ? [{
+          request: 'gpu',
+          driverName: 'driver.example',
+          poolName: 'recovery-pool',
+          deviceName: 'gpu-0',
+          nodeName: 'worker-a',
+        }] : [],
+      }]),
+    });
+  });
+  await page.route('**/api/explain?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        targetName: 'shared',
+        targetType: 'claim',
+        allocated: status === 'Allocated',
+        reasonTree: {
+          message: status === 'Allocated' ? 'Claim is allocated.' : 'Claim could not be allocated.',
+          confidence: 'confirmed',
+          evidence: 'Observed from the current claim state.',
+          sourceType: 'ResourceClaim',
+        },
+        remedy: [],
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('status', { name: 'Live stream status' })).toContainText('Stream Connected');
+  await page.getByRole('button', { name: 'CLAIMS' }).click();
+  const claimRow = page.getByRole('row', { name: /shared team-b/ });
+  await expect(claimRow).toContainText('Pending');
+
+  // The mock stream starts with a baseline frame. A real claim allocation
+  // should produce a changed SSE frame and refresh the read-only views.
+  status = 'Allocated';
+  const graph = {
+    nodes: [{ id: 'claim/team-b/shared', type: 'ResourceClaim', label: 'shared', metadata: { namespace: 'team-b', status: 'Allocated', allocationCount: 1 } }],
+    edges: [],
+  };
+  await page.evaluate((next) => {
+    window.dispatchEvent(new CustomEvent('draforge-test-graph', { detail: next }));
+  }, graph);
+  await expect(claimRow).toContainText('recovery-pool');
+  await expect(claimRow).toContainText('Allocated');
+  await page.getByRole('button', { name: 'EXPLAIN' }).click();
+  await expect(page.getByText('Claim is allocated.')).toBeVisible();
+
+  const afterRecoveryReads = claimReads;
+  await page.evaluate((next) => {
+    window.dispatchEvent(new CustomEvent('draforge-test-graph', { detail: next }));
+  }, graph);
+  expect(claimReads).toBe(afterRecoveryReads);
+});
+
 test('@axe selected critical views have no serious or critical WCAG 2.2 violations', async ({
   page,
 }) => {

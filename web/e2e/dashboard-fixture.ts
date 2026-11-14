@@ -155,8 +155,15 @@ export async function installDashboardMocks(
       onmessage: ((event: MessageEvent<string>) => void) | null = null;
       onerror: ((event: Event) => void) | null = null;
 
+      private readonly onTestGraph = (event: Event) => {
+        if (this.readyState !== MockEventSource.OPEN) return;
+        const data = (event as CustomEvent<unknown>).detail;
+        this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(data) }));
+      };
+
       constructor(url: string | URL) {
         this.url = String(url);
+        window.addEventListener('draforge-test-graph', this.onTestGraph);
         window.setTimeout(() => {
           this.readyState = MockEventSource.OPEN;
           this.onopen?.(new Event('open'));
@@ -168,6 +175,7 @@ export async function installDashboardMocks(
 
       close() {
         this.readyState = MockEventSource.CLOSED;
+        window.removeEventListener('draforge-test-graph', this.onTestGraph);
       }
 
     }

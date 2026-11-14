@@ -51,6 +51,7 @@ The Vitest + repository-owned linkedom environment + React Testing Library suite
 - SSE connected, reconnecting, malformed-message, and cleanup behavior;
 - namespace-qualified duplicate claim selection and explain requests;
 - graph-to-explain navigation;
+- automatic pending-to-allocated claim reconciliation after changed SSE frames, including selected Explain refresh, error recovery, and no redundant fetch on identical frames;
 - diagnostics rendering and active-tab accessibility;
 - keyboard selection of SVG graph nodes.
 

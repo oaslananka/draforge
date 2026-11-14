@@ -36,6 +36,7 @@ The verifier:
 - confirms the discovery API retains namespace, driver, pool, device, node, and consumer Pod identity;
 - verifies summary, graph, explain, server metrics, controller metrics, readiness, and SSE output;
 - runs the packaged CLI inside the installed server Pod against the live kind API: discovers an allocated claim, explains a second claim blocked by a missing DeviceClass, adds a separate DeviceClass/simulated pool, and verifies that the **same** claim becomes allocated via `claims` and `explain`; this is simulated-resource acceptance, not physical accelerator qualification;
+- on the v1.35.5 baseline, drives real Chromium against the installed frontend and live Kubernetes-backed REST/SSE endpoints (no browser mocks): shows the still-pending claim and missing-class explanation, observes the pending resource graph, applies the matching simulated class/pool from operator-side `kubectl`, and requires Claims and Explain to update to Allocated **without a page reload**; the v1.36.1 matrix target retains the CLI/API checks without a second browser installation;
 - fails when a core component is missing, an API assertion is broken, or namespace-qualified API/SSE identity diverges.
 
 The deterministic contract suites run before the heavier kind job. `scripts/test-install-e2e-cni.sh` verifies the pinned CNI download, SHA-256 check, rollout waits, and fail-closed hash mismatch path. `scripts/test-install-e2e-harness.sh` exercises success, missing-component, broken-API, enforced NetworkPolicy allow/deny, and matrix-policy paths without creating a cluster.
@@ -79,6 +80,14 @@ The local entry point deletes its kind cluster after the run. Preserve a failed 
 ```bash
 DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 scripts/kind-install-e2e.sh pull-request
 ```
+
+To run the real browser acceptance in a local kind E2E, install the repository-pinned
+pnpm dependencies and Chromium (`pnpm --dir web install --frozen-lockfile --ignore-scripts`,
+then `pnpm --dir web exec playwright install --with-deps chromium`) and set
+`DRAFORGE_INSTALL_E2E_LIVE_BROWSER=1`. The default standalone kind script
+still supports the CLI/API acceptance without installing a browser. This
+browser path is intentionally distinct from `web/e2e/`, whose mocks remain
+useful for fast cross-browser accessibility and responsive-layout tests.
 
 Artifacts are written under `artifacts/install-e2e/`. The directory contains the run report, API and SSE payloads, metrics, Helm manifests and values, Kubernetes resources, events, descriptions, and component logs.
 

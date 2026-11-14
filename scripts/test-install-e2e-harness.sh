@@ -262,7 +262,20 @@ METRICS
 esac
 CURL
 
-chmod +x "$FAKE_BIN/helm" "$FAKE_BIN/kubectl" "$FAKE_BIN/curl"
+cat > "$FAKE_BIN/pnpm" <<'PNPM'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'pnpm %s\n' "$*" >> "$FAKE_COMMAND_LOG"
+if [[ "${FAKE_BROWSER_FAIL:-0}" == "1" ]]; then
+  echo "fake browser acceptance failed" >&2
+  exit 1
+fi
+# Only the operator context performs the fixture repair, as the live browser
+# would after observing the pending claim via the read-only dashboard.
+kubectl apply -f tests/install-e2e/recovery-fix.yaml
+PNPM
+
+chmod +x "$FAKE_BIN/helm" "$FAKE_BIN/kubectl" "$FAKE_BIN/curl" "$FAKE_BIN/pnpm"
 
 run_case() {
   local name=$1
@@ -314,6 +327,11 @@ run_case() {
 }
 
 run_case success 0 env
+run_case live-browser 0 env DRAFORGE_INSTALL_E2E_LIVE_BROWSER=1
+assert_contains "$TEST_ROOT/live-browser/commands.log" 'pnpm --dir web exec playwright test --config playwright.live-kind.config.ts'
+run_case broken-browser 1 env DRAFORGE_INSTALL_E2E_LIVE_BROWSER=1 FAKE_BROWSER_FAIL=1
+assert_contains "$TEST_ROOT/broken-browser/stdout.log" 'live browser could not verify ResourceClaim recovery'
+assert_absent "$TEST_ROOT/broken-browser/commands.log" 'kubectl apply -f tests/install-e2e/recovery-fix.yaml'
 run_case broken-api 1 env FAKE_BROKEN_API=1
 run_case missing-component 1 env FAKE_MISSING_COMPONENT=1
 run_case no-allocation 1 env FAKE_NO_ALLOCATION=1

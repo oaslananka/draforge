@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -26,6 +27,19 @@ func executeCommand(root *cobra.Command, args ...string) (string, error) {
 }
 
 // --- Output contract tests ---
+
+func TestCLIOutputStreamsPreservePipingContract(t *testing.T) {
+	root := NewRootCommand()
+	if !root.SilenceUsage {
+		t.Fatal("invalid CLI commands must not write usage into stdout pipelines")
+	}
+	if got := root.OutOrStderr(); got != os.Stdout {
+		t.Fatalf("CLI command writer = %v, want stdout", got)
+	}
+	if got := root.ErrOrStderr(); got != os.Stderr {
+		t.Fatalf("CLI error writer = %v, want stderr", got)
+	}
+}
 
 func TestVersionOutput(t *testing.T) {
 	root := NewRootCommand()

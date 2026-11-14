@@ -4,7 +4,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -312,5 +314,59 @@ func TestClaimFormattingPreservesAllClassesAndAllocations(t *testing.T) {
 		if !strings.Contains(allocations, want) {
 			t.Fatalf("formatClaimAllocations missing %q: %q", want, allocations)
 		}
+	}
+}
+
+func TestUnsupportedOutputFormatsFailFast(t *testing.T) {
+	cases := []struct {
+		args   []string
+		reason string
+	}{
+		{[]string{"discover", "-o", "dot"}, "table, json, yaml"},
+		{[]string{"claims", "-o", "yaml"}, "table, json"},
+		{[]string{"graph", "-o", "yaml"}, "json, dot, mermaid"},
+		{[]string{"graph", "-o", "table"}, "json, dot, mermaid"},
+		{[]string{"explain", "claim", "--output", "mermaid"}, "table, json"},
+		{[]string{"doctor", "-o", "yaml"}, "table, json"},
+		{[]string{"version", "--output", "json"}, "not supported"},
+		{[]string{"scenario", "apply", "-o", "json"}, "not supported"},
+	}
+	for _, tc := range cases {
+		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
+			root := NewRootCommand()
+			_, err := executeCommand(root, tc.args...)
+			if err == nil || !strings.Contains(err.Error(), tc.reason) {
+				t.Fatalf("expected format error containing %q, got %v", tc.reason, err)
+			}
+		})
+	}
+}
+
+func TestSupportedOutputFormatsAreNotRejected(t *testing.T) {
+	cases := [][]string{
+		{"discover", "-o", "yaml"}, {"discover", "-o", "table"},
+		{"claims", "-o", "json"}, {"graph", "-o", "dot"},
+		{"graph", "-o", "mermaid"}, {"explain", "claim", "-o", "json"},
+		{"doctor", "-o", "table"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			root := NewRootCommand()
+			// A missing kubeconfig must produce a cluster error, not a format error.
+			_, err := executeCommand(root, append([]string{"--kubeconfig", "/missing-draforge-test-kubeconfig"}, args...)...)
+			if err != nil && strings.Contains(err.Error(), "--output") {
+				t.Fatalf("supported output mode rejected: %v", err)
+			}
+		})
+	}
+}
+
+func TestCanceledCommandRejectsBeforeKubernetesRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	root := NewRootCommand()
+	root.SetArgs([]string{"discover"})
+	if err := root.ExecuteContext(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", err)
 	}
 }

@@ -69,6 +69,14 @@ The `draforge` command-line interface provides administration and inspection too
 | `inject-fault` | Beta | Injects a simulation fault. |
 | `clear-faults` | Beta | Clears injected faults. |
 
+Explicit `-o/--output` options are command-specific: `discover` accepts
+`table`, `json`, `yaml`; `claims`, `explain`, and `doctor` accept
+`table`, `json`; `graph` accepts `json`, `dot`, `mermaid`.
+For backward compatibility, `graph` without an output flag defaults to JSON.
+Unsupported explicit formats return an error before contacting Kubernetes.
+Commands without formatted output reject `-o`. Kubernetes requests honor
+command cancellation (for example Ctrl+C).
+
 ### CLI Change Policy
 - **Global Flags**: Standard flags (e.g., `--kubeconfig`, `--namespace`) are stable.
 - **Command Output**: Human-readable terminal output is subject to change. Machine-readable formats (`-o json`) are stable.

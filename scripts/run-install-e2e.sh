@@ -66,6 +66,10 @@ cleanup() {
       wait "$pid" 2>/dev/null || true
     fi
   done
+  if [[ "$status" -ne 0 && "${DRAFORGE_INSTALL_E2E_LIVE_BROWSER:-0}" == "1" &&
+        -d "$ROOT_DIR/web/test-results" ]]; then
+    cp -R "$ROOT_DIR/web/test-results" "$ARTIFACT_DIR/browser-results" || true
+  fi
   write_report "$status" || true
   return "$status"
 }
@@ -343,7 +347,15 @@ jq -e \
      any(contains("draforge-e2e-recovery-gpu") and contains("does not exist")))' \
   "$ARTIFACT_DIR/cli-explain-pending.json" >/dev/null || fail "CLI did not diagnose the missing DeviceClass"
 
-kubectl apply -f tests/install-e2e/recovery-fix.yaml
+if [[ "${DRAFORGE_INSTALL_E2E_LIVE_BROWSER:-0}" == "1" ]]; then
+  # The browser test observes a real SSE baseline and performs the repair
+  # using operator-side kubectl, never through the read-only dashboard.
+  echo "Verifying installed dashboard against live kind REST/SSE..."
+  pnpm --dir web exec playwright test --config playwright.live-kind.config.ts ||
+    fail "live browser could not verify ResourceClaim recovery"
+else
+  kubectl apply -f tests/install-e2e/recovery-fix.yaml
+fi
 wait_for "recovered ResourceClaim allocation" recovery_claim_allocated
 
 cli_json claims --output json > "$ARTIFACT_DIR/cli-claims-recovered.json"

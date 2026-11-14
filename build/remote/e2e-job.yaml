@@ -68,7 +68,7 @@ spec:
               mountPath: /tmp
       containers:
         - name: e2e-runner
-          image: golang:1.26.6
+          image: golang:1.26.11
           workingDir: /workspace/repo
           command:
             - /bin/bash

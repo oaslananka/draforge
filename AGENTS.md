@@ -51,7 +51,7 @@ The checked-in scripts and tests are executable policy. If documentation and enf
 
 Use repository pins instead of floating `latest` installs when a version is governed by the repository:
 
-- Go `1.26.6` from `go.mod`;
+- Go `1.26.11` from `go.mod`;
 - Node.js `22` and pnpm `11.5.2` in CI;
 - kind `v0.32.0` from `tests/install-e2e/kubernetes-versions.json`;
 - golangci-lint `v2.12.2`;

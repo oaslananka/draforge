@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   blockingViolations,
   installDashboardMocks,
@@ -13,6 +14,18 @@ const wcagTags = [
   'wcag22a',
   'wcag22aa',
 ];
+
+// SVG link focus order can differ across browser engines. Verify the target
+// is genuinely keyboard-reachable rather than assuming it is the next Tab stop.
+async function tabUntilFocused(page: Page, target: Locator, maxTabs = 24): Promise<void> {
+  for (let i = 0; i < maxTabs; i += 1) {
+    await page.keyboard.press('Tab');
+    if (await target.evaluate((element) => element === document.activeElement)) {
+      return;
+    }
+  }
+  expect(false, 'Expected interactive graph control to be reachable by keyboard Tab navigation').toBe(true);
+}
 
 test.beforeEach(async ({ page }) => {
   await installDashboardMocks(page);
@@ -48,11 +61,11 @@ test('@desktop critical dashboard flow is keyboard operable with visible focus a
 
   const resetView = page.getByRole('button', { name: 'Reset View' });
   await resetView.focus();
-  await page.keyboard.press('Tab');
 
   const claimNode = page.getByRole('button', {
     name: 'ResourceClaim shared in namespace team-b, status Allocated',
   });
+  await tabUntilFocused(page, claimNode);
   await expect(claimNode).toBeFocused();
   const focusedNodeStroke = await claimNode.locator('circle').evaluate((element) =>
     getComputedStyle(element).strokeWidth,
@@ -61,8 +74,8 @@ test('@desktop critical dashboard flow is keyboard operable with visible focus a
   await page.keyboard.press('Enter');
   await expect(claimNode).toHaveAttribute('aria-pressed', 'true');
 
-  await page.keyboard.press('Tab');
   const diagnose = page.getByRole('button', { name: 'Diagnose Allocation' });
+  await tabUntilFocused(page, diagnose);
   await expect(diagnose).toBeFocused();
   await page.keyboard.press('Enter');
 

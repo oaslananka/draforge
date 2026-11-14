@@ -109,6 +109,42 @@ func TestInstallResourceFixturesUseTypedDRAIdentity(t *testing.T) {
 	validateSimulatorPool(t, byKind["SimulatedDevicePool"], claim.Namespace)
 }
 
+func TestCLIRecoveryFixturesKeepClaimIdentityAndSeparateCapacity(t *testing.T) {
+	claimObjects := indexByKind(t, decodeDocuments(t, readFixture(t, "recovery-claim.yaml")))
+	claim := typedObject[resourcev1.ResourceClaim](t, claimObjects, "ResourceClaim")
+	if claim.Namespace != "draforge-e2e" || claim.Name != "e2e-recovery-claim" {
+		t.Fatalf("unexpected recovery claim identity: %s/%s", claim.Namespace, claim.Name)
+	}
+	if len(claim.Spec.Devices.Requests) != 1 || claim.Spec.Devices.Requests[0].Exactly == nil {
+		t.Fatalf("recovery claim requires exactly one typed request: %#v", claim.Spec.Devices.Requests)
+	}
+	exact := claim.Spec.Devices.Requests[0].Exactly
+	if exact.DeviceClassName != "draforge-e2e-recovery-gpu" ||
+		exact.AllocationMode != resourcev1.DeviceAllocationModeExactCount || exact.Count != 1 {
+		t.Fatalf("unexpected recovery request: %#v", exact)
+	}
+
+	repair := indexByKind(t, decodeDocuments(t, readFixture(t, "recovery-fix.yaml")))
+	class := typedObject[resourcev1.DeviceClass](t, repair, "DeviceClass")
+	if class.Name != exact.DeviceClassName || len(class.Spec.Selectors) != 1 ||
+		class.Spec.Selectors[0].CEL == nil ||
+		!strings.Contains(class.Spec.Selectors[0].CEL.Expression, "DRAForge-E2E-Recovery") {
+		t.Fatalf("recovery DeviceClass cannot select its simulated capacity: %#v", class)
+	}
+	pool := repair["SimulatedDevicePool"]
+	if pool == nil || pool.GetName() != "e2e-recovery-pool" || pool.GetNamespace() != claim.Namespace {
+		t.Fatalf("recovery pool is absent or in the wrong namespace: %#v", pool)
+	}
+	name, _, err := unstructured.NestedString(pool.Object, "spec", "poolName")
+	if err != nil || name != pool.GetName() {
+		t.Fatalf("recovery pool spec name is inconsistent: %q, %v", name, err)
+	}
+	count, _, err := unstructured.NestedFloat64(pool.Object, "spec", "deviceCount")
+	if err != nil || count != 1 {
+		t.Fatalf("recovery pool capacity must remain one isolated device: %.0f, %v", count, err)
+	}
+}
+
 func TestClaimConsumerFixtureReferencesExistingClaim(t *testing.T) {
 	objects := decodeDocuments(t, readFixture(t, "workload.yaml"))
 	pod := typedObject[corev1.Pod](t, indexByKind(t, objects), "Pod")

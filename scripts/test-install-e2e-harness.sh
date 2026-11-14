@@ -119,6 +119,14 @@ JSON
 JSON
         ;;
       resourceclaim.resource.k8s.io)
+        if [[ "$*" == *e2e-recovery-claim* ]]; then
+          if grep -Fq 'kubectl apply -f tests/install-e2e/recovery-fix.yaml' "$FAKE_COMMAND_LOG"; then
+            printf '%s\n' '{"status":{"allocation":{"devices":{"results":[{"pool":"e2e-recovery-pool","device":"device-0"}]}}}}'
+          else
+            printf '%s\n' '{"status":{}}'
+          fi
+          exit 0
+        fi
         if [[ "${FAKE_NO_ALLOCATION:-0}" == "1" ]]; then
           printf '%s\n' '{"status":{}}'
         else
@@ -147,6 +155,37 @@ JSON
     while true; do sleep 1; done
     ;;
   exec)
+    if [[ "$*" == *'deployment/draforge-server -- ./draforge'* ]]; then
+      case "$*" in
+        *' discover --output json')
+          cat <<'JSON'
+{"claims":[{"namespace":"draforge-e2e","name":"e2e-gpu-claim","status":"Allocated"}]}
+JSON
+          ;;
+        *' claims --output json')
+          cat <<'JSON'
+[{"namespace":"draforge-e2e","name":"e2e-recovery-claim","status":"Allocated","allocations":[{"poolName":"e2e-recovery-pool"}]}]
+JSON
+          ;;
+        *' explain e2e-gpu-claim --output json')
+          printf '%s\n' '{"targetName":"e2e-gpu-claim","allocated":true,"reasonTree":{"confidence":"confirmed"}}'
+          ;;
+        *' explain e2e-recovery-claim --output json')
+          if grep -Fq 'kubectl apply -f tests/install-e2e/recovery-fix.yaml' "$FAKE_COMMAND_LOG"; then
+            printf '%s\n' '{"targetName":"e2e-recovery-claim","allocated":true,"reasonTree":{"confidence":"confirmed","evidence":"e2e-recovery-pool"}}'
+          elif [[ "${FAKE_BAD_CLI_DIAGNOSIS:-0}" == "1" ]]; then
+            printf '%s\n' '{"targetName":"e2e-recovery-claim","allocated":false,"reasonTree":{"message":"No diagnostic information"}}'
+          else
+            printf '%s\n' '{"targetName":"e2e-recovery-claim","allocated":false,"reasonTree":{"children":[{"message":"Requested DeviceClass draforge-e2e-recovery-gpu does not exist in the cluster."}]}}'
+          fi
+          ;;
+        *)
+          echo "unsupported fake CLI command: $*" >&2
+          exit 2
+          ;;
+      esac
+      exit 0
+    fi
     if [[ "$*" == *network-policy-denied* && "$*" == *draforge-controller* ]]; then
       exit 1
     fi
@@ -263,6 +302,11 @@ run_case() {
     assert_contains "$case_dir/commands.log" 'kubectl apply -f tests/install-e2e/workload.yaml'
     assert_contains "$case_dir/commands.log" 'kubectl port-forward -n draforge-system service/draforge-server'
     assert_contains "$case_dir/commands.log" 'kubectl port-forward -n draforge-system service/draforge-controller'
+    assert_contains "$case_dir/commands.log" 'kubectl exec -n draforge-system deployment/draforge-server -- ./draforge --namespace draforge-e2e discover --output json'
+    assert_contains "$case_dir/commands.log" 'kubectl apply -f tests/install-e2e/recovery-claim.yaml'
+    assert_contains "$case_dir/commands.log" 'kubectl apply -f tests/install-e2e/recovery-fix.yaml'
+    jq -e '.targetName == "e2e-recovery-claim" and .allocated == false' "$case_dir/artifacts/cli-explain-pending.json" >/dev/null
+    jq -e '.targetName == "e2e-recovery-claim" and .allocated == true' "$case_dir/artifacts/cli-explain-recovered.json" >/dev/null
     assert_contains "$case_dir/stdout.log" 'Install-level E2E verification passed.'
   else
     jq -e '.passed == false' "$case_dir/artifacts/report.json" >/dev/null
@@ -273,6 +317,8 @@ run_case success 0 env
 run_case broken-api 1 env FAKE_BROKEN_API=1
 run_case missing-component 1 env FAKE_MISSING_COMPONENT=1
 run_case no-allocation 1 env FAKE_NO_ALLOCATION=1
+run_case bad-cli-diagnosis 1 env FAKE_BAD_CLI_DIAGNOSIS=1
+assert_contains "$TEST_ROOT/bad-cli-diagnosis/stdout.log" 'CLI did not diagnose the missing DeviceClass'
 assert_contains "$TEST_ROOT/no-allocation/stdout.log" 'ERROR: timed out waiting for simulated ResourceClaim allocation'
 assert_absent "$TEST_ROOT/no-allocation/stdout.log" 'Cannot iterate over null'
 

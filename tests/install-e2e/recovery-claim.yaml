@@ -1,0 +1,16 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: e2e-recovery-claim
+  namespace: draforge-e2e
+  labels:
+    app.kubernetes.io/part-of: draforge
+    draforge.oaslananka/e2e: "true"
+spec:
+  devices:
+    requests:
+      - name: recovery-gpu
+        exactly:
+          deviceClassName: draforge-e2e-recovery-gpu
+          allocationMode: ExactCount
+          count: 1

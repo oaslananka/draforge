@@ -105,6 +105,18 @@ claim_allocated() {
       >/dev/null
 }
 
+recovery_claim_allocated() {
+  kubectl get resourceclaim.resource.k8s.io e2e-recovery-claim \
+    -n "$FIXTURE_NAMESPACE" -o json 2>/dev/null | jq -e \
+      '(.status.allocation.devices.results // []) | any(.pool == "e2e-recovery-pool" and (.device | length) > 0)' \
+      >/dev/null
+}
+
+cli_json() {
+  kubectl exec -n "$SYSTEM_NAMESPACE" "deployment/${RELEASE_NAME}-server" -- \
+    ./draforge --namespace "$FIXTURE_NAMESPACE" "$@"
+}
+
 consumer_exists() {
   kubectl get pod "$CONSUMER_POD" -n "$FIXTURE_NAMESPACE" -o json 2>/dev/null | jq -e \
     --arg claim "$CLAIM_NAME" \
@@ -307,5 +319,45 @@ sse_claim_namespace=$(jq -r \
   fail "API and SSE namespace identity diverged"
 [[ -n "$api_claim_allocation" && "$api_claim_allocation" != "null" ]] || \
   fail "API claim allocation identity was empty"
+
+# Exercise the shipped CLI against the same real cluster used by the API checks.
+# A missing DeviceClass gives an actionable diagnosis; adding a separate simulated
+# pool and DeviceClass must allow that exact claim to recover without touching the
+# already-allocated fixture claim or making hardware-availability claims.
+echo "Verifying CLI discovery and claim explanation against live DRA resources..."
+cli_json discover --output json > "$ARTIFACT_DIR/cli-discover.json"
+jq -e --arg ns "$FIXTURE_NAMESPACE" --arg claim "$CLAIM_NAME" \
+  '.claims | any(.namespace == $ns and .name == $claim and .status == "Allocated")' \
+  "$ARTIFACT_DIR/cli-discover.json" >/dev/null || fail "CLI discover omitted the allocated claim"
+
+cli_json explain "$CLAIM_NAME" --output json > "$ARTIFACT_DIR/cli-explain-allocated.json"
+jq -e --arg claim "$CLAIM_NAME" \
+  '.targetName == $claim and .allocated == true and .reasonTree.confidence == "confirmed"' \
+  "$ARTIFACT_DIR/cli-explain-allocated.json" >/dev/null || fail "CLI explain failed on allocated claim"
+
+kubectl apply -f tests/install-e2e/recovery-claim.yaml
+cli_json explain e2e-recovery-claim --output json > "$ARTIFACT_DIR/cli-explain-pending.json"
+jq -e \
+  '.targetName == "e2e-recovery-claim" and .allocated == false and
+   ([.reasonTree | .. | objects | .message? // empty] |
+     any(contains("draforge-e2e-recovery-gpu") and contains("does not exist")))' \
+  "$ARTIFACT_DIR/cli-explain-pending.json" >/dev/null || fail "CLI did not diagnose the missing DeviceClass"
+
+kubectl apply -f tests/install-e2e/recovery-fix.yaml
+wait_for "recovered ResourceClaim allocation" recovery_claim_allocated
+
+cli_json claims --output json > "$ARTIFACT_DIR/cli-claims-recovered.json"
+jq -e --arg ns "$FIXTURE_NAMESPACE" \
+  'any(.namespace == $ns and .name == "e2e-recovery-claim" and .status == "Allocated" and
+       (.allocations | any(.poolName == "e2e-recovery-pool")))' \
+  "$ARTIFACT_DIR/cli-claims-recovered.json" >/dev/null || fail "CLI claims omitted the recovered allocation"
+
+cli_json explain e2e-recovery-claim --output json > "$ARTIFACT_DIR/cli-explain-recovered.json"
+jq -e \
+  '.targetName == "e2e-recovery-claim" and .allocated == true and
+   .reasonTree.confidence == "confirmed" and
+   (.reasonTree.evidence | contains("e2e-recovery-pool"))' \
+  "$ARTIFACT_DIR/cli-explain-recovered.json" >/dev/null || fail "CLI explain did not report recovery"
+echo "Verified: CLI missing-class diagnosis and successful simulated allocation recovery."
 
 echo "Install-level E2E verification passed."

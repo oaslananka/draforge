@@ -48,12 +48,13 @@ done
 node_version_comment='# node:22.23.1-alpine'
 node_image_arg='ARG NODE_IMAGE=node@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2'
 node_base="FROM \${NODE_IMAGE} AS frontend-builder"
-corepack_install='npm install --global --ignore-scripts --force corepack@0.35.0'
+corepack_enable='RUN corepack enable && corepack prepare pnpm@11.5.2 --activate'
 pnpm_activate='corepack prepare pnpm@11.5.2 --activate'
 assert_contains "$dockerfile" "$node_version_comment"
 assert_contains "$dockerfile" "$node_image_arg"
 assert_contains "$dockerfile" "$node_base"
-assert_contains "$dockerfile" "$corepack_install"
+assert_contains "$dockerfile" "$corepack_enable"
+assert_absent "$dockerfile" "npm install --global"
 assert_contains "$dockerfile" "$pnpm_activate"
 
 workspace_copy='COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./'

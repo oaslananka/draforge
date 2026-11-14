@@ -39,6 +39,11 @@ The verifier:
 - on the v1.35.5 baseline, drives real Chromium against the installed frontend and live Kubernetes-backed REST/SSE endpoints (no browser mocks): shows the still-pending claim and missing-class explanation, observes the pending resource graph, applies the matching simulated class/pool from operator-side `kubectl`, and requires Claims and Explain to update to Allocated **without a page reload**; the v1.36.1 matrix target retains the CLI/API checks without a second browser installation;
 - fails when a core component is missing, an API assertion is broken, or namespace-qualified API/SSE identity diverges.
 
+The normal Go CI also executes a bounded, native fuzz target for the E2E
+result parser: arbitrary test output must never override a `no packages to test`
+failure, even when combined with otherwise passing TestSmoke events. This has
+a three-second fuzzing budget and uses two workers, not a new service or CI job.
+
 The deterministic contract suites run before the heavier kind job. `scripts/test-install-e2e-cni.sh` verifies the pinned CNI download, SHA-256 check, rollout waits, and fail-closed hash mismatch path. `scripts/test-install-e2e-harness.sh` exercises success, missing-component, broken-API, enforced NetworkPolicy allow/deny, and matrix-policy paths without creating a cluster.
 
 ## Pull-request and release behavior

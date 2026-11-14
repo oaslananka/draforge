@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
+# Default workflow token is read-only; publishing and OIDC jobs declare
+# their narrower elevated scopes explicitly.
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -52,6 +57,10 @@ jobs:
 
       - name: Run unit tests (fast)
         run: go test ./...
+
+      - name: Fuzz fail-closed E2E evidence parser (bounded)
+        # Native Go fuzzing, two workers and a short CPU budget; no cloud service.
+        run: go test -run '^$' -fuzz '^FuzzCheckRejectsNoPackages$' -fuzztime=3s -parallel=2 ./internal/e2echeck
 
       - name: Compile tagged E2E package
         run: go test -tags=e2e ./tests/e2e/... -run '^$'

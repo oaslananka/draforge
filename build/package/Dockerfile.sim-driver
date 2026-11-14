@@ -1,6 +1,6 @@
 # Dockerfile for draforge-sim-driver
 # Stage 1: Build Go Driver
-FROM golang:1.26.11 AS builder
+FROM golang:1.26.11@sha256:957952ae74dc010608717144399a59a2c6e82ea03d63be1c7ff6577c5a135f93 AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -10,7 +10,7 @@ ARG COMMIT=unknown
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.versionVal=${VERSION} -X main.commitSHA=${COMMIT}" -o draforge-sim-driver ./cmd/draforge-sim-driver
 
 # Stage 2: Runner
-FROM alpine:3.24.2
+FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 RUN apk add --no-cache ca-certificates && \
     addgroup -S draforge && adduser -S draforge -G draforge
 USER draforge

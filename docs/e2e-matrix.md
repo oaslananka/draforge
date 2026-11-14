@@ -57,6 +57,7 @@ Required tools:
 - Bash (WSL on Windows) and Docker with daemon access;
 - kind at the version declared in `tests/install-e2e/kubernetes-versions.json`;
 - kubectl, Helm, jq, curl and sha256sum; Task is optional. Go is only needed for standalone binary builds; Node.js/pnpm for the optional local live-browser test.
+- A reachable Docker daemon **from the shell running the installer** (\`docker info\`); on Windows, [enable WSL 2 integration](https://docs.docker.com/desktop/features/wsl/) for the Linux distribution.
 
 Run the fast orchestration contract:
 

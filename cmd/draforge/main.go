@@ -100,6 +100,31 @@ func run() int {
 	return 0
 }
 
+// validateOutputFormat rejects explicitly requested formats that the command
+// cannot produce; a bad format must fail before accessing Kubernetes.
+func validateOutputFormat(cmd *cobra.Command, set bool, format string) error {
+	if !set {
+		return nil
+	}
+	var supported []string
+	switch cmd.Name() {
+	case "discover":
+		supported = []string{"table", "json", "yaml"}
+	case "claims", "explain", "doctor":
+		supported = []string{"table", "json"}
+	case "graph":
+		supported = []string{"json", "dot", "mermaid"}
+	default:
+		return fmt.Errorf("--output is not supported for %s", cmd.CommandPath())
+	}
+	for _, candidate := range supported {
+		if format == candidate {
+			return nil
+		}
+	}
+	return fmt.Errorf("unsupported --output %q for %s; choose one of: %s", format, cmd.CommandPath(), strings.Join(supported, ", "))
+}
+
 // NewRootCommand builds the complete DRAForge CLI command tree.
 // Extracted from main() for testability — tests can call this and capture
 // output via cmd.SetOut / cmd.SetErr without spawning a subprocess.
@@ -111,7 +136,13 @@ func NewRootCommand() *cobra.Command {
 
 	rootCmd.PersistentFlags().StringVar(&kubeconfig, "kubeconfig", "", "Path to the kubeconfig file")
 	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "default", "Kubernetes namespace")
-	rootCmd.PersistentFlags().StringVarP(&outputFmt, "output", "o", "table", "Output format (table, json, yaml, dot, mermaid)")
+	rootCmd.PersistentFlags().StringVarP(&outputFmt, "output", "o", "table", "Output format (supported values depend on the command; see docs/api.md)")
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if err := cmd.Context().Err(); err != nil {
+			return err
+		}
+		return validateOutputFormat(cmd, rootCmd.PersistentFlags().Changed("output"), outputFmt)
+	}
 
 	// 1. Version Command
 	var versionCmd = &cobra.Command{
@@ -132,7 +163,7 @@ func NewRootCommand() *cobra.Command {
 				return err
 			}
 
-			pools, devices, claims, err := discovery.DiscoverDRA(context.Background(), cs)
+			pools, devices, claims, err := discovery.DiscoverDRA(cmd.Context(), cs)
 			if err != nil {
 				return err
 			}
@@ -168,7 +199,7 @@ func NewRootCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _, claims, err := discovery.DiscoverDRA(context.Background(), cs)
+			_, _, claims, err := discovery.DiscoverDRA(cmd.Context(), cs)
 			if err != nil {
 				return err
 			}
@@ -197,7 +228,7 @@ func NewRootCommand() *cobra.Command {
 				return err
 			}
 			gb := graph.NewGraphBuilder()
-			g, err := gb.BuildGraph(context.Background(), cs, namespace, "")
+			g, err := gb.BuildGraph(cmd.Context(), cs, namespace, "")
 			if err != nil {
 				return err
 			}
@@ -225,7 +256,7 @@ func NewRootCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := explain.ExplainClaim(context.Background(), cs, namespace, args[0])
+			res, err := explain.ExplainClaim(cmd.Context(), cs, namespace, args[0])
 			if err != nil {
 				return err
 			}
@@ -258,7 +289,7 @@ func NewRootCommand() *cobra.Command {
 				return err
 			}
 			registry := doctor.NewRegistry()
-			report := registry.RunDiagnostics(context.Background(), cs)
+			report := registry.RunDiagnostics(cmd.Context(), cs)
 
 			if outputFmt == "json" {
 				data, _ := json.MarshalIndent(report, "", "  ")
@@ -348,16 +379,16 @@ func NewRootCommand() *cobra.Command {
 				Version:  "v1alpha1",
 				Resource: "simulateddevicepools",
 			}
-			existing, err := dynamicClient.Resource(gvr).Namespace(ns).Get(context.Background(), obj.GetName(), metav1.GetOptions{})
+			existing, err := dynamicClient.Resource(gvr).Namespace(ns).Get(cmd.Context(), obj.GetName(), metav1.GetOptions{})
 			if err == nil {
 				obj.SetResourceVersion(existing.GetResourceVersion())
-				_, err = dynamicClient.Resource(gvr).Namespace(ns).Update(context.Background(), &obj, metav1.UpdateOptions{})
+				_, err = dynamicClient.Resource(gvr).Namespace(ns).Update(cmd.Context(), &obj, metav1.UpdateOptions{})
 				if err == nil {
 					cmd.Printf("Successfully updated scenario %s/%s\n", ns, obj.GetName())
 				}
 				return err
 			}
-			_, err = dynamicClient.Resource(gvr).Namespace(ns).Create(context.Background(), &obj, metav1.CreateOptions{})
+			_, err = dynamicClient.Resource(gvr).Namespace(ns).Create(cmd.Context(), &obj, metav1.CreateOptions{})
 			if err == nil {
 				cmd.Printf("Successfully applied scenario %s/%s\n", ns, obj.GetName())
 			}
@@ -378,13 +409,13 @@ func NewRootCommand() *cobra.Command {
 				Version:  "v1alpha1",
 				Resource: "simulateddevicepools",
 			}
-			list, err := dynamicClient.Resource(gvr).Namespace(namespace).List(context.Background(), metav1.ListOptions{})
+			list, err := dynamicClient.Resource(gvr).Namespace(namespace).List(cmd.Context(), metav1.ListOptions{})
 			if err != nil {
 				return err
 			}
 			for _, item := range list.Items {
 				cmd.Printf("Deleting SimulatedDevicePool scenario %s/%s...\n", namespace, item.GetName())
-				_ = dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.Background(), item.GetName(), metav1.DeleteOptions{})
+				_ = dynamicClient.Resource(gvr).Namespace(namespace).Delete(cmd.Context(), item.GetName(), metav1.DeleteOptions{})
 			}
 			cmd.Println("All SimulatedDevicePool scenarios reset.")
 			return nil
@@ -419,7 +450,7 @@ func NewRootCommand() *cobra.Command {
 				Version:  "v1alpha1",
 				Resource: "simulateddevicepools",
 			}
-			sdp, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(context.Background(), poolNameFlag, metav1.GetOptions{})
+			sdp, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(cmd.Context(), poolNameFlag, metav1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("failed to get pool %s/%s: %w", namespace, poolNameFlag, err)
 			}
@@ -427,7 +458,7 @@ func NewRootCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = dynamicClient.Resource(gvr).Namespace(namespace).Update(context.Background(), sdp, metav1.UpdateOptions{})
+			_, err = dynamicClient.Resource(gvr).Namespace(namespace).Update(cmd.Context(), sdp, metav1.UpdateOptions{})
 			if err != nil {
 				return err
 			}
@@ -454,7 +485,7 @@ func NewRootCommand() *cobra.Command {
 				Version:  "v1alpha1",
 				Resource: "simulateddevicepools",
 			}
-			sdp, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(context.Background(), poolNameFlag, metav1.GetOptions{})
+			sdp, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(cmd.Context(), poolNameFlag, metav1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("failed to get pool %s/%s: %w", namespace, poolNameFlag, err)
 			}
@@ -462,7 +493,7 @@ func NewRootCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = dynamicClient.Resource(gvr).Namespace(namespace).Update(context.Background(), sdp, metav1.UpdateOptions{})
+			_, err = dynamicClient.Resource(gvr).Namespace(namespace).Update(cmd.Context(), sdp, metav1.UpdateOptions{})
 			if err != nil {
 				return err
 			}

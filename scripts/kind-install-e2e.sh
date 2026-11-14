@@ -26,13 +26,28 @@ if [[ "$installed_kind" != "$KIND_VERSION" ]]; then
   exit 1
 fi
 
+# The documented quickstart may be rerun with KEEP_CLUSTER=1. Never remove
+# an existing user's cluster, even if it has the test's default name.
+if ! existing_clusters=$(kind get clusters); then
+  echo "ERROR: cannot list kind clusters; refusing to create or delete anything." >&2
+  exit 1
+fi
+if grep -Fxq -- "$CLUSTER_NAME" <<< "$existing_clusters"; then
+  echo "ERROR: kind cluster '$CLUSTER_NAME' already exists; refusing to replace it." >&2
+  echo "Inspect it, choose DRAFORGE_INSTALL_E2E_CLUSTER_NAME=<new-name>, or deliberately delete it with 'kind delete cluster --name $CLUSTER_NAME' before retrying." >&2
+  exit 1
+fi
+
+created_cluster=0
 cleanup() {
   local status=$?
   "$ROOT_DIR/scripts/collect-install-e2e-artifacts.sh" || true
-  if [[ "$KEEP_CLUSTER" != "1" ]]; then
-    kind delete cluster --name "$CLUSTER_NAME" || true
-  else
-    echo "Keeping kind cluster $CLUSTER_NAME for inspection."
+  if [[ "$created_cluster" == "1" ]]; then
+    if [[ "$KEEP_CLUSTER" != "1" ]]; then
+      kind delete cluster --name "$CLUSTER_NAME" || true
+    else
+      echo "Keeping kind cluster $CLUSTER_NAME for inspection."
+    fi
   fi
   return "$status"
 }
@@ -51,12 +66,12 @@ networking:
   podSubnet: 192.168.0.0/16
 CONFIG
 
-kind delete cluster --name "$CLUSTER_NAME" >/dev/null 2>&1 || true
 kind create cluster \
   --name "$CLUSTER_NAME" \
   --image "$NODE_IMAGE" \
   --config "$ARTIFACT_DIR/kind-config.yaml" \
   --wait 0s
+created_cluster=1
 
 "$ROOT_DIR/scripts/install-e2e-cni.sh"
 "$ROOT_DIR/scripts/build-install-e2e-images.sh"

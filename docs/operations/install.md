@@ -8,17 +8,20 @@ The local profile uses the same policy-pinned kind installation exercised by pul
 
 ### Prerequisites
 
-- Docker with daemon access
+- Bash (WSL on Windows) and Docker with running daemon access
 - the exact kind version declared in `tests/install-e2e/kubernetes-versions.json`
-- kubectl, Helm, jq, curl, Go, Node.js, pnpm, and Task
+- kubectl, Helm, jq, curl, and sha256sum
+- Task is optional; Go is needed only for a local CLI/TUI build, and Node.js/pnpm only for optional local browser tests
 
 ### Create and keep the verified cluster
 
 ```bash
-DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind
+DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 bash scripts/kind-install-e2e.sh pull-request
 ```
 
-The command uses cluster name `draforge-install-e2e`, installs DRAForge in namespace `draforge-system`, and leaves diagnostics under `artifacts/install-e2e/`.
+If you have Task installed, `DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind` is equivalent. The command uses cluster name `draforge-install-e2e`, installs DRAForge in namespace `draforge-system`, and leaves diagnostics under `artifacts/install-e2e/`.
+
+**Existing cluster protection:** the script checks the name first and **will not delete or replace** an existing kind cluster. For a fresh parallel cluster, set `DRAFORGE_INSTALL_E2E_CLUSTER_NAME=draforge-my-demo`. If you intend to replace your old demo, inspect and explicitly delete it with `kind delete cluster --name draforge-install-e2e` before running again. Failed creation never triggers deletion of someone else's cluster; automatic cleanup only applies to a cluster this run successfully created.
 
 Access the dashboard locally:
 

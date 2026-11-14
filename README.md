@@ -80,11 +80,17 @@ Binaries are also available as pre-built archives from the [GitHub Releases](htt
 
 ### Quickstart A: Verified local kind cluster
 
-Install Docker, kubectl, Helm, jq, curl, Go, Node.js, pnpm, Task, and the kind version pinned in `tests/install-e2e/kubernetes-versions.json`. Then create the same complete local stack used by the pull-request install gate and keep it for exploration:
+For the complete local stack, install **Bash** (WSL on Windows), a running **Docker daemon**, **kubectl**, **Helm**, **jq**, **curl**, **sha256sum**, and the exact **kind** version pinned in `tests/install-e2e/kubernetes-versions.json`. Go is only needed if you also build the standalone CLI/TUI; Node.js and pnpm are only needed for optional local frontend/browser tests. The container image build brings its own toolchains.
+
+Clone the repository and create the disposable kind stack:
 
 ```bash
-DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind
+git clone https://github.com/oaslananka/draforge.git
+cd draforge
+DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 bash scripts/kind-install-e2e.sh pull-request
 ```
+
+If you already use Task, the equivalent command is `DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 task e2e:install-kind`. The installer **refuses to replace an existing kind cluster**, including a previous `draforge-install-e2e` cluster: inspect the existing cluster, choose a unique `DRAFORGE_INSTALL_E2E_CLUSTER_NAME`, or deliberately remove it before retrying. It only cleans up clusters it successfully created itself.
 
 Access the dashboard:
 
@@ -92,10 +98,10 @@ Access the dashboard:
 kubectl port-forward svc/draforge-server -n draforge-system 8080:8080
 ```
 
-Build the local CLI/TUI when needed:
+Build the local CLI/TUI when needed (requires Go 1.26+):
 
 ```bash
-task build
+go build -o bin/draforge ./cmd/draforge
 ./bin/draforge doctor
 ./bin/draforge tui
 ```

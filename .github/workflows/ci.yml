@@ -82,6 +82,7 @@ jobs:
             scripts/kind-install-e2e-matrix.sh \
             scripts/test-install-e2e-cni.sh \
             scripts/test-install-e2e-harness.sh \
+            scripts/test-kind-install-e2e-ownership.sh \
             scripts/verify-install-e2e-policy.sh \
             scripts/verify-release-tag.sh \
             scripts/test-verify-release-tag.sh \
@@ -104,6 +105,9 @@ jobs:
 
       - name: Test install-level E2E orchestration
         run: bash scripts/test-install-e2e-harness.sh
+
+      - name: Test local kind cluster ownership safeguards
+        run: bash scripts/test-kind-install-e2e-ownership.sh
 
       - name: Run race detector with coverage
         run: go test -race -coverprofile=coverage.out ./...

@@ -77,3 +77,34 @@ func assertCheckError(t *testing.T, input, wantErr string) {
 		t.Fatalf("Check() error = %v, want substring %q", err, wantErr)
 	}
 }
+
+// FuzzCheckRejectsNoPackages guards the fail-closed E2E evidence contract
+// against arbitrary Go test output, including malformed JSON and embedded
+// newlines. No random prefix may turn "no packages to test" into acceptance.
+func FuzzCheckRejectsNoPackages(f *testing.F) {
+	for _, seed := range []string{
+		"",
+		"not JSON",
+		`{"Action":"run","Test":"TestSmoke"}`,
+		`{"Action":"pass","Test":"TestSmoke","Output":"looks fine"}`,
+		"no packages to test",
+		"failed test\nextra line",
+		string([]byte{0, 255, 128, 10}),
+	} {
+		f.Add(seed)
+	}
+
+	const passedSmoke = `{"Action":"run","Test":"TestSmoke"}` + "\n" +
+		`{"Action":"pass","Test":"TestSmoke"}` + "\n"
+
+	f.Fuzz(func(t *testing.T, attackerInput string) {
+		if len(attackerInput) > 16*1024 {
+			t.Skip() // avoid unbounded resource use during fuzz corpus growth
+		}
+		stream := attackerInput + "\nno packages to test\n" + passedSmoke
+		_, err := Check(strings.NewReader(stream), "TestSmoke")
+		if err == nil || !strings.Contains(err.Error(), "no packages to test") {
+			t.Fatalf("Check must reject the no-packages sentinel; got %v", err)
+		}
+	})
+}

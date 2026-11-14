@@ -134,6 +134,12 @@ func NewRootCommand() *cobra.Command {
 		Short: "DRAForge: Observe, simulate, and diagnose Kubernetes DRA.",
 	}
 
+	// Cobra Print/Println/Printf default to stderr unless a writer is set.
+	// Send normal CLI results (including JSON pipelines) to stdout.
+	rootCmd.SetOut(os.Stdout)
+	// On failure, report the error to stderr without emitting usage into JSON pipes.
+	rootCmd.SilenceUsage = true
+
 	rootCmd.PersistentFlags().StringVar(&kubeconfig, "kubeconfig", "", "Path to the kubeconfig file")
 	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "default", "Kubernetes namespace")
 	rootCmd.PersistentFlags().StringVarP(&outputFmt, "output", "o", "table", "Output format (supported values depend on the command; see docs/api.md)")

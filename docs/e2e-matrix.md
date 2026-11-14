@@ -35,6 +35,7 @@ The verifier:
 - waits for the controller to publish a ResourceSlice and allocate the claim;
 - confirms the discovery API retains namespace, driver, pool, device, node, and consumer Pod identity;
 - verifies summary, graph, explain, server metrics, controller metrics, readiness, and SSE output;
+- runs the packaged CLI inside the installed server Pod against the live kind API: discovers an allocated claim, explains a second claim blocked by a missing DeviceClass, adds a separate DeviceClass/simulated pool, and verifies that the **same** claim becomes allocated via `claims` and `explain`; this is simulated-resource acceptance, not physical accelerator qualification;
 - fails when a core component is missing, an API assertion is broken, or namespace-qualified API/SSE identity diverges.
 
 The deterministic contract suites run before the heavier kind job. `scripts/test-install-e2e-cni.sh` verifies the pinned CNI download, SHA-256 check, rollout waits, and fail-closed hash mismatch path. `scripts/test-install-e2e-harness.sh` exercises success, missing-component, broken-API, enforced NetworkPolicy allow/deny, and matrix-policy paths without creating a cluster.

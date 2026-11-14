@@ -74,8 +74,10 @@ Explicit `-o/--output` options are command-specific: `discover` accepts
 `table`, `json`; `graph` accepts `json`, `dot`, `mermaid`.
 For backward compatibility, `graph` without an output flag defaults to JSON.
 Unsupported explicit formats return an error before contacting Kubernetes.
-Commands without formatted output reject `-o`. Kubernetes requests honor
-command cancellation (for example Ctrl+C).
+Commands without formatted output reject `-o`. CLI command results go to
+standard output for shell pipelines (`draforge discover -o json | jq`), while
+usage errors go to standard error. Kubernetes requests honor command
+cancellation (for example Ctrl+C).
 
 ### CLI Change Policy
 - **Global Flags**: Standard flags (e.g., `--kubeconfig`, `--namespace`) are stable.

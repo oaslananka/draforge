@@ -1,0 +1,32 @@
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  name: draforge-e2e-recovery-gpu
+  labels:
+    app.kubernetes.io/part-of: draforge
+    draforge.oaslananka/e2e: "true"
+spec:
+  selectors:
+    - cel:
+        expression: >-
+          device.driver == "sim.draforge.oaslananka" &&
+          device.attributes["sim.draforge.oaslananka"].model == "DRAForge-E2E-Recovery"
+---
+apiVersion: draforge.oaslananka/v1alpha1
+kind: SimulatedDevicePool
+metadata:
+  name: e2e-recovery-pool
+  namespace: draforge-e2e
+  labels:
+    app.kubernetes.io/part-of: draforge
+    draforge.oaslananka/e2e: "true"
+spec:
+  driverName: sim.draforge.oaslananka
+  poolName: e2e-recovery-pool
+  deviceCount: 1
+  deviceType: gpu
+  attributes:
+    model: DRAForge-E2E-Recovery
+    vendor: DRAForge
+  capacities:
+    memory: 16Gi

@@ -78,15 +78,23 @@ func TestInstallValuesRequireTwoReplicaLeaderElection(t *testing.T) {
 	}
 }
 
-func TestFailoverClaimFixtureRequestsOneTypedDevice(t *testing.T) {
-	objects := decodeDocuments(t, readFixture(t, "failover-claim.yaml"))
-	claim := typedObject[resourcev1.ResourceClaim](t, indexByKind(t, objects), "ResourceClaim")
-	if claim.Namespace != "draforge-e2e" || claim.Name != "e2e-failover-claim" {
-		t.Fatalf("unexpected failover claim identity %s/%s", claim.Namespace, claim.Name)
+// singleExactClaimFixture enforces the same structural contract for every
+// one-device installation test claim, without duplicating validation logic.
+func singleExactClaimFixture(t *testing.T, fixture, name string) *resourcev1.ResourceClaim {
+	t.Helper()
+	claim := typedObject[resourcev1.ResourceClaim](t, indexByKind(t,
+		decodeDocuments(t, readFixture(t, fixture))), "ResourceClaim")
+	if claim.Namespace != "draforge-e2e" || claim.Name != name {
+		t.Fatalf("unexpected claim identity %s/%s (want draforge-e2e/%s)", claim.Namespace, claim.Name, name)
 	}
 	if len(claim.Spec.Devices.Requests) != 1 || claim.Spec.Devices.Requests[0].Exactly == nil {
-		t.Fatalf("failover claim must contain one exact request: %#v", claim.Spec.Devices.Requests)
+		t.Fatalf("claim must contain one exact request: %#v", claim.Spec.Devices.Requests)
 	}
+	return claim
+}
+
+func TestFailoverClaimFixtureRequestsOneTypedDevice(t *testing.T) {
+	claim := singleExactClaimFixture(t, "failover-claim.yaml", "e2e-failover-claim")
 	exact := claim.Spec.Devices.Requests[0].Exactly
 	if exact.DeviceClassName != "draforge-e2e-gpu" ||
 		exact.AllocationMode != resourcev1.DeviceAllocationModeExactCount || exact.Count != 1 {
@@ -107,6 +115,35 @@ func TestInstallResourceFixturesUseTypedDRAIdentity(t *testing.T) {
 	claim := typedObject[resourcev1.ResourceClaim](t, byKind, "ResourceClaim")
 	validateResourceClaim(t, claim, deviceClass.Name)
 	validateSimulatorPool(t, byKind["SimulatedDevicePool"], claim.Namespace)
+}
+
+func TestCLIRecoveryFixturesKeepClaimIdentityAndSeparateCapacity(t *testing.T) {
+	claim := singleExactClaimFixture(t, "recovery-claim.yaml", "e2e-recovery-claim")
+	exact := claim.Spec.Devices.Requests[0].Exactly
+	if exact.DeviceClassName != "draforge-e2e-recovery-gpu" ||
+		exact.AllocationMode != resourcev1.DeviceAllocationModeExactCount || exact.Count != 1 {
+		t.Fatalf("unexpected recovery request: %#v", exact)
+	}
+
+	repair := indexByKind(t, decodeDocuments(t, readFixture(t, "recovery-fix.yaml")))
+	class := typedObject[resourcev1.DeviceClass](t, repair, "DeviceClass")
+	if class.Name != exact.DeviceClassName || len(class.Spec.Selectors) != 1 ||
+		class.Spec.Selectors[0].CEL == nil ||
+		!strings.Contains(class.Spec.Selectors[0].CEL.Expression, "DRAForge-E2E-Recovery") {
+		t.Fatalf("recovery DeviceClass cannot select its simulated capacity: %#v", class)
+	}
+	pool := repair["SimulatedDevicePool"]
+	if pool == nil || pool.GetName() != "e2e-recovery-pool" || pool.GetNamespace() != claim.Namespace {
+		t.Fatalf("recovery pool is absent or in the wrong namespace: %#v", pool)
+	}
+	name, _, err := unstructured.NestedString(pool.Object, "spec", "poolName")
+	if err != nil || name != pool.GetName() {
+		t.Fatalf("recovery pool spec name is inconsistent: %q, %v", name, err)
+	}
+	count, _, err := unstructured.NestedFloat64(pool.Object, "spec", "deviceCount")
+	if err != nil || count != 1 {
+		t.Fatalf("recovery pool capacity must remain one isolated device: %.0f, %v", count, err)
+	}
 }
 
 func TestClaimConsumerFixtureReferencesExistingClaim(t *testing.T) {

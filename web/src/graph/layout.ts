@@ -45,7 +45,7 @@ export function reducedMotionLayout(
   const columnSpacing = 160;
   const rowSpacing = 100;
   const columns = Math.max(1, Math.floor((width - 2 * horizontalMargin) / columnSpacing) + 1);
-  const sortedIDs = [...new Set(ids)].sort();
+  const sortedIDs = [...new Set(ids)].sort((a, b) => a.localeCompare(b));
   const positions = new Map<string, GraphPoint>();
 
   sortedIDs.forEach((id, index) => {

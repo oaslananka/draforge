@@ -310,11 +310,13 @@ test('@mobile reduced-motion dense graph scrolls internally without shrinking no
         actualSvgWidth: svg.getBoundingClientRect().width,
       };
     });
-  expect(sizes).not.toBeNull();
-  expect(sizes!.documentWidth).toBeLessThanOrEqual(sizes!.viewport);
-  expect(sizes!.internalWidth).toBeGreaterThan(sizes!.visibleWidth);
-  expect(sizes!.internalHeight).toBeGreaterThan(sizes!.visibleHeight);
-  expect(sizes!.actualSvgWidth).toBeGreaterThanOrEqual(800);
+  if (sizes === null) {
+    throw new Error('Graph SVG is missing from the reduced-motion panel');
+  }
+  expect(sizes.documentWidth).toBeLessThanOrEqual(sizes.viewport);
+  expect(sizes.internalWidth).toBeGreaterThan(sizes.visibleWidth);
+  expect(sizes.internalHeight).toBeGreaterThan(sizes.visibleHeight);
+  expect(sizes.actualSvgWidth).toBeGreaterThanOrEqual(800);
 });
 
 test('@mobile representative mobile viewport keeps navigation and main content within the page', async ({

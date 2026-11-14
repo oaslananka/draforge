@@ -201,12 +201,122 @@ test('@motion keeps graph positions static and exposes the reduced-motion state'
   await page.getByRole('button', { name: 'GRAPH', exact: true }).click();
 
   await expect(
-    page.getByText('Reduced motion is active; graph nodes use fixed positions.'),
+    page.getByText('Reduced motion is active; graph nodes use fixed, separated positions. Scroll inside the graph to reach more nodes.'),
   ).toBeVisible();
   await expect(page.getByRole('region', { name: 'Resource relationship graph' })).toHaveAttribute(
     'data-motion',
     'reduced',
   );
+});
+
+test('@motion dense static graph keeps every node separately pointer-selectable', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await expect(page.getByRole('status', { name: 'Live stream status' }))
+    .toContainText('Stream Connected');
+  await page.getByRole('button', { name: 'GRAPH' }).click();
+
+  const claim = {
+    id: 'claim/draforge-e2e/e2e-recovery-claim',
+    type: 'ResourceClaim',
+    label: 'e2e-recovery-claim',
+    metadata: { namespace: 'draforge-e2e', status: 'Allocated' },
+  };
+  const graph = {
+    nodes: [
+      claim,
+      ...Array.from({ length: 18 }, (_, index) => ({
+        id: 'resource/synthetic-' + index,
+        type: ['Allocation', 'Device', 'DeviceClass', 'ResourcePool', 'Node', 'Pod', 'Driver', 'Namespace'][index % 8],
+        label: 'resource-' + index,
+        metadata: { status: 'healthy' },
+      })),
+    ],
+    edges: [],
+  };
+  await page.evaluate((payload) => {
+    window.dispatchEvent(new CustomEvent('draforge-test-graph', { detail: payload }));
+  }, graph);
+
+  const nodes = page.locator('.graph-node');
+  await expect(nodes).toHaveCount(19);
+  // A one-node mock passes even when other graph nodes obscure the target.
+  // Check the actual browser pointer hit for every node in a dense graph.
+  for (let index = 0; index < 19; index += 1) {
+    const node = nodes.nth(index);
+    await node.scrollIntoViewIfNeeded();
+    const targetIsTopmost = await node.evaluate((element) => {
+      const circle = element.querySelector('circle');
+      if (!circle) return false;
+      const bounds = circle.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2,
+      );
+      return hit?.closest('.graph-node') === element;
+    });
+    expect(targetIsTopmost, 'Graph node index ' + index + ' must be independently clickable')
+      .toBe(true);
+  }
+
+  const recoveryClaim = page.getByRole('button', {
+    name: 'ResourceClaim e2e-recovery-claim in namespace draforge-e2e, status Allocated',
+  });
+  await recoveryClaim.locator('circle').click();
+  await expect(recoveryClaim).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Diagnose Allocation' })).toBeVisible();
+
+  // A reordered SSE graph must preserve the same fixed layout, without jitter.
+  const before = await recoveryClaim.locator('g[transform]').first().getAttribute('transform');
+  await page.evaluate((payload) => {
+    window.dispatchEvent(new CustomEvent('draforge-test-graph', { detail: payload }));
+  }, { ...graph, nodes: [...graph.nodes].reverse() });
+  await expect(recoveryClaim.locator('g[transform]').first()).toHaveAttribute('transform', before ?? '');
+});
+
+test('@mobile reduced-motion dense graph scrolls internally without shrinking nodes', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await expect(page.getByRole('status', { name: 'Live stream status' }))
+    .toContainText('Stream Connected');
+  await page.getByRole('button', { name: 'GRAPH' }).click();
+
+  const graph = {
+    nodes: Array.from({ length: 75 }, (_, index) => ({
+      id: 'device/synthetic-' + index,
+      type: 'Device',
+      label: 'dev-' + index,
+      metadata: { status: 'healthy' },
+    })),
+    edges: [],
+  };
+  await page.evaluate((payload) => {
+    window.dispatchEvent(new CustomEvent('draforge-test-graph', { detail: payload }));
+  }, graph);
+  await expect(page.locator('.graph-node')).toHaveCount(75);
+
+  const sizes = await page.getByRole('region', { name: 'Resource relationship graph' })
+    .evaluate((region) => {
+      const svg = region.querySelector('svg');
+      if (!svg) return null;
+      return {
+        viewport: document.documentElement.clientWidth,
+        documentWidth: document.documentElement.scrollWidth,
+        internalWidth: region.scrollWidth,
+        internalHeight: region.scrollHeight,
+        visibleWidth: region.clientWidth,
+        visibleHeight: region.clientHeight,
+        actualSvgWidth: svg.getBoundingClientRect().width,
+      };
+    });
+  if (sizes === null) {
+    throw new Error('Graph SVG is missing from the reduced-motion panel');
+  }
+  expect(sizes.documentWidth).toBeLessThanOrEqual(sizes.viewport);
+  expect(sizes.internalWidth).toBeGreaterThan(sizes.visibleWidth);
+  expect(sizes.internalHeight).toBeGreaterThan(sizes.visibleHeight);
+  expect(sizes.actualSvgWidth).toBeGreaterThanOrEqual(800);
 });
 
 test('@mobile representative mobile viewport keeps navigation and main content within the page', async ({

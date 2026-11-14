@@ -41,6 +41,14 @@ The dashboard handles the stream with controlled reconnection:
 
 A stream status badge is visible in the dashboard header.
 
+The first graph frame establishes a baseline. When a later frame changes
+resource relationships or allocation state, the dashboard refreshes the
+read-only Overview, Pools, Devices, Claims, and Doctor data and the selected
+claim explanation. Repeated identical frames do not trigger additional
+HTTP requests. A successful refresh clears earlier API errors, without any
+fixed-interval polling; unrelated diagnostic changes that do not alter the
+resource graph may require an explicit page reload.
+
 ## Frontend architecture and tests
 
 `App.tsx` is a small composition root. API/query state is isolated in `useDashboardData`, claim explanation requests are isolated in `useClaimExplanation`, SSE lifecycle remains in `useSSE`, and tab rendering is delegated to `DashboardViewRouter`. Header, footer, graph, and view state components are independently reviewable.

@@ -206,11 +206,13 @@ describe('App critical dashboard flows', () => {
       edges: [],
     };
     const onGraph = () => mockUseSSE.mock.lastCall?.[0];
-    const sendGraph = (graph: ResourceGraph) => act(() => {
-      const callback = onGraph();
-      if (!callback) throw new Error('SSE handler not installed');
-      callback(graph);
-    });
+    const sendGraph = (graph: ResourceGraph) => {
+      act(() => {
+        const callback = onGraph();
+        if (!callback) throw new Error('SSE handler not installed');
+        callback(graph);
+      });
+    };
     sendGraph(pendingGraph);
     sendGraph({ ...pendingGraph, nodes: [...pendingGraph.nodes] });
     expect(mockFetchClaims).toHaveBeenCalledTimes(1);
@@ -261,11 +263,13 @@ describe('App critical dashboard flows', () => {
     render(<App />);
     expect(await screen.findByText('summary temporarily unavailable')).toBeTruthy();
 
-    const sendGraph = (status: string) => act(() => {
-      const callback = mockUseSSE.mock.lastCall?.[0];
-      if (!callback) throw new Error('SSE handler not installed');
-      callback({ nodes: [{ id: 'claim/team-a/shared', type: 'ResourceClaim', label: 'shared', metadata: { status } }], edges: [] });
-    });
+    const sendGraph = (status: string) => {
+      act(() => {
+        const callback = mockUseSSE.mock.lastCall?.[0];
+        if (!callback) throw new Error('SSE handler not installed');
+        callback({ nodes: [{ id: 'claim/team-a/shared', type: 'ResourceClaim', label: 'shared', metadata: { status } }], edges: [] });
+      });
+    };
     sendGraph('Pending');
     sendGraph('Allocated');
     await waitFor(() => {

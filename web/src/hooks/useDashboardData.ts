@@ -90,9 +90,7 @@ async function loadSection<T>(options: SectionLoadOptions<T>) {
       // Clear stale error messages after the API becomes healthy again.
       options.setErrors((current) => {
         if (current[options.section] === undefined) return current;
-        const next = { ...current };
-        delete next[options.section];
-        return next;
+        return { ...current, [options.section]: undefined };
       });
     }
   } catch (error: unknown) {

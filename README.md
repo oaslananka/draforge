@@ -82,6 +82,8 @@ Binaries are also available as pre-built archives from the [GitHub Releases](htt
 
 For the complete local stack, install **Bash** (WSL on Windows), a running **Docker daemon**, **kubectl**, **Helm**, **jq**, **curl**, **sha256sum**, and the exact **kind** version pinned in `tests/install-e2e/kubernetes-versions.json`. Go is only needed if you also build the standalone CLI/TUI; Node.js and pnpm are only needed for optional local frontend/browser tests. The container image build brings its own toolchains.
 
+**Windows/WSL:** Docker Desktop working in PowerShell does not prove that Docker works inside Ubuntu/WSL. Use the [Docker Desktop WSL 2 backend and per-distribution integration](https://docs.docker.com/desktop/features/wsl/), then run **\`docker info\` in the same WSL terminal** before starting. The quickstart now reports missing tools together and refuses to create a kind cluster if the Docker daemon is unavailable. Native Linux Docker Engine works with the same \`docker info\` check.
+
 Clone the repository and create the disposable kind stack:
 
 ```bash

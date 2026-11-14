@@ -13,6 +13,20 @@ The local profile uses the same policy-pinned kind installation exercised by pul
 - kubectl, Helm, jq, curl, and sha256sum
 - Task is optional; Go is needed only for a local CLI/TUI build, and Node.js/pnpm only for optional local browser tests
 
+#### Windows with Ubuntu/WSL 2
+
+A Docker Desktop daemon reachable from PowerShell is **not sufficient** for a Linux shell running kind. In Docker Desktop, select the **WSL 2 backend**, then enable your Ubuntu distribution under **Settings > Resources > WSL Integration**. See [Docker's official WSL documentation](https://docs.docker.com/desktop/features/wsl/). The native Linux Docker Engine is also supported.
+
+From the **same WSL terminal** that will run DRAForge:
+
+\`\`\`bash
+docker info
+kind version
+helm version --short
+\`\`\`
+
+The installer checks all required command-line tools before parsing the test matrix. It then tests the Docker daemon before any kind operation. Missing tools or an unreachable daemon produce a clear error, **without creating or deleting a cluster**. Do not assume \`docker --version\` proves the daemon is available.
+
 ### Create and keep the verified cluster
 
 ```bash

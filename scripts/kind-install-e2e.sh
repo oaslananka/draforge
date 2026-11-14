@@ -8,17 +8,39 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PROFILE=${1:-pull-request}
 CLUSTER_NAME=${DRAFORGE_INSTALL_E2E_CLUSTER_NAME:-draforge-install-e2e}
 KEEP_CLUSTER=${DRAFORGE_INSTALL_E2E_KEEP_CLUSTER:-0}
+ARTIFACT_DIR=${DRAFORGE_INSTALL_E2E_ARTIFACT_DIR:-$ROOT_DIR/artifacts/install-e2e}
+
+# Check the environment before invoking any command that could create a cluster.
+missing_tools=()
+for tool in docker kind kubectl helm jq curl sha256sum; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    missing_tools+=("$tool")
+  fi
+done
+# Report all missing tools *and* daemon connectivity in one pass. A Windows
+# Docker Desktop daemon may be healthy while Ubuntu/WSL cannot reach it.
+docker_unavailable=0
+if command -v docker >/dev/null 2>&1; then
+  if ! docker info --format '{{.ServerVersion}}' >/dev/null 2>&1; then
+    docker_unavailable=1
+  fi
+fi
+
+if (( ${#missing_tools[@]} > 0 )); then
+  echo "ERROR: missing required tools: ${missing_tools[*]}." >&2
+fi
+if (( docker_unavailable == 1 )); then
+  echo "ERROR: Docker daemon unavailable from this shell." >&2
+  echo "Start Docker Engine and verify 'docker info' here. With Docker Desktop on Windows, enable the WSL 2 backend and Resources > WSL Integration for this distro (https://docs.docker.com/desktop/features/wsl/)." >&2
+fi
+if (( ${#missing_tools[@]} > 0 || docker_unavailable == 1 )); then
+  echo "No kind cluster created." >&2
+  exit 1
+fi
+
 MATRIX_JSON=$("$ROOT_DIR/scripts/e2e-matrix.sh" "$PROFILE")
 KIND_VERSION=$(jq -r '.include[0].kind_version' <<<"$MATRIX_JSON")
 NODE_IMAGE=${DRAFORGE_INSTALL_E2E_NODE_IMAGE:-$(jq -r '.include[0].node_image' <<<"$MATRIX_JSON")}
-ARTIFACT_DIR=${DRAFORGE_INSTALL_E2E_ARTIFACT_DIR:-$ROOT_DIR/artifacts/install-e2e}
-
-for tool in docker kind kubectl helm jq curl; do
-  command -v "$tool" >/dev/null 2>&1 || {
-    echo "ERROR: missing required tool: $tool" >&2
-    exit 1
-  }
-done
 
 installed_kind=$(kind version 2>/dev/null | awk '{print $2}')
 if [[ "$installed_kind" != "$KIND_VERSION" ]]; then

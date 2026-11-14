@@ -53,6 +53,9 @@ for tool in docker kubectl helm curl; do
   cat > "$FAKE_BIN/$tool" <<'STUB'
 #!/usr/bin/env bash
 printf 'other %s %s\n' "$(basename "$0")" "$*" >> "$FAKE_LOG"
+if [[ "$(basename "$0")" == docker && "${1:-}" == info && "${FAKE_DOCKER_UNAVAILABLE:-0}" == 1 ]]; then
+  exit 7
+fi
 STUB
 done
 chmod +x "$FAKE_BIN"/* "$FAKE_PROJECT/scripts"/*.sh
@@ -81,6 +84,13 @@ run_case() {
   fi
   [[ "$actual" == "$expected" ]] || { cat "$dir/out.log" >&2; fail "$name exited $actual (expected $expected)"; }
 }
+
+run_case docker-unavailable 1 FAKE_DOCKER_UNAVAILABLE=1
+must_contain "$TEST_ROOT/docker-unavailable/out.log" 'Docker daemon unavailable from this shell'
+must_contain "$TEST_ROOT/docker-unavailable/out.log" 'No kind cluster created.'
+must_contain "$TEST_ROOT/docker-unavailable/calls.log" 'other docker info --format'
+must_not_contain "$TEST_ROOT/docker-unavailable/calls.log" 'kind '
+must_not_contain "$TEST_ROOT/docker-unavailable/calls.log" 'stage '
 
 run_case already-exists 1 FAKE_EXISTING=1
 must_contain "$TEST_ROOT/already-exists/out.log" 'already exists; refusing to replace it'

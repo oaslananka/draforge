@@ -32,7 +32,7 @@ description: Diagnose Kubernetes ResourceClaim allocation, explore simulated dev
         <div class="df-path-topline"><span>01 · Local simulation</span><span>No cloud account</span></div>
         <h3 id="df-local-title">Explore a complete DRA stack</h3>
         <p>Build and install the simulator, controller, server, and example claims in a new kind cluster. The installer runs real Kubernetes checks before leaving it available for you.</p>
-        <p class="df-prereqs"><strong>You need:</strong> Bash or WSL, Docker running, pinned kind, kubectl, Helm, jq, curl and sha256sum. Go, Node.js and pnpm are not required on the host for this stack.</p>
+        <p class="df-prereqs"><strong>You need:</strong> Bash or WSL, Docker accessible from that shell (verify with <code>docker info</code>), pinned kind, kubectl, Helm, jq, curl and sha256sum. On Windows, enable Docker Desktop's WSL integration for your distribution. Go, Node.js and pnpm are not required on the host for this stack.</p>
         <p class="df-command-label">In your terminal</p>
         <pre><code>git clone https://github.com/oaslananka/draforge.git
 cd draforge

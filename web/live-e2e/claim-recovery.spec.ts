@@ -48,7 +48,11 @@ test('real kind dashboard diagnoses and observes claim recovery without reloadin
 
   await page.getByRole('button', { name: 'EXPLAIN', exact: true }).click();
   await expect(claimSelector).toHaveValue('draforge-e2e/e2e-recovery-claim');
-  await expect(page.getByText('Claim is allocated.')).toBeVisible();
+  // Assert the real Explain engine's result and allocation evidence, not
+  // wording from the separate browser test's mocked fixture.
+  await expect(page.getByText('Allocated claim:')).toBeVisible();
+  await expect(page.getByText('ResourceClaim successfully allocated.')).toBeVisible();
+  await expect(page.getByText(/e2e-recovery-pool\/dev-/)).toBeVisible();
 
   // This entire transition occurs in one browser page, without reload.
   expect(new URL(page.url()).origin).toBe(

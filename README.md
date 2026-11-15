@@ -16,6 +16,10 @@ Model virtual device pools, inspect `ResourceClaim` and `ResourceSlice` state, a
 
 </div>
 
+![DRAForge dashboard showing simulated resource claims and related devices in the interactive graph](docs/assets/dashboard-simulation.webp)
+
+*Actual DRAForge web interface rendered with **synthetic demonstration data**. No physical GPU or publicly connected Kubernetes cluster is shown. [Try the local simulation](#quickstart).*
+
 ---
 
 ## Why DRAForge?
@@ -82,7 +86,7 @@ Binaries are also available as pre-built archives from the [GitHub Releases](htt
 
 For the complete local stack, install **Bash** (WSL on Windows), a running **Docker daemon**, **kubectl**, **Helm**, **jq**, **curl**, **sha256sum**, and the exact **kind** version pinned in `tests/install-e2e/kubernetes-versions.json`. Go is only needed if you also build the standalone CLI/TUI; Node.js and pnpm are only needed for optional local frontend/browser tests. The container image build brings its own toolchains.
 
-**Windows/WSL:** Docker Desktop working in PowerShell does not prove that Docker works inside Ubuntu/WSL. Use the [Docker Desktop WSL 2 backend and per-distribution integration](https://docs.docker.com/desktop/features/wsl/), then run **\`docker info\` in the same WSL terminal** before starting. The quickstart now reports missing tools together and refuses to create a kind cluster if the Docker daemon is unavailable. Native Linux Docker Engine works with the same \`docker info\` check.
+**Windows/WSL:** Docker Desktop working in PowerShell does not prove that Docker works inside Ubuntu/WSL. Use the [Docker Desktop WSL 2 backend and per-distribution integration](https://docs.docker.com/desktop/features/wsl/), then run **`docker info` in the same WSL terminal** before starting. The quickstart now reports missing tools together and refuses to create a kind cluster if the Docker daemon is unavailable. Native Linux Docker Engine works with the same `docker info` check.
 
 Clone the repository and create the disposable kind stack:
 
@@ -99,6 +103,8 @@ Access the dashboard:
 ```bash
 kubectl port-forward svc/draforge-server -n draforge-system 8080:8080
 ```
+
+Open **[http://localhost:8080](http://localhost:8080)** on the same machine to explore the live, read-only DRAForge dashboard (Claims, Graph and Explain). This is a local connection, **not a publicly hosted demo**.
 
 Build the local CLI/TUI when needed (requires Go 1.26+):
 

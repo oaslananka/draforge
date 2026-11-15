@@ -110,6 +110,22 @@ def validate_markdown_links(root: Path, files: list[Path]) -> list[str]:
     return errors
 
 
+def validate_jekyll_include_links(root: Path) -> list[str]:
+    """Check site-wide Jekyll head snippets for missing local CSS/JS assets."""
+    errors: list[str] = []
+    includes = root / "docs" / "_includes"
+    for source in sorted(includes.glob("*.html")):
+        text = source.read_text(encoding="utf-8")
+        for match in JEKYLL_LINK_PATTERN.finditer(text):
+            relative = Path(normalize_link_target(match.group(1)).lstrip("/"))
+            target = (root / "docs" / relative).resolve()
+            if not target.is_relative_to((root / "docs").resolve()) or not target.is_file():
+                errors.append(
+                    f"{source.relative_to(root)}: missing Jekyll relative_url target: {relative}"
+                )
+    return errors
+
+
 def repository_references(text: str) -> set[str]:
     references: set[str] = set()
     for prefix in ACTIVE_PATH_PREFIXES:
@@ -606,6 +622,7 @@ def validate_root(root: Path) -> list[str]:
     active_files = active_markdown_files(root)
     errors: list[str] = []
     errors.extend(validate_markdown_links(root, files))
+    errors.extend(validate_jekyll_include_links(root))
     errors.extend(validate_repository_paths(root, active_files))
     errors.extend(validate_tasks(root, active_files))
     errors.extend(validate_version_contract(root))
@@ -681,6 +698,14 @@ def self_test() -> list[str]:
         write_fixture(Path("docs/index.md"), """<a href="{{ '/missing.html' | relative_url }}">Missing page</a>""")
         if not has_error("missing Jekyll relative_url target"):
             return ["missing Jekyll documentation link fixture unexpectedly passed"]
+
+        reset_fixture()
+        write_fixture(
+            Path("docs/_includes/head-custom.html"),
+            """<script src="{{ '/assets/js/nonexistent-theme.js' | relative_url }}"></script>""",
+        )
+        if not has_error("missing Jekyll relative_url target"):
+            return ["missing Jekyll include asset fixture unexpectedly passed"]
 
         reset_fixture()
         write_fixture(README_PATH, "task missing:task\n")

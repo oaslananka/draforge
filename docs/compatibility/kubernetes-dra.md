@@ -1,8 +1,8 @@
 # Kubernetes DRA Compatibility
 
-> **Last reviewed for v0.4.0 candidate:** 2026-11-15
+> **Last reviewed:** 2026-11-15
 > **Upstream Kubernetes reference:** v1.35 through v1.37
-> **DRAForge version:** 0.4.0 (**unpublished candidate**; the latest published release remains v0.3.0)
+> **DRAForge version:** 0.4.0
 
 > **Evidence boundary:** Kubernetes v1.37 exists upstream, but no DRAForge
 > v1.37 kind, API, or physical-cluster acceptance has been performed. The
@@ -48,7 +48,7 @@ transition targets and must be validated per distribution.
 | kind full gate | v1.35.5 and v1.36.1 | Weekly, manual, release-candidate, and final-release matrix |
 | DOKS | distribution-supported v1 API | Optional provider-adapter smoke target; not a general release gate |
 
-**Upstream review for this candidate (2026-11-15):** Kubernetes lists v1.37
+**Upstream review (2026-11-15):** Kubernetes lists v1.37
 among its maintained minor versions, and its v1.37 DRA release notes state that
 extended-resource allocation by DRA reached GA. This describes the upstream
 feature only: DRAForge has **not** exercised its extended-resource integration

@@ -7,12 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.0]
-
-> **Release preparation (not yet published).** This undated v0.4.0
-> candidate summarizes changes since v0.3.0. GitHub/GHCR artifacts and
-> container images remain at the latest published v0.3.0 until an
-> independently verified release workflow completes.
+## [0.4.0] - 2026-11-15
 
 ### Added
 - A task-first GitHub Pages landing page with separate local kind simulation and compatible Kubernetes setup paths, complete commands and boundaries; an accessible documentation-wide light/dark theme that follows the operating system until the visitor chooses a preference; a labeled dashboard screenshot using simulated data.

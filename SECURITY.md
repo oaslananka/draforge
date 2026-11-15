@@ -6,11 +6,6 @@
 
 Only the latest release is actively supported with security updates.
 
-> **Unpublished v0.4.0 release candidate:** the table below is the proposed
-> policy **once v0.4.0 is published**. Until that release exists, v0.3.x
-> remains the latest published and supported release. Do not infer that a
-> reviewed candidate PR provides downloadable v0.4.0 binaries or images.
-
 | Version | Supported |
 | ------- | --------- |
 | v0.4.x  | Yes       |

@@ -29,3 +29,10 @@ to those historical artifacts.
 Dependencies, vendored material, fixtures, and embedded third-party assets retain
 their own applicable notices and licenses. Refer to repository-specific third-party
 notices, attribution files, and dependency metadata.
+
+## Historical Apache license notice
+
+Earlier source versions used Apache License 2.0. The complete historical
+text is retained at [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
+This proposal does not revoke the Apache grants that apply to those older
+revisions or change licenses for separately owned third-party material.

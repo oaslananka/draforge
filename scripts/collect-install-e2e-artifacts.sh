@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Captures install-level E2E diagnostics without failing the caller.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -u
 

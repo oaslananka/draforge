@@ -2,7 +2,7 @@
 // +build e2e
 
 // Package e2e implements smoke tests for live cluster verification.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package e2e
 
 import (

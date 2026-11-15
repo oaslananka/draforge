@@ -1,6 +1,6 @@
 # Contributing to DRAForge
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 
 Welcome! We are excited that you want to contribute to DRAForge.
 
@@ -81,7 +81,7 @@ DRAForge uses standard ecosystem tooling and reviewable manifests for every depe
 
 ## Contributor Authorization
 
-Every contribution is submitted through GitHub. Under the [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service), a contributor is responsible for having the right to post the submitted content and, when contributing to a licensed repository, agrees that the contribution is licensed under the repository's license. DRAForge relies on this platform-level assertion for every commit and pull request rather than requiring a separate CLA or DCO bot. Do not submit third-party code, generated content, or copied material unless you are authorized to do so and its license is compatible with Apache-2.0.
+Every contribution is submitted through GitHub. Under the [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service), a contributor is responsible for having the right to post the submitted content and, when contributing to a licensed repository, agrees that the contribution is licensed under the repository's license. DRAForge relies on this platform-level assertion for every commit and pull request rather than requiring a separate CLA or DCO bot. Do not submit third-party code, generated content, or copied material unless you are authorized to do so and its license is compatible with AGPL-3.0-only.
 
 ## Common Commands
 

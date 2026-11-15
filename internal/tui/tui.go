@@ -1,5 +1,5 @@
 // Package tui provides a Bubble Tea terminal UI for browsing and inspecting DRA resources.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package tui
 
 import (

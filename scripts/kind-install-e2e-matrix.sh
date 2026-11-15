@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the install-level E2E entry point for every target in one matrix profile.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

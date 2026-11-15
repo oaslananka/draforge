@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Local entry point for one install-level E2E run on kind.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

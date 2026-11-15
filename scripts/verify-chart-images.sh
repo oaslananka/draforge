@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verifies Helm image references and, optionally, published multi-arch manifests.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

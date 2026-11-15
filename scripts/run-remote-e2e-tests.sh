@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the tagged E2E package and verifies that TestSmoke executed and passed.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

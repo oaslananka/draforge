@@ -13,6 +13,19 @@ DRAForge connects Kubernetes ResourceClaims, device pools, and ResourceSlices in
 [![Go Coverage](https://codecov.io/gh/oaslananka/draforge/branch/main/graph/badge.svg)](https://app.codecov.io/github/oaslananka/draforge)
 [![Latest Release](https://img.shields.io/github/v/release/oaslananka/draforge?sort=semver&display_name=tag)](https://github.com/oaslananka/draforge/releases/latest)
 
+
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL-3.0-only-blue" alt="AGPL-3.0-only license" /></a>
+
+<p align="center">
+  <a href="https://gitgem.org/github/oaslananka/draforge"><img src="https://gitgem.org/api/badge/github/oaslananka/draforge.svg" alt="GitGem" /></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/sponsors/oaslananka"><img src="https://img.shields.io/badge/GitHub-Sponsors-ea4aaa?logo=githubsponsors" alt="GitHub Sponsors" /></a>
+  <a href="https://www.buymeacoffee.com/oaslananka"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-ffdd00?logo=buymeacoffee&amp;logoColor=black" alt="Buy Me a Coffee" /></a>
+  <a href="https://github.com/oaslananka/draforge"><img src="https://img.shields.io/github/stars/oaslananka/draforge?label=Stars&amp;color=8e65d3" alt="Stars" /></a>
+</p>
+
 </div>
 
 ## What can you do?
@@ -275,7 +288,7 @@ For Kubernetes DRA API support and known limitations, see [Kubernetes DRA Compat
 
 ## License
 
-This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full license text.
+Project-authored source is licensed under [GNU AGPL v3.0](LICENSE) (AGPL-3.0-only).
 
 ---
 

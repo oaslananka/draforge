@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Validate Go coverage source mapping without accepting filesystem paths."""
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 import argparse
 import tempfile

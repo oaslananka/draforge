@@ -1,6 +1,6 @@
 # Maintainers
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 
 Below is the list of active maintainers of DRAForge:
 

@@ -85,6 +85,16 @@ Maintainers with a configured Git signing identity may use `git tag -s` instead 
 
 Update `CHANGELOG.md`, chart `version` and `appVersion`, web package metadata, compatibility statements, and supported-version documentation in a pull request. Merge only after required CI passes.
 
+**Release-preparation hold:** A chart with an updated `appVersion` resolves its
+default server, controller, and sim-driver images to that as-yet-unpublished
+version. Leave a reviewed, CI-green preparation PR **unmerged** until an
+explicitly authorized release window is ready to follow its merge with the
+immutable tag and full publish/verification workflow. Otherwise, a default
+Helm install from `main` would try to pull images that do not yet exist.
+Keeping the PR open does not create or publish release artifacts. If release
+publication does not happen, preserve the old working published image version
+on `main`; never fake success or replace a previously published tag.
+
 Choose the new version after the release commit is on `main`:
 
 ```bash

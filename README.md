@@ -14,7 +14,7 @@ DRAForge connects Kubernetes ResourceClaims, device pools, and ResourceSlices in
 [![Latest Release](https://img.shields.io/github/v/release/oaslananka/draforge?sort=semver&display_name=tag)](https://github.com/oaslananka/draforge/releases/latest)
 
 
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL-3.0-only-blue" alt="AGPL-3.0-only license" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="AGPL-3.0-only license" /></a>
 
 <p align="center">
   <a href="https://gitgem.org/github/oaslananka/draforge"><img src="https://gitgem.org/api/badge/github/oaslananka/draforge.svg" alt="GitGem" /></a>

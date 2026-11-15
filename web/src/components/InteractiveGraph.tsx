@@ -134,7 +134,7 @@ function Relationships({ graphData, nodeId, nodes, onSelectNode }: Relationships
             <button
               type="button"
               style={{
-                color: nodeColor(graphData, relation.node.type, relation.node.id),
+                color: 'var(--text-primary)',
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 textDecoration: 'underline',
@@ -395,8 +395,8 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
         </div>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           {prefersReducedMotion
-            ? 'Reduced motion is active; graph nodes use fixed, separated positions. Scroll inside the graph to reach more nodes.'
-            : 'Use mouse wheel to zoom, drag background to pan. Use Tab and Enter or Space to inspect nodes.'}
+            ? 'Static layout (reduced motion): select a node to inspect it; scroll the graph for more.'
+            : 'Select a node to inspect details. Scroll to zoom; drag the background to pan.'}
         </span>
       </div>
 
@@ -441,7 +441,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                 if (!source || !target) return null;
 
                 const isDanger = edge.type === 'allocates-missing';
-                const strokeColor = isDanger ? '#ef4444' : 'var(--border-light)';
+                const strokeColor = isDanger ? '#ef4444' : '#536b86';
                 const isHovered = hoveredNodeId === edge.from || hoveredNodeId === edge.to || (hoveredEdge?.from === edge.from && hoveredEdge?.to === edge.to);
 
                 return (
@@ -457,7 +457,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                       x2={target.x}
                       y2={target.y}
                       stroke={strokeColor}
-                      strokeWidth={isHovered ? 3 : 1.5}
+                      strokeWidth={isHovered ? 3 : 1.8}
                       strokeDasharray={edge.type === 'managed-by' ? '4 4' : undefined}
                       markerEnd={isDanger ? "url(#arrow-danger)" : "url(#arrow)"}
                       opacity={hoveredNodeId && !isHovered ? 0.2 : 0.8}
@@ -467,7 +467,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                         x={(source.x + target.x) / 2}
                         y={(source.y + target.y) / 2 - 4}
                         fill={isDanger ? '#ef4444' : 'var(--text-secondary)'}
-                        fontSize="9"
+                        fontSize="11"
                         textAnchor="middle"
                         fontWeight="600"
                         style={{ pointerEvents: 'none' }}
@@ -519,7 +519,7 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                     <text
                       dy=".3em"
                       fill={nodeForeground(node.type)}
-                      fontSize="9"
+                      fontSize="10"
                       fontWeight="bold"
                       textAnchor="middle"
                       style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -528,8 +528,8 @@ export default function InteractiveGraph({ graphData, onSelectClaim }: Interacti
                     </text>
                     <text
                       y={radius + 12}
-                      fill="var(--text-secondary)"
-                      fontSize="9"
+                      fill="#d3e3f3"
+                      fontSize="12"
                       textAnchor="middle"
                       style={{ pointerEvents: 'none', userSelect: 'none' }}
                     >

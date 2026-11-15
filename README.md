@@ -2,23 +2,57 @@
 
 # DRAForge
 
-**Provider-neutral Kubernetes Dynamic Resource Allocation observability, simulation, and diagnostics for GPU and accelerator workloads.**
+**Understand why a Kubernetes GPU or accelerator claim is pending, allocated, or failing.**
 
-Model virtual device pools, inspect `ResourceClaim` and `ResourceSlice` state, and explain why allocations succeed or fail—without requiring physical accelerator hardware or a specific cloud provider.
+DRAForge connects Kubernetes ResourceClaims, device pools, and ResourceSlices into a readable graph, explains allocation decisions, and lets you reproduce DRA scenarios with simulated hardware—no physical GPU required.
 
-[![CI](https://github.com/oaslananka/draforge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/oaslananka/draforge/actions/workflows/ci.yml) [![Security Analysis](https://github.com/oaslananka/draforge/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/oaslananka/draforge/actions/workflows/security.yml) [![Latest Release](https://img.shields.io/github/v/release/oaslananka/draforge?sort=semver&display_name=tag)](https://github.com/oaslananka/draforge/releases/latest) [![Go Coverage](https://codecov.io/gh/oaslananka/draforge/branch/main/graph/badge.svg)](https://codecov.io/gh/oaslananka/draforge) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge)](https://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge) [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13404/badge)](https://www.bestpractices.dev/projects/13404) [![License](https://img.shields.io/github/license/oaslananka/draforge)](LICENSE)
+[**Try it locally**](#quickstart) · [**Read the documentation**](https://oaslananka.github.io/draforge/) · [**Download v0.4.0**](https://github.com/oaslananka/draforge/releases/latest)
 
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-0969da?logo=github)](https://oaslananka.github.io/draforge/) [![Kubernetes DRA](https://img.shields.io/badge/Kubernetes%20DRA-provider--neutral-326ce5?logo=kubernetes&logoColor=white)](docs/compatibility/kubernetes-dra.md) [![Go Version](https://img.shields.io/github/go-mod/go-version/oaslananka/draforge)](go.mod) [![Discussions](https://img.shields.io/github/discussions/oaslananka/draforge?logo=github)](https://github.com/oaslananka/draforge/discussions) [![GitGem](https://gitgem.org/api/badge/github/oaslananka/draforge.svg)](https://gitgem.org/github/oaslananka/draforge)
-
-[Documentation](https://oaslananka.github.io/draforge/) · [Quickstart](#quickstart) · [Architecture](docs/architecture.md) · [Compatibility](docs/compatibility/kubernetes-dra.md) · [Operations](docs/operations/guide.md) · [Contributing](CONTRIBUTING.md) · [Governance](GOVERNANCE.md) · [Security](SECURITY.md) · [Support](SUPPORT.md)
-
-[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-support-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/oaslananka) [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=000)](https://buymeacoffee.com/oaslananka) [![Stars](https://img.shields.io/github/stars/oaslananka/draforge?style=flat&label=Stars)](https://github.com/oaslananka/draforge)
+[![CI](https://github.com/oaslananka/draforge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/oaslananka/draforge/actions/workflows/ci.yml)
+[![Security Analysis](https://github.com/oaslananka/draforge/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/oaslananka/draforge/actions/workflows/security.yml)
+[![Go Coverage](https://codecov.io/gh/oaslananka/draforge/branch/main/graph/badge.svg)](https://app.codecov.io/github/oaslananka/draforge)
+[![Latest Release](https://img.shields.io/github/v/release/oaslananka/draforge?sort=semver&display_name=tag)](https://github.com/oaslananka/draforge/releases/latest)
 
 </div>
 
-![DRAForge dashboard showing simulated resource claims and related devices in the interactive graph](docs/assets/dashboard-simulation.webp)
+## What can you do?
 
-*Actual DRAForge web interface rendered with **synthetic demonstration data**. No physical GPU or publicly connected Kubernetes cluster is shown. [Try the local simulation](#quickstart).*
+| Inspect allocations | Reproduce scenarios | Explain the failure |
+|:---|:---|:---|
+| See real Kubernetes claims, classes, pools, and devices in one relationship graph. | Create **synthetic** accelerator pools on a local kind cluster; no GPU or cloud provider needed. | Open a claim's explanation to investigate selectors, capacity, node affinity, and DRA health checks. |
+| [Dashboard guide](docs/dashboard.md) | [Local quickstart](#quickstart) | [Troubleshooting](docs/operations/troubleshooting.md) |
+
+## See the allocation path
+
+<a href="docs/assets/dashboard-simulation.webp">
+  <img src="docs/assets/dashboard-simulation.webp" alt="Real DRAForge dashboard: a selected synthetic ResourceClaim, connected resources, and a diagnostics action in the interactive graph" width="100%">
+</a>
+
+<sub>Actual DRAForge React dashboard rendered with <strong>synthetic demonstration data</strong>. This is a product preview—not a publicly connected Kubernetes cluster or proof of physical GPU support. <a href="docs/assets/dashboard-simulation.webp">View the full-size image</a>.</sub>
+
+## Quickstart
+
+**Try a complete local DRA flow.** You need Docker Engine or Docker Desktop with WSL integration, Bash, kind, kubectl, Helm, jq, curl, and sha256sum. No cloud account or physical accelerator is required.
+
+```bash
+git clone https://github.com/oaslananka/draforge.git
+cd draforge
+DRAFORGE_INSTALL_E2E_KEEP_CLUSTER=1 bash scripts/kind-install-e2e.sh pull-request
+
+# In a separate terminal, open http://localhost:8080
+kubectl port-forward svc/draforge-server -n draforge-system 8080:8080
+```
+
+The disposable kind installation checks its prerequisites, refuses to overwrite an existing cluster, and leaves the cluster running for exploration. Visit **http://localhost:8080**, select **Relationships**, then **Explain a claim** to follow a simulated allocation. When finished, use `kind delete cluster --name draforge-install-e2e` only for the disposable cluster you created.
+
+**Already have Kubernetes?** Use the [production/local installation guide](docs/operations/install.md) for read-only deployment and ingress controls. **On Windows?** Enable Docker Desktop's [WSL 2 integration](https://docs.docker.com/desktop/features/wsl/) for the distribution running the commands, then confirm `docker info` in that same terminal.
+
+<details>
+<summary>More resources — architecture, compatibility, operations, and project policies</summary>
+
+[Architecture](docs/architecture.md) · [Kubernetes compatibility](docs/compatibility/kubernetes-dra.md) · [Operations](docs/operations/guide.md) · [Contributing](CONTRIBUTING.md) · [Governance](GOVERNANCE.md) · [Security](SECURITY.md) · [Support](SUPPORT.md)
+
+</details>
 
 ---
 
@@ -80,9 +114,9 @@ task build          # Builds all three binaries into bin/
 
 Binaries are also available as pre-built archives from the [GitHub Releases](https://github.com/oaslananka/draforge/releases) page.
 
-## Quickstart
+## Detailed installation recipes
 
-### Quickstart A: Verified local kind cluster
+### Local kind cluster (expanded)
 
 For the complete local stack, install **Bash** (WSL on Windows), a running **Docker daemon**, **kubectl**, **Helm**, **jq**, **curl**, **sha256sum**, and the exact **kind** version pinned in `tests/install-e2e/kubernetes-versions.json`. Go is only needed if you also build the standalone CLI/TUI; Node.js and pnpm are only needed for optional local frontend/browser tests. The container image build brings its own toolchains.
 
@@ -120,7 +154,7 @@ Destroy the disposable cluster when finished:
 kind delete cluster --name draforge-install-e2e
 ```
 
-### Quickstart B: Optional DigitalOcean Kubernetes (DOKS) Showcase
+### Optional DigitalOcean Kubernetes (DOKS) showcase
 
 This provider-specific path is an optional demonstration of DRAForge on one managed Kubernetes service. It is not required for installation, testing, or releases.
 
@@ -242,3 +276,18 @@ For Kubernetes DRA API support and known limitations, see [Kubernetes DRA Compat
 ## License
 
 This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full license text.
+
+---
+
+<div align="center">
+
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge)](https://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13404/badge)](https://www.bestpractices.dev/projects/13404)
+[![License](https://img.shields.io/github/license/oaslananka/draforge)](LICENSE)
+[![GitGem](https://gitgem.org/api/badge/github/oaslananka/draforge.svg)](https://gitgem.org/github/oaslananka/draforge)
+
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-support-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/oaslananka)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=000)](https://buymeacoffee.com/oaslananka)
+[![Stars](https://img.shields.io/github/stars/oaslananka/draforge?style=flat&label=Stars)](https://github.com/oaslananka/draforge)
+
+</div>

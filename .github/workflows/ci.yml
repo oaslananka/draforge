@@ -118,11 +118,20 @@ jobs:
           echo "Total coverage: $cov%"
           awk -v cov="$cov" 'BEGIN { if (cov + 0 < 80.0) { print "Error: Coverage is below 80.0%"; exit 1 } }'
 
+      - name: Verify source paths in Go coverage
+        run: python3 scripts/verify-codecov-inputs.py --self-test
+
+      # Codecov must match each covered Go path against repository files. The
+      # OIDC job below deliberately has no checkout or script execution, so
+      # stage public source files + Codecov config alongside the real report.
       - name: Stage Go coverage for isolated upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: go-coverage
-          path: coverage.out
+          path: |
+            coverage.out
+            codecov.yml
+            **/*.go
           if-no-files-found: error
           retention-days: 1
 
@@ -139,6 +148,8 @@ jobs:
         with:
           name: go-coverage
 
+      # No checkout, shell command or untrusted code execution in this
+      # OIDC-enabled job. Downloaded sources are inert data for path mapping.
       - name: Upload Go coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:

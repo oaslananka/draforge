@@ -14,13 +14,13 @@ test('real kind dashboard diagnoses and observes claim recovery without reloadin
   await expect(page.getByRole('status', { name: 'Live stream status' }))
     .toContainText('Stream Connected');
 
-  await page.getByRole('button', { name: 'CLAIMS', exact: true }).click();
+  await page.getByRole('button', { name: 'Claims', exact: true }).click();
   const claimRow = page.getByRole('row').filter({
     has: page.getByRole('cell', { name: 'e2e-recovery-claim', exact: true }),
   });
   await expect(claimRow).toContainText('Pending');
 
-  await page.getByRole('button', { name: 'EXPLAIN', exact: true }).click();
+  await page.getByRole('button', { name: 'Explain a claim', exact: true }).click();
   const claimSelector = page.getByRole('combobox', { name: /Select ResourceClaim to diagnose/ });
   await claimSelector.selectOption('draforge-e2e/e2e-recovery-claim');
   await expect(page.getByText(/draforge-e2e-recovery-gpu.*does not exist/i))
@@ -29,7 +29,7 @@ test('real kind dashboard diagnoses and observes claim recovery without reloadin
   // Wait for the *real* SSE baseline to contain this pending claim before
   // changing anything. Otherwise a first post-repair frame could masquerade
   // as the initial snapshot and the dashboard would not refresh its panels.
-  await page.getByRole('button', { name: 'GRAPH', exact: true }).click();
+  await page.getByRole('button', { name: 'Relationships', exact: true }).click();
   const pendingGraphNode = page.getByRole('button', {
     name: 'ResourceClaim e2e-recovery-claim in namespace draforge-e2e, status Pending',
   });
@@ -42,11 +42,11 @@ test('real kind dashboard diagnoses and observes claim recovery without reloadin
     name: 'ResourceClaim e2e-recovery-claim in namespace draforge-e2e, status Allocated',
   })).toHaveCount(1, { timeout: 60_000 });
 
-  await page.getByRole('button', { name: 'CLAIMS', exact: true }).click();
+  await page.getByRole('button', { name: 'Claims', exact: true }).click();
   await expect(claimRow).toContainText('Allocated');
   await expect(claimRow).toContainText('e2e-recovery-pool');
 
-  await page.getByRole('button', { name: 'EXPLAIN', exact: true }).click();
+  await page.getByRole('button', { name: 'Explain a claim', exact: true }).click();
   await expect(claimSelector).toHaveValue('draforge-e2e/e2e-recovery-claim');
   // Assert the real Explain engine's result and allocation evidence, not
   // wording from the separate browser test's mocked fixture.

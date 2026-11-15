@@ -12,11 +12,13 @@ DRAForge connects Kubernetes ResourceClaims, device pools, and ResourceSlices in
 [![Security Analysis](https://github.com/oaslananka/draforge/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/oaslananka/draforge/actions/workflows/security.yml)
 [![Go Coverage](https://codecov.io/gh/oaslananka/draforge/branch/main/graph/badge.svg)](https://app.codecov.io/github/oaslananka/draforge)
 [![Latest Release](https://img.shields.io/github/v/release/oaslananka/draforge?sort=semver&display_name=tag)](https://github.com/oaslananka/draforge/releases/latest)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge)](https://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13404/badge)](https://www.bestpractices.dev/projects/13404)
 
 
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="AGPL-3.0-only license" /></a>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="AGPL-3.0-only license" /></a>
   <a href="https://gitgem.org/github/oaslananka/draforge"><img src="https://gitgem.org/api/badge/github/oaslananka/draforge.svg" alt="GitGem" /></a>
 </p>
 
@@ -291,16 +293,3 @@ For Kubernetes DRA API support and known limitations, see [Kubernetes DRA Compat
 Project-authored source is licensed under [GNU AGPL v3.0](LICENSE) (AGPL-3.0-only).
 
 ---
-
-<div align="center">
-
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/oaslananka/draforge/badge)](https://scorecard.dev/viewer/?uri=github.com/oaslananka/draforge)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13404/badge)](https://www.bestpractices.dev/projects/13404)
-[![License](https://img.shields.io/github/license/oaslananka/draforge)](LICENSE)
-[![GitGem](https://gitgem.org/api/badge/github/oaslananka/draforge.svg)](https://gitgem.org/github/oaslananka/draforge)
-
-[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-support-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/oaslananka)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=000)](https://buymeacoffee.com/oaslananka)
-[![Stars](https://img.shields.io/github/stars/oaslananka/draforge?style=flat&label=Stars)](https://github.com/oaslananka/draforge)
-
-</div>

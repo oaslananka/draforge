@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed when a Go profile cannot map to checked-in project sources."""
+"""Validate Go coverage source mapping without accepting filesystem paths."""
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
@@ -7,52 +7,55 @@ import tempfile
 from pathlib import Path
 
 MODULE = "github.com/oaslananka/draforge/"
+MODE_ATOMIC = "mode: atomic\n"
 
 
-def check(root: Path, report: Path) -> list[str]:
+def coverage_record(line: str, root: Path) -> tuple[Path | None, int, str]:
+    path, separator, values = line.partition(":")
+    if not separator or not path.startswith(MODULE):
+        return None, 0, "invalid module-qualified Go source path"
+    name = Path(path[len(MODULE):])
+    if name.is_absolute() or ".." in name.parts or name.suffix != ".go":
+        return None, 0, "unsafe or non-Go coverage path"
+    source = (root / name).resolve()
+    if not source.is_relative_to(root.resolve()) or not source.is_file():
+        return None, 0, f"source missing from repository: {name}"
+    fields = values.split()
+    if len(fields) != 3:
+        return None, 0, "malformed Go coverage record"
+    try:
+        statements, executions = int(fields[1]), int(fields[2])
+    except ValueError:
+        return None, 0, "non-numeric Go coverage values"
+    if statements < 0 or executions < 0:
+        return None, 0, "invalid statement/hit count"
+    return name, statements if executions > 0 else 0, ""
+
+
+def check(root: Path, profile: str) -> list[str]:
     errors: list[str] = []
+    # This path is derived from the script's checkout, not caller input.
     config = root / "codecov.yml"
     if not config.is_file():
         errors.append("missing repository codecov.yml")
     elif f'"{MODULE}::"' not in config.read_text(encoding="utf-8"):
         errors.append("missing Go module path mapping in codecov.yml")
-    if not report.is_file():
-        return errors + ["missing coverage.out"]
-    lines = report.read_text(encoding="utf-8").splitlines()
+    lines = profile.splitlines()
     if not lines or lines[0] not in ("mode: atomic", "mode: count", "mode: set"):
         return errors + ["missing Go coverage mode"]
     if len(lines) < 2:
         return errors + ["empty Go coverage profile"]
+
     sources: set[Path] = set()
     covered = 0
-    for i, line in enumerate(lines[1:], start=2):
-        path, separator, segment = line.partition(":")
-        if not separator or not path.startswith(MODULE):
-            errors.append(f"line {i}: invalid module-qualified Go source path")
-            continue
-        source = Path(path[len(MODULE):])
-        if source.is_absolute() or ".." in source.parts or source.suffix != ".go":
-            errors.append(f"line {i}: unsafe or non-Go coverage path")
-            continue
-        source_path = (root / source).resolve()
-        if not source_path.is_relative_to(root.resolve()) or not source_path.is_file():
-            errors.append(f"line {i}: source missing from repository: {source}")
-            continue
-        sources.add(source)
-        blocks = segment.split()
-        if len(blocks) != 3:
-            errors.append(f"line {i}: malformed Go coverage record")
-            continue
-        try:
-            statements, executions = int(blocks[1]), int(blocks[2])
-        except ValueError:
-            errors.append(f"line {i}: non-numeric Go coverage values")
-            continue
-        if statements < 0 or executions < 0:
-            errors.append(f"line {i}: invalid statement/hit count")
-        if executions > 0:
+    for number, line in enumerate(lines[1:], start=2):
+        name, statements, error = coverage_record(line, root)
+        if error:
+            errors.append(f"line {number}: {error}")
+        elif name is not None:
+            sources.add(name)
             covered += statements
-    if len(sources) < 1 or covered < 1:
+    if not sources or covered < 1:
         errors.append("no real covered Go source statements")
     return errors
 
@@ -60,46 +63,45 @@ def check(root: Path, report: Path) -> list[str]:
 def self_test() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
-        (root / "codecov.yml").write_text('fixes:\n  - "github.com/oaslananka/draforge/::"\n')
+        (root / "codecov.yml").write_text('fixes:\n  - "' + MODULE + '::"\n')
         (root / "cmd").mkdir()
         (root / "cmd" / "main.go").write_text("package main\n")
-        report = root / "coverage.out"
-        report.write_text("mode: atomic\n" + MODULE + "cmd/main.go:1.1,1.3 1 1\n")
-        assert check(root, report) == []
-        report.write_text("mode: atomic\n" + MODULE + "cmd/missing.go:1.1,1.3 1 1\n")
-        assert any("source missing" in issue for issue in check(root, report))
-        report.write_text("mode: atomic\n" + MODULE + "../secret.go:1.1,1.3 1 1\n")
-        assert any("unsafe" in issue for issue in check(root, report))
-        report.write_text("mode: atomic\n" + MODULE + "cmd/main.go:1.1,1.3 1 1\n"
-                          + MODULE + "cmd/main.go:2.1,2.3 0 0\n")
-        assert check(root, report) == []  # Valid Go profiles may contain 0-statement blocks.
-        report.write_text("mode: atomic\n" + MODULE + "cmd/main.go:1.1,1.3 1 0\n")
-        assert any("no real covered" in issue for issue in check(root, report))
-        report.write_text("mode: atomic\n")
-        assert any("empty" in issue for issue in check(root, report))
+        stem = MODULE + "cmd/main.go:"
+        fixtures = [
+            (MODE_ATOMIC + stem + "1.1,1.3 1 1\n", False),
+            (MODE_ATOMIC + MODULE + "cmd/missing.go:1.1,1.3 1 1\n", True),
+            (MODE_ATOMIC + MODULE + "../secret.go:1.1,1.3 1 1\n", True),
+            (MODE_ATOMIC + stem + "1.1,1.3 1 1\n" + stem + "2.1,2.3 0 0\n", False),
+            (MODE_ATOMIC + stem + "1.1,1.3 1 0\n", True),
+            (MODE_ATOMIC, True),
+        ]
+        for number, (profile, should_fail) in enumerate(fixtures, start=1):
+            errors = check(root, profile)
+            if bool(errors) != should_fail:
+                raise ValueError(f"Codecov fixture {number} incorrect: {errors}")
     print("Codecov source-path fixtures passed.")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
-    parser.add_argument("--root", type=Path, default=Path("."))
-    parser.add_argument("--report", type=Path, default=Path("coverage.out"))
     args = parser.parse_args()
     if args.self_test:
         self_test()
-    if args.report.is_file():
-        issues = check(args.root, args.report)
-        for issue in issues:
-            print(f"Codecov source-path error: {issue}")
-        if issues:
-            return 1
-        print("Codecov Go coverage file paths verified against repository sources.")
-        return 0
-    if args.self_test:
-        return 0
-    print("Codecov source-path error: coverage report missing")
-    return 1
+    root = Path(__file__).resolve().parent.parent
+    report = root / "coverage.out"
+    if not report.is_file():
+        if args.self_test:
+            return 0
+        print("Codecov source-path error: checkout coverage.out is missing")
+        return 1
+    issues = check(root, report.read_text(encoding="utf-8"))
+    for issue in issues:
+        print("Codecov source-path error: " + issue)
+    if issues:
+        return 1
+    print("Codecov Go coverage paths verified against repository sources.")
+    return 0
 
 
 if __name__ == "__main__":

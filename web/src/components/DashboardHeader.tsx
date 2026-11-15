@@ -67,7 +67,7 @@ export default function DashboardHeader({
           </span>
           {doctor && (
             <button type="button" className={'badge dashboard-health ' + doctor.badgeClass}
-              onClick={() => onTabChange('doctor')} title="View detailed Doctor diagnostics">
+              onClick={() => { onTabChange('doctor'); }} title="View detailed Doctor diagnostics">
               {doctor.label}
             </button>
           )}
@@ -79,7 +79,7 @@ export default function DashboardHeader({
             type="button"
             className="dashboard-nav-item"
             key={id}
-            onClick={() => onTabChange(id)}
+            onClick={() => { onTabChange(id); }}
             aria-pressed={activeTab === id}
           >
             {label}

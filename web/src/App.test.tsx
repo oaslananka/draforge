@@ -130,8 +130,8 @@ describe('App critical dashboard flows', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await screen.findByRole('button', { name: 'EXPLAIN' });
-    await user.click(screen.getByRole('button', { name: 'EXPLAIN' }));
+    await screen.findByRole('button', { name: 'Explain a claim' });
+    await user.click(screen.getByRole('button', { name: 'Explain a claim' }));
 
     const selector = screen.getByRole('combobox', { name: /Select ResourceClaim/i });
     expect(screen.getByRole('option', { name: 'team-a/shared (Pending)' }).isConnected).toBe(true);
@@ -148,7 +148,7 @@ describe('App critical dashboard flows', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'GRAPH' }));
+    await user.click(await screen.findByRole('button', { name: 'Relationships' }));
     await user.click(screen.getByRole('button', { name: 'Open team-b/shared from graph' }));
 
     expect((await screen.findByRole('heading', { name: 'Allocation Explanation Engine' })).isConnected).toBe(true);
@@ -162,7 +162,7 @@ describe('App critical dashboard flows', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'GRAPH' }));
+    await user.click(await screen.findByRole('button', { name: 'Relationships' }));
 
     expect(screen.getByText('Reconnecting...').isConnected).toBe(true);
     expect(screen.getByText('Dashboard stream disconnected. Reconnecting...').isConnected).toBe(true);
@@ -176,7 +176,7 @@ describe('App critical dashboard flows', () => {
     render(<App />);
 
     expect((await screen.findByText('summary unavailable')).isConnected).toBe(true);
-    await user.click(screen.getByRole('button', { name: 'CLAIMS' }));
+    await user.click(screen.getByRole('button', { name: 'Claims' }));
     expect(screen.getByText('No ResourceClaims found in the current cluster.').isConnected).toBe(true);
   });
 
@@ -195,7 +195,7 @@ describe('App critical dashboard flows', () => {
   it('refreshes claim status and selected explanation after a changed live graph, without polling unchanged frames', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('button', { name: 'CLAIMS' });
+    await screen.findByRole('button', { name: 'Claims' });
     await waitFor(() => {
       expect(mockFetchClaims).toHaveBeenCalledTimes(1);
       expect(mockFetchExplain).toHaveBeenCalledWith('shared', 'team-a');
@@ -244,12 +244,12 @@ describe('App critical dashboard flows', () => {
       expect(mockFetchClaims).toHaveBeenCalledTimes(2);
       expect(mockFetchExplain).toHaveBeenCalledTimes(2);
     });
-    await user.click(screen.getByRole('button', { name: 'CLAIMS' }));
+    await user.click(screen.getByRole('button', { name: 'Claims' }));
     const recoveredRow = screen.getByRole('row', { name: /shared team-a/ });
     expect(within(recoveredRow).getByText('Allocated')).toBeTruthy();
     expect(within(recoveredRow).getByText(/recovery-pool/)).toBeTruthy();
 
-    await user.click(screen.getByRole('button', { name: 'EXPLAIN' }));
+    await user.click(screen.getByRole('button', { name: 'Explain a claim' }));
     expect(screen.getByText('Claim is allocated.')).toBeTruthy();
     const claimReads = mockFetchClaims.mock.calls.length;
     const explainReads = mockFetchExplain.mock.calls.length;
@@ -289,10 +289,11 @@ describe('App critical dashboard flows', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const poolsTab = await screen.findByRole('button', { name: 'POOLS' });
+    const poolsTab = await screen.findByRole('button', { name: 'Pools' });
     await user.click(poolsTab);
 
     expect(poolsTab.getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'OVERVIEW' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByText('Inspect simulated pools and the nodes advertising them.').isConnected).toBe(true);
+    expect(screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed')).toBe('false');
   });
 });

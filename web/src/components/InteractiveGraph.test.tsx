@@ -78,7 +78,7 @@ describe('InteractiveGraph accessibility', () => {
     expect(claimNode.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(claimNode);
     expect(claimNode.getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByText('Reduced motion is active; graph nodes use fixed, separated positions. Scroll inside the graph to reach more nodes.').isConnected).toBe(true);
+    expect(screen.getByText('Static layout (reduced motion): select a node to inspect it; scroll the graph for more.').isConnected).toBe(true);
     expect(requestAnimationFrame).not.toHaveBeenCalled();
   });
 

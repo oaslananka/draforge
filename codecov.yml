@@ -19,3 +19,9 @@ comment:
 flags:
   go:
     carryforward: false
+
+
+# Go's coverprofile uses module-qualified paths while the repository tree is
+# relative. Apply an explicit stable prefix mapping for isolated upload jobs.
+fixes:
+  - "github.com/oaslananka/draforge/::"

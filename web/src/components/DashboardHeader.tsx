@@ -1,6 +1,14 @@
 import type { DoctorReport, SSEStatus, TabId } from '../api/types';
 
-const tabs: TabId[] = ['overview', 'pools', 'devices', 'claims', 'graph', 'explain', 'doctor'];
+const sections: ReadonlyArray<{ id: TabId; label: string; purpose: string }> = [
+  { id: 'overview', label: 'Overview', purpose: 'Check resource counts and cluster health at a glance.' },
+  { id: 'pools', label: 'Pools', purpose: 'Inspect simulated pools and the nodes advertising them.' },
+  { id: 'devices', label: 'Devices', purpose: 'See discovered devices, their pools and availability.' },
+  { id: 'claims', label: 'Claims', purpose: 'Find pending and allocated resource claims.' },
+  { id: 'graph', label: 'Relationships', purpose: 'Trace a claim through classes, pools and devices.' },
+  { id: 'explain', label: 'Explain a claim', purpose: 'Understand why a claim was allocated or is still pending.' },
+  { id: 'doctor', label: 'Diagnostics', purpose: 'Review actionable cluster and DRA health checks.' },
+];
 
 function streamSummary(status: SSEStatus): { badgeClass: string; label: string } {
   switch (status) {
@@ -26,21 +34,12 @@ function doctorSummary(report: DoctorReport): { badgeClass: string; label: strin
   const passes = report.summary.PASS ?? 0;
 
   if (failures > 0) {
-    return {
-      badgeClass: 'badge-danger',
-      label: `Doctor: ${failures} Failure${failures > 1 ? 's' : ''}`,
-    };
+    return { badgeClass: 'badge-danger', label: 'Doctor: ' + failures + (failures > 1 ? ' Failures' : ' Failure') };
   }
   if (warnings > 0) {
-    return {
-      badgeClass: 'badge-warning',
-      label: `Doctor: ${warnings} Warning${warnings > 1 ? 's' : ''}`,
-    };
+    return { badgeClass: 'badge-warning', label: 'Doctor: ' + warnings + (warnings > 1 ? ' Warnings' : ' Warning') };
   }
-  return {
-    badgeClass: 'badge-success',
-    label: `Doctor: Healthy (${passes} OK)`,
-  };
+  return { badgeClass: 'badge-success', label: 'Doctor: Healthy (' + passes + ' OK)' };
 }
 
 export default function DashboardHeader({
@@ -51,55 +50,46 @@ export default function DashboardHeader({
 }: Readonly<DashboardHeaderProps>) {
   const stream = streamSummary(sseStatus);
   const doctor = doctorReport ? doctorSummary(doctorReport) : null;
+  const active = sections.find((section) => section.id === activeTab) ?? sections[0];
 
   return (
     <header className="dashboard-header">
-      <div className="dashboard-brand-row">
-        <div>
-          <h1 className="glow-text" style={{ fontSize: '1.8rem', fontFamily: 'var(--font-title)' }}>DRAForge</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Dynamic Resource Allocation Developer Platform</p>
+      <div className="dashboard-header-top">
+        <div className="dashboard-brand">
+          <span className="dashboard-eyebrow">Kubernetes DRA / Read-only observability</span>
+          <h1 className="dashboard-title">DRAForge</h1>
+          <p className="dashboard-subtitle">See what is allocated, what is pending, and why.</p>
         </div>
-        <span
-          className={`badge ${stream.badgeClass}`}
-          style={{ alignSelf: 'flex-start', marginTop: '4px' }}
-          role="status"
-          aria-label="Live stream status"
-          aria-live="polite"
-        >
-          {stream.label}
-        </span>
-        {doctor && (
-          <button
-            type="button"
-            className={`badge ${doctor.badgeClass}`}
-            onClick={() => onTabChange('doctor')}
-            title="View detailed Doctor diagnostics"
-            style={{ alignSelf: 'flex-start', marginTop: '4px', cursor: 'pointer', border: 0 }}
-          >
-            {doctor.label}
-          </button>
-        )}
+        <div className="dashboard-system-state">
+          <span className={'badge ' + stream.badgeClass} role="status"
+            aria-label="Live stream status" aria-live="polite">
+            {stream.label}
+          </span>
+          {doctor && (
+            <button type="button" className={'badge dashboard-health ' + doctor.badgeClass}
+              onClick={() => onTabChange('doctor')} title="View detailed Doctor diagnostics">
+              {doctor.label}
+            </button>
+          )}
+        </div>
       </div>
       <nav className="dashboard-nav" aria-label="Dashboard sections">
-        {tabs.map((tab) => (
+        {sections.map(({ id, label }) => (
           <button
             type="button"
-            key={tab}
-            onClick={() => onTabChange(tab)}
-            aria-pressed={activeTab === tab}
-            style={{
-              background: activeTab === tab ? 'var(--accent-primary)' : 'transparent',
-              color: 'white',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontWeight: 600,
-              border: activeTab === tab ? 'none' : '1px solid var(--border-light)',
-            }}
+            className="dashboard-nav-item"
+            key={id}
+            onClick={() => onTabChange(id)}
+            aria-pressed={activeTab === id}
           >
-            {tab.toUpperCase()}
+            {label}
           </button>
         ))}
       </nav>
+      <div className="dashboard-context" aria-live="off">
+        <span className="dashboard-context-label">{active.label}</span>
+        <span>{active.purpose}</span>
+      </div>
     </header>
   );
 }

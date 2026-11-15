@@ -41,6 +41,16 @@ The dashboard handles the stream with controlled reconnection:
 
 A stream status badge is visible in the dashboard header.
 
+### Navigation and relationships
+
+The header is organized for a first-time operator: a product/connection row,
+seven clearly named destinations, and a one-sentence description of the active
+view. Choose **Relationships** to connect ResourceClaims to classes, pools,
+devices and nodes; select a claim to inspect its related components, then use
+**Diagnose Allocation** to open **Explain a claim**. Choose **Diagnostics** for
+cluster health checks. Navigation wraps on small screens without hiding a
+section behind horizontal scrolling; status labels are distinct from actions.
+
 The first graph frame establishes a baseline. When a later frame changes
 resource relationships or allocation state, the dashboard refreshes the
 read-only Overview, Pools, Devices, Claims, and Doctor data and the selected

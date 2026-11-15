@@ -34,6 +34,16 @@ grep -Fq 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' <<<"
   echo "The Go job must stage coverage through the pinned artifact action." >&2
   exit 1
 }
+
+# The OIDC Codecov upload job has no checkout and cannot run untrusted code.
+# The successful Go job must stage *data* for Codecov path mapping, or Codecov
+# accepts a nominal upload but reports 0 files and an unusable coverage state.
+for required_coverage_input in 'coverage.out' 'codecov.yml' '**/*.go'; do
+  grep -Fq "$required_coverage_input" <<<"$go_block" || {
+    echo "Go coverage artifact is missing source/config input: $required_coverage_input" >&2
+    exit 1
+  }
+done
 grep -Fq 'coverage-upload' <<<"$ci_pass_block" || {
   echo "CI Pass must wait for the isolated coverage upload." >&2
   exit 1

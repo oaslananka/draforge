@@ -39,14 +39,14 @@ test('@desktop critical dashboard flow is keyboard operable with visible focus a
     page.getByRole('status', { name: 'Live stream status' }),
   ).toContainText('Stream Connected');
 
-  const overview = page.getByRole('button', { name: 'OVERVIEW' });
+  const overview = page.getByRole('button', { name: 'Overview' });
   await overview.focus();
-  for (const name of ['POOLS', 'DEVICES', 'CLAIMS', 'GRAPH']) {
+  for (const name of ['Pools', 'Devices', 'Claims', 'Relationships']) {
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name })).toBeFocused();
   }
 
-  const graphTab = page.getByRole('button', { name: 'GRAPH' });
+  const graphTab = page.getByRole('button', { name: 'Relationships' });
   const graphFocus = await graphTab.evaluate((element) => {
     const style = getComputedStyle(element);
     return { style: style.outlineStyle, width: style.outlineWidth };
@@ -137,7 +137,7 @@ test('@desktop claim recovery updates the visible dashboard and explanation with
 
   await page.goto('/');
   await expect(page.getByRole('status', { name: 'Live stream status' })).toContainText('Stream Connected');
-  await page.getByRole('button', { name: 'CLAIMS' }).click();
+  await page.getByRole('button', { name: 'Claims' }).click();
   const claimRow = page.getByRole('row', { name: /shared team-b/ });
   await expect(claimRow).toContainText('Pending');
 
@@ -153,7 +153,7 @@ test('@desktop claim recovery updates the visible dashboard and explanation with
   }, graph);
   await expect(claimRow).toContainText('recovery-pool');
   await expect(claimRow).toContainText('Allocated');
-  await page.getByRole('button', { name: 'EXPLAIN' }).click();
+  await page.getByRole('button', { name: 'Explain a claim' }).click();
   await expect(page.getByText('Claim is allocated.')).toBeVisible();
 
   const afterRecoveryReads = claimReads;
@@ -172,7 +172,7 @@ test('@axe selected critical views have no serious or critical WCAG 2.2 violatio
     page.getByRole('status', { name: 'Live stream status' }),
   ).toContainText('Stream Connected');
 
-  for (const view of ['OVERVIEW', 'GRAPH', 'DOCTOR']) {
+  for (const view of ['Overview', 'Relationships', 'Diagnostics']) {
     await page.getByRole('button', { name: view, exact: true }).click();
     const results = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
     expect(blockingViolations(results.violations), `${view} accessibility violations`).toEqual([]);
@@ -198,10 +198,10 @@ test('@motion keeps graph positions static and exposes the reduced-motion state'
   await expect.poll(() => page.evaluate(() =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   )).toBe(true);
-  await page.getByRole('button', { name: 'GRAPH', exact: true }).click();
+  await page.getByRole('button', { name: 'Relationships', exact: true }).click();
 
   await expect(
-    page.getByText('Reduced motion is active; graph nodes use fixed, separated positions. Scroll inside the graph to reach more nodes.'),
+    page.getByText('Static layout (reduced motion): select a node to inspect it; scroll the graph for more.'),
   ).toBeVisible();
   await expect(page.getByRole('region', { name: 'Resource relationship graph' })).toHaveAttribute(
     'data-motion',
@@ -215,7 +215,7 @@ test('@motion dense static graph keeps every node separately pointer-selectable'
   await page.goto('/');
   await expect(page.getByRole('status', { name: 'Live stream status' }))
     .toContainText('Stream Connected');
-  await page.getByRole('button', { name: 'GRAPH' }).click();
+  await page.getByRole('button', { name: 'Relationships' }).click();
 
   const claim = {
     id: 'claim/draforge-e2e/e2e-recovery-claim',
@@ -280,7 +280,7 @@ test('@mobile reduced-motion dense graph scrolls internally without shrinking no
   await page.goto('/');
   await expect(page.getByRole('status', { name: 'Live stream status' }))
     .toContainText('Stream Connected');
-  await page.getByRole('button', { name: 'GRAPH' }).click();
+  await page.getByRole('button', { name: 'Relationships' }).click();
 
   const graph = {
     nodes: Array.from({ length: 75 }, (_, index) => ({
@@ -334,8 +334,47 @@ test('@mobile representative mobile viewport keeps navigation and main content w
   expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
   expect(dimensions.body).toBeLessThanOrEqual(dimensions.viewport);
 
-  await page.getByRole('button', { name: 'GRAPH' }).click();
+  await page.getByRole('button', { name: 'Relationships' }).click();
   await expect(
     page.getByRole('heading', { name: 'Resource Relationship Graph' }),
   ).toBeVisible();
+});
+
+test('@mobile all dashboard destinations stay reachable without a sideways-scrolling menu', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const navigation = page.getByRole('navigation', { name: 'Dashboard sections' });
+  await expect(navigation).toBeVisible();
+  const labels = [
+    'Overview', 'Pools', 'Devices', 'Claims',
+    'Relationships', 'Explain a claim', 'Diagnostics',
+  ];
+  for (const name of labels) {
+    const button = navigation.getByRole('button', { name });
+    await expect(button).toBeVisible();
+    const dimensions = await button.evaluate((element) => {
+      const buttonBox = element.getBoundingClientRect();
+      const navBox = element.parentElement?.getBoundingClientRect();
+      return {
+        left: buttonBox.left,
+        right: buttonBox.right,
+        navLeft: navBox?.left ?? 0,
+        navRight: navBox?.right ?? 0,
+      };
+    });
+    expect(dimensions.left).toBeGreaterThanOrEqual(dimensions.navLeft);
+    expect(dimensions.right).toBeLessThanOrEqual(dimensions.navRight);
+  }
+  const metrics = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    scrollWidth: document.querySelector('.dashboard-nav')?.scrollWidth,
+    clientWidth: document.querySelector('.dashboard-nav')?.clientWidth,
+  }));
+  expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewport);
+  expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
+  await navigation.getByRole('button', { name: 'Relationships' }).click();
+  await expect(page.getByText('Trace a claim through classes, pools and devices.')).toBeVisible();
+  await navigation.getByRole('button', { name: 'Explain a claim' }).click();
+  await expect(page.getByText('Understand why a claim was allocated or is still pending.')).toBeVisible();
 });

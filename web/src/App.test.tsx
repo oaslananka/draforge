@@ -61,7 +61,7 @@ const summary: Summary = {
   timestamp: '2026-07-23T12:00:00Z',
 };
 
-const version: VersionInfo = { version: 'v0.3.0', commit: 'test' };
+const version: VersionInfo = { version: 'v0.4.0', commit: 'test' };
 
 const duplicateClaims: ResourceClaimInfo[] = [
   {

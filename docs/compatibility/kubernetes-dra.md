@@ -1,8 +1,14 @@
 # Kubernetes DRA Compatibility
 
-> **Last updated:** 2026-07-29
-> **Kubernetes reference:** v1.35 through v1.36
-> **DRAForge version:** 0.3.0
+> **Last reviewed for v0.4.0 candidate:** 2026-11-15
+> **Upstream Kubernetes reference:** v1.35 through v1.37
+> **DRAForge version:** 0.4.0 (**unpublished candidate**; the latest published release remains v0.3.0)
+
+> **Evidence boundary:** Kubernetes v1.37 exists upstream, but no DRAForge
+> v1.37 kind, API, or physical-cluster acceptance has been performed. The
+> release tests currently cover **v1.35.5** and **v1.36.1**, using simulated
+> devices. Do not interpret current upstream feature availability as tested
+> DRAForge support or physical-accelerator compatibility.
 
 ---
 
@@ -20,6 +26,7 @@ transition targets and must be validated per distribution.
 
 | Kubernetes version | Upstream DRA status | DRAForge stance |
 | --- | --- | --- |
+| v1.37 | Stable core DRA; upstream extended-resource DRA graduated to GA | **Not verified** in DRAForge; no v1.37 support claim |
 | v1.36 | Stable core DRA plus additional alpha/beta extensions | Supported target, with extension gaps documented below |
 | v1.35 | Stable core DRA, enabled by default | Recommended baseline |
 | v1.34 | Transition-era DRA support | Best-effort only; validate API availability |
@@ -41,6 +48,16 @@ transition targets and must be validated per distribution.
 | kind full gate | v1.35.5 and v1.36.1 | Weekly, manual, release-candidate, and final-release matrix |
 | DOKS | distribution-supported v1 API | Optional provider-adapter smoke target; not a general release gate |
 
+**Upstream review for this candidate (2026-11-15):** Kubernetes lists v1.37
+among its maintained minor versions, and its v1.37 DRA release notes state that
+extended-resource allocation by DRA reached GA. This describes the upstream
+feature only: DRAForge has **not** exercised its extended-resource integration
+on v1.37 and the corresponding row below remains "Not implemented" for this
+product. The current v1.35/v1.36 matrix must remain unchanged until a separately
+tested v1.37 support milestone is completed. References:
+[Kubernetes maintained releases](https://kubernetes.io/releases/),
+[Kubernetes v1.37 DRA changes](https://kubernetes.io/blog/2026/09/03/kubernetes-v1-37-dra-updates/).
+
 `tests/install-e2e/kubernetes-versions.json` is the source of truth for the pinned kind and Kubernetes node-image matrix. The full install suite verifies the chart CRD, server, controller, sim-driver, Services, RBAC, NetworkPolicies, scenario, ResourceClaim allocation, consumer Pod association, API, explain output, metrics, readiness, graph, and SSE identity.
 
 
@@ -53,7 +70,7 @@ The table below captures the compatibility model DRAForge should use as of
 baseline; alpha/beta extensions are discovered or explained only when the code
 explicitly supports them.
 
-| Capability | Upstream status as of v1.36 docs | DRAForge 0.3.0 support |
+| Capability | Upstream status as of v1.36 docs | DRAForge 0.4.0 support |
 | --- | --- | --- |
 | Core Dynamic Resource Allocation | Stable since v1.35 | Supported for discovery and visualization |
 | DeviceClass | Stable core DRA | Discovered; class selectors use the exact-version Kubernetes DRA CEL evaluator |
@@ -64,7 +81,7 @@ explicitly supports them.
 | Device health monitoring | Observability feature | Partial; custom health label fallback remains |
 | Admin access | Beta extension | Not implemented |
 | Granular status authorization | Beta extension | Not implemented |
-| Extended resource allocation by DRA | Alpha extension | Not implemented |
+| Extended resource allocation by DRA | Alpha in older docs; GA upstream in v1.37 | Not implemented in DRAForge |
 | Partitionable devices | Alpha extension | Not implemented |
 | Consumable capacity | Alpha extension | Simulator support includes exclusive filtering plus a bounded shareable-device subset with request-policy rounding and allocation accounting |
 | Device taints and tolerations | Alpha extension | Not implemented |

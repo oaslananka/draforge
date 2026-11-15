@@ -20,7 +20,7 @@ const responses: Record<string, unknown> = {
     doctorStatus: { PASS: 1, WARN: 0, FAIL: 1 },
     timestamp: '2026-07-28T07:00:00Z',
   },
-  '/api/version': { version: 'v0.3.0', commit: 'browser-test' },
+  '/api/version': { version: 'v0.4.0', commit: 'browser-test' },
   '/api/pools': [
     {
       name: 'pool-a',

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0]
+
+> **Release preparation (not yet published).** This undated v0.4.0
+> candidate summarizes changes since v0.3.0. GitHub/GHCR artifacts and
+> container images remain at the latest published v0.3.0 until an
+> independently verified release workflow completes.
+
 ### Added
 - A task-first GitHub Pages landing page with separate local kind simulation and compatible Kubernetes setup paths, complete commands and boundaries; an accessible documentation-wide light/dark theme that follows the operating system until the visitor chooses a preference; a labeled dashboard screenshot using simulated data.
 - Real kind Kubernetes API/SSE allocation recovery acceptance, Windows/WSL first-run checks, and dense reduced-motion graph interaction regression coverage.
@@ -128,7 +135,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Controller and sim-driver binaries**: These are headless and do not expose a `version` readout at runtime — version is embedded at build time via ldflags and visible only in the binary metadata (`go version -m`).
 - **GoReleaser signing disabled by default**: Cosign signing is configured in `.goreleaser.yaml` but requires manual cosign setup and key management. Snapshot builds skip signing.
 
-[Unreleased]: https://github.com/oaslananka/draforge/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/oaslananka/draforge/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/oaslananka/draforge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/oaslananka/draforge/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/oaslananka/draforge/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/oaslananka/draforge/releases/tag/v0.1.0

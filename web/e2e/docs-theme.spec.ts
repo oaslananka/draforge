@@ -1,80 +1,29 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const docs = resolve(process.cwd(), '../docs');
 const base = 'http://127.0.0.1:4173/site-acceptance/';
-const readDoc = (file: string) => readFileSync(resolve(docs, file), 'utf8');
-const jekyllPaths = (source: string) =>
-  source.replace(/\{\{\s*'(\/[^']+)'\s*\|\s*relative_url\s*\}\}/g, '$1');
-
-const head = jekyllPaths(readDoc('_includes/head-custom.html'));
-const landing = jekyllPaths(
-  readDoc('index.md').replace(/^---\n[\s\S]*?\n---\n/, ''),
-);
-const innerContent = [
-  '<h2>Compatibility reference</h2>',
-  '<p>This page contains a standard Markdown-like table and command block.</p>',
-  '<table><thead><tr><th>Kubernetes</th><th>DRA API</th></tr></thead>',
-  '<tbody><tr><td>v1.35</td><td>resource.k8s.io/v1</td></tr>',
-  '<tr><td>v1.36</td><td>resource.k8s.io/v1</td></tr></tbody></table>',
-  '<pre><code>kubectl get resourceclaims --all-namespaces --output json --request-timeout=15s</code></pre>',
-].join('');
-
-function htmlFor(content: string) {
-  return [
-    '<!doctype html><html lang="en"><head><meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width,initial-scale=1">',
-    '<title>DRAForge documentation theme test</title>',
-    '<style>',
-    'body{margin:0;background:white;color:#24292e}',
-    '.markdown-body{box-sizing:border-box;max-width:1100px;margin:0 auto;padding:24px;color:#24292e}',
-    '.markdown-body table{border-collapse:collapse;width:100%}',
-    '.markdown-body td,.markdown-body th{padding:8px;border:1px solid #d8e1eb}',
-    '.markdown-body pre{background:#f6f8fa;padding:12px;overflow:auto}',
-    '</style>',
-    head,
-    '</head><body><main class="markdown-body">',
-    '<h1><a href="/site-acceptance/landing">draforge</a></h1>',
-    content,
-    '</main></body></html>',
-  ].join('');
-}
+const fixtures = resolve(process.cwd(), 'e2e/fixtures');
+const docs = resolve(process.cwd(), '../docs');
 
 async function setupDocs(page: Page) {
-  const files: Record<string, string> = {
-    '/assets/css/docs-theme.css': 'assets/css/docs-theme.css',
-    '/assets/css/landing.css': 'assets/css/landing.css',
-    '/assets/js/docs-theme.js': 'assets/js/docs-theme.js',
-    '/assets/dashboard-simulation.webp': 'assets/dashboard-simulation.webp',
-  };
-
-  await page.route('**/assets/css/docs-theme.css', serveFile);
-  await page.route('**/assets/css/landing.css', serveFile);
-  await page.route('**/assets/js/docs-theme.js', serveFile);
-  await page.route('**/assets/dashboard-simulation.webp', serveFile);
-
-  async function serveFile(route: Route) {
-    const pathname = new URL(route.request().url()).pathname;
-    const file = files[pathname];
-    if (!file) throw new Error('Unexpected asset: ' + pathname);
-    await route.fulfill({
-      status: 200,
-      contentType: file.endsWith('.js') ? 'text/javascript'
-        : file.endsWith('.webp') ? 'image/webp' : 'text/css',
-      body: file.endsWith('.webp') ? readFileSync(resolve(docs, file)) : readDoc(file),
-    });
-  }
-
-  await page.route('**/site-acceptance/**', (route) => {
-    const isInner = new URL(route.request().url()).pathname.endsWith('/inner');
-    return route.fulfill({
-      status: 200,
-      contentType: 'text/html',
-      body: htmlFor(isInner ? innerContent : landing),
-    });
-  });
+  // Serve committed, static HTML fixtures. No dynamic raw-HTML interpolation:
+  // only repository-owned CSS/JS source is loaded into the browser.
+  await page.route('**/site-acceptance/landing', (route) =>
+    route.fulfill({ path: resolve(fixtures, 'docs-theme-landing.html'), contentType: 'text/html' }),
+  );
+  await page.route('**/site-acceptance/inner', (route) =>
+    route.fulfill({ path: resolve(fixtures, 'docs-theme-inner.html'), contentType: 'text/html' }),
+  );
+  await page.route('**/assets/css/docs-theme.css', (route) =>
+    route.fulfill({ path: resolve(docs, 'assets/css/docs-theme.css'), contentType: 'text/css' }),
+  );
+  await page.route('**/assets/css/landing.css', (route) =>
+    route.fulfill({ path: resolve(docs, 'assets/css/landing.css'), contentType: 'text/css' }),
+  );
+  await page.route('**/assets/js/docs-theme.js', (route) =>
+    route.fulfill({ path: resolve(docs, 'assets/js/docs-theme.js'), contentType: 'text/javascript' }),
+  );
 }
 
 test('@desktop docs: system dark, manual light and navigation persistence', async ({ page }) => {

@@ -1,18 +1,4 @@
-<!-- Jekyll theme hook: applied to every GitHub Pages documentation page. -->
-<script>
-(function () {
-  var preference;
-  try {
-    preference = window.localStorage.getItem('draforge-docs-theme');
-  } catch (_) {
-    preference = null;
-  }
-  var systemDark = window.matchMedia &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches;
-  document.documentElement.dataset.docsTheme =
-    preference === 'dark' || preference === 'light'
-      ? preference : systemDark ? 'dark' : 'light';
-}());
-</script>
+<!-- Jekyll Primer theme hook: apply the same light/dark control on every page.
+     Synchronous, tiny script initializes the chosen theme before first paint. -->
 <link rel="stylesheet" href="{{ '/assets/css/docs-theme.css' | relative_url }}">
-<script src="{{ '/assets/js/docs-theme.js' | relative_url }}" defer></script>
+<script src="{{ '/assets/js/docs-theme.js' | relative_url }}"></script>

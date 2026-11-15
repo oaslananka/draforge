@@ -13,6 +13,10 @@
     }
   };
 
+  // This file is loaded in the document head, before the page becomes visible.
+  // Apply the saved preference or the OS setting without a light-theme flash.
+  root.dataset.docsTheme = storedPreference() ?? (system.matches ? 'dark' : 'light');
+
   const useTheme = (value) => {
     root.dataset.docsTheme = value;
     root.style.colorScheme = value;

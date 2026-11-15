@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DRAForge compatibility reference</title>
+  <style>
+    body { margin: 0; background: #fff; color: #24292e; }
+    .markdown-body { box-sizing: border-box; max-width: 1100px; margin: auto; padding: 24px; color: #24292e; }
+    .markdown-body table { border-collapse: collapse; width: 100%; }
+    .markdown-body td, .markdown-body th { padding: 8px; border: 1px solid #d8e1eb; }
+    .markdown-body pre { background: #f6f8fa; padding: 12px; overflow: auto; }
+  </style>
+  <link rel="stylesheet" href="/assets/css/docs-theme.css">
+  <script src="/assets/js/docs-theme.js"></script>
+</head>
+<body>
+<main class="markdown-body">
+  <h1><a href="/site-acceptance/landing">draforge</a></h1>
+  <h2>Compatibility reference</h2>
+  <p>Technical documentation includes tables and terminal commands.</p>
+  <table>
+    <thead><tr><th>Kubernetes</th><th>DRA API</th></tr></thead>
+    <tbody>
+      <tr><td>v1.35</td><td>resource.k8s.io/v1</td></tr>
+      <tr><td>v1.36</td><td>resource.k8s.io/v1</td></tr>
+    </tbody>
+  </table>
+  <pre><code>kubectl get resourceclaims --all-namespaces --output json --request-timeout=15s</code></pre>
+</main>
+</body>
+</html>

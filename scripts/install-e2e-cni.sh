@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installs the digest-verified NetworkPolicy-capable CNI used by install E2E.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

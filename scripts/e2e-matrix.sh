@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Emits the kind matrix defined by the documented Kubernetes compatibility policy.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

@@ -1,5 +1,5 @@
 // Package e2echeck verifies go test -json output for remote E2E runs.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package e2echeck
 
 import (

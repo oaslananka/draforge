@@ -1,6 +1,6 @@
 {{- if .Values.networkPolicies.enabled }}
 # Network Policies for DRAForge Namespace
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 {{- $fullName := include "draforge.fullname" . }}
 {{- $name := include "draforge.name" . }}
 apiVersion: networking.k8s.io/v1

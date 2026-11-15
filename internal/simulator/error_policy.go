@@ -1,5 +1,5 @@
 // Package simulator classifies controller workqueue failures.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package simulator
 
 import apierrors "k8s.io/apimachinery/pkg/api/errors"

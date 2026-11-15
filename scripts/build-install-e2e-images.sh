@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the three local images exercised by install-level E2E tests.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

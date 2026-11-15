@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verify immutable release-tag provenance before any release resources are used.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

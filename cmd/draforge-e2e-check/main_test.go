@@ -1,5 +1,5 @@
 // Package main tests the remote E2E result verifier command.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package main
 
 import (

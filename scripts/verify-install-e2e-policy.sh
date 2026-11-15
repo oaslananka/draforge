@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verifies install-level E2E matrix, workflow, release, fixture, and documentation contracts.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

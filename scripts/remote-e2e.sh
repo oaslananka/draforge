@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Provider-neutral core: submits a Kubernetes Job using the active kubectl connection.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

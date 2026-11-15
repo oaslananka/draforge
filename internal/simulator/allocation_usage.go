@@ -1,5 +1,5 @@
 // Package simulator tracks committed and in-progress DRA device usage.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package simulator
 
 import (

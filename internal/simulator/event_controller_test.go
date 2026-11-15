@@ -1,5 +1,5 @@
 // Package simulator tests informer-driven controller execution.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package simulator
 
 import (

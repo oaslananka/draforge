@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Decode and validate a short-lived kubeconfig for provider-neutral remote E2E.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

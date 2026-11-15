@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests multi-architecture verification without contacting a registry.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

@@ -1,5 +1,5 @@
 // Package e2echeck tests the checked-in remote E2E harness contract.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package e2echeck
 
 import (

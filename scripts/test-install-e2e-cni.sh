@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deterministic tests for the hash-verified install E2E CNI installer.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

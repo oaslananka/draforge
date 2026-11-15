@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verifies two-replica controller leadership transfer and reconciliation continuity.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 set -euo pipefail
 

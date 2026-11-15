@@ -1,5 +1,5 @@
 // Package draeval provides the supported Kubernetes DRA selector semantics shared by DRAForge components.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package draeval
 
 import (

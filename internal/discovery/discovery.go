@@ -1,5 +1,5 @@
 // Package discovery queries the Kubernetes API for Dynamic Resource Allocation (DRA) resources.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package discovery
 
 import (

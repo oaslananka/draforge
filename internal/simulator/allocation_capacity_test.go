@@ -1,5 +1,5 @@
 // Package simulator tests exclusive-device capacity requirements.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 package simulator
 
 import (

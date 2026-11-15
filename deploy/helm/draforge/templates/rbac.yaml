@@ -1,5 +1,5 @@
 # Scoped RBAC Permissions for DRAForge
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # 1. Server ClusterRole (Read-Only)
 apiVersion: rbac.authorization.k8s.io/v1

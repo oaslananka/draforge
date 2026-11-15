@@ -1,6 +1,6 @@
 # Governance of DRAForge
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 
 DRAForge is an open-source project founded and maintained by Osman Aslan.
 
